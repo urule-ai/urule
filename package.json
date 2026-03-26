@@ -1,0 +1,23 @@
+{
+  "name": "urule",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Urule — A Linux for AI. Thin control plane for AI coworkers.",
+  "license": "Apache-2.0",
+  "workspaces": [
+    "packages/*",
+    "services/*",
+    "plugins/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build:all": "npm run build --workspaces --if-present",
+    "test:all": "npm run test --workspaces --if-present",
+    "lint:all": "npm run lint --workspaces --if-present",
+    "typecheck:all": "npm run typecheck --workspaces --if-present",
+    "clean": "npm run clean --workspaces --if-present && rm -rf node_modules"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
