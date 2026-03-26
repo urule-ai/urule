@@ -1,4 +1,4 @@
-import { pgTable, varchar, text, jsonb, timestamp } from 'drizzle-orm/pg-core';
+import { pgTable, varchar, text, jsonb, timestamp, index } from 'drizzle-orm/pg-core';
 import { workspaces } from './workspaces.js';
 
 export const agents = pgTable('agents', {
@@ -13,4 +13,7 @@ export const agents = pgTable('agents', {
   config: jsonb('config').notNull().default({}),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-});
+}, (table) => ({
+  workspaceIdIdx: index('agents_workspace_id_idx').on(table.workspaceId),
+  statusIdx: index('agents_status_idx').on(table.workspaceId, table.status),
+}));

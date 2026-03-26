@@ -12,8 +12,10 @@ const createOrgSchema = z.object({
 
 export function registerOrgRoutes(app: FastifyInstance, db: Database) {
   // List orgs
-  app.get('/api/v1/orgs', async () => {
-    return db.select().from(orgs);
+  app.get<{ Querystring: { limit?: string; offset?: string } }>('/api/v1/orgs', async (request) => {
+    const limit = Math.min(parseInt(request.query.limit ?? '50', 10), 100);
+    const offset = parseInt(request.query.offset ?? '0', 10);
+    return db.select().from(orgs).limit(limit).offset(offset);
   });
 
   // Create org

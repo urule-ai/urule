@@ -99,17 +99,21 @@ export function registerConversationRoutes(app: FastifyInstance, db: Database) {
   });
 
   // List conversations with last_message, message_count, agents
-  app.get<{ Querystring: { workspaceId?: string } }>('/api/v1/conversations', async (request) => {
+  app.get<{ Querystring: { workspaceId?: string; limit?: string; offset?: string } }>('/api/v1/conversations', async (request) => {
     const { workspaceId } = request.query;
+    const limit = Math.min(parseInt(request.query.limit ?? '50', 10), 100);
+    const offset = parseInt(request.query.offset ?? '0', 10);
 
     let convRows;
     if (workspaceId) {
       convRows = await db.select().from(conversations)
         .where(eq(conversations.workspaceId, workspaceId))
-        .orderBy(desc(conversations.updatedAt));
+        .orderBy(desc(conversations.updatedAt))
+        .limit(limit).offset(offset);
     } else {
       convRows = await db.select().from(conversations)
-        .orderBy(desc(conversations.updatedAt));
+        .orderBy(desc(conversations.updatedAt))
+        .limit(limit).offset(offset);
     }
 
     const result = await Promise.all(convRows.map(async (conv) => {

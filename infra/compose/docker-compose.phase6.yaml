@@ -17,6 +17,12 @@ include:
 services:
   # Override postgres with schema init + seed scripts
   postgres:
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./init-db.sql:/docker-entrypoint-initdb.d/01-init-db.sql
@@ -27,10 +33,24 @@ services:
 
   # ── Core Services ──────────────────────────────────────────────────────────
 
+  nats:
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '1.0'
+
   registry:
     build:
       context: ../../urule-registry
       dockerfile: Dockerfile
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '1.0'
     ports:
       - '${URULE_REGISTRY_PORT:-3001}:3000'
     environment:
@@ -55,6 +75,12 @@ services:
     build:
       context: ../../urule-langgraph-adapter
       dockerfile: Dockerfile
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '1.0'
     ports:
       - '${URULE_ADAPTER_PORT:-3002}:3000'
     environment:
@@ -80,6 +106,12 @@ services:
     build:
       context: ../../urule-approvals
       dockerfile: Dockerfile
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '1.0'
     ports:
       - '${URULE_APPROVALS_PORT:-3003}:3000'
     environment:
@@ -99,6 +131,12 @@ services:
     build:
       context: ../../urule-state
       dockerfile: Dockerfile
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '1.0'
     ports:
       - '${URULE_STATE_PORT:-3007}:3000'
     environment:
@@ -118,6 +156,12 @@ services:
     build:
       context: ../../urule-packagehub
       dockerfile: Dockerfile
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '1.0'
     ports:
       - '${URULE_PACKAGEHUB_PORT:-3009}:3000'
     environment:
@@ -139,6 +183,12 @@ services:
     build:
       context: ../../urule-office-ui
       dockerfile: Dockerfile
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '1.0'
     ports:
       - '${URULE_UI_PORT:-3000}:3000'
     environment:

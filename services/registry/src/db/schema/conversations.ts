@@ -1,4 +1,4 @@
-import { pgTable, varchar, text, integer, jsonb, timestamp } from 'drizzle-orm/pg-core';
+import { pgTable, varchar, text, integer, jsonb, timestamp, index } from 'drizzle-orm/pg-core';
 import { workspaces } from './workspaces.js';
 import { agents } from './agents.js';
 
@@ -9,7 +9,9 @@ export const conversations = pgTable('conversations', {
   type: varchar('type', { length: 50 }).notNull().default('direct'), // direct, group, meeting, channel
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-});
+}, (table) => ({
+  workspaceIdIdx: index('conversations_workspace_id_idx').on(table.workspaceId),
+}));
 
 export const conversationAgents = pgTable('conversation_agents', {
   conversationId: varchar('conversation_id', { length: 26 }).notNull().references(() => conversations.id, { onDelete: 'cascade' }),

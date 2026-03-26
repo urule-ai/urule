@@ -10,6 +10,8 @@ export interface UruleError {
 }
 
 export function errorHandler(error: FastifyError, request: FastifyRequest, reply: FastifyReply) {
+  request.log.error({ err: error, requestId: request.id }, 'Request error');
+
   const statusCode = error.statusCode ?? 500;
   const response: UruleError = {
     error: {

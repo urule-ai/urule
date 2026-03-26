@@ -73,8 +73,10 @@ function toUiAgent(row: Record<string, unknown>, provider?: Record<string, unkno
 
 export function registerAgentRoutes(app: FastifyInstance, db: Database) {
   // List all agents (across all workspaces)
-  app.get('/api/v1/agents', async () => {
-    const rows = await db.select().from(agents);
+  app.get<{ Querystring: { limit?: string; offset?: string } }>('/api/v1/agents', async (request) => {
+    const limit = Math.min(parseInt(request.query.limit ?? '50', 10), 100);
+    const offset = parseInt(request.query.offset ?? '0', 10);
+    const rows = await db.select().from(agents).limit(limit).offset(offset);
     return Promise.all(rows.map(async (row) => {
       const config = (row.config ?? {}) as Record<string, unknown>;
       const providerId = config.provider_id as string | undefined;
@@ -88,9 +90,11 @@ export function registerAgentRoutes(app: FastifyInstance, db: Database) {
   });
 
   // List agents for a workspace
-  app.get<{ Params: { wsId: string } }>('/api/v1/workspaces/:wsId/agents', async (request) => {
+  app.get<{ Params: { wsId: string }; Querystring: { limit?: string; offset?: string } }>('/api/v1/workspaces/:wsId/agents', async (request) => {
     const { wsId } = request.params;
-    const rows = await db.select().from(agents).where(eq(agents.workspaceId, wsId));
+    const limit = Math.min(parseInt(request.query.limit ?? '50', 10), 100);
+    const offset = parseInt(request.query.offset ?? '0', 10);
+    const rows = await db.select().from(agents).where(eq(agents.workspaceId, wsId)).limit(limit).offset(offset);
     return rows.map(row => toUiAgent(row as Record<string, unknown>));
   });
 

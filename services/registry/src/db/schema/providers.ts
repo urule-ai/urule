@@ -1,4 +1,4 @@
-import { pgTable, varchar, text, boolean, timestamp } from 'drizzle-orm/pg-core';
+import { pgTable, varchar, text, boolean, timestamp, index } from 'drizzle-orm/pg-core';
 import { workspaces } from './workspaces.js';
 
 export const providers = pgTable('providers', {
@@ -13,4 +13,6 @@ export const providers = pgTable('providers', {
   isActive: boolean('is_active').notNull().default(true),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-});
+}, (table) => ({
+  workspaceIdIdx: index('providers_workspace_id_idx').on(table.workspaceId),
+}));

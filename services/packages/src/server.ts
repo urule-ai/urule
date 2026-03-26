@@ -10,7 +10,19 @@ import { registerPackageRoutes } from './routes/packages.routes.js';
 
 export async function buildServer(config: Config) {
   const app = Fastify({
-    logger: true,
+    logger: {
+      level: process.env['LOG_LEVEL'] ?? 'info',
+      serializers: {
+        req(request) {
+          return {
+            method: request.method,
+            url: request.url,
+            hostname: request.hostname,
+            remoteAddress: request.ip,
+          };
+        },
+      },
+    },
     genReqId: () => crypto.randomUUID(),
   });
 

@@ -1,4 +1,4 @@
-import { pgTable, varchar, text, timestamp } from 'drizzle-orm/pg-core';
+import { pgTable, varchar, text, timestamp, index } from 'drizzle-orm/pg-core';
 import { orgs } from './orgs.js';
 
 export const workspaces = pgTable('workspaces', {
@@ -10,4 +10,7 @@ export const workspaces = pgTable('workspaces', {
   status: varchar('status', { length: 20 }).notNull().default('active'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-});
+}, (table) => ({
+  orgIdIdx: index('workspaces_org_id_idx').on(table.orgId),
+  slugIdx: index('workspaces_slug_idx').on(table.slug),
+}));

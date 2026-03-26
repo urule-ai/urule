@@ -1,4 +1,4 @@
-import { pgTable, varchar, text, jsonb, timestamp, boolean } from 'drizzle-orm/pg-core';
+import { pgTable, varchar, text, jsonb, timestamp, boolean, index } from 'drizzle-orm/pg-core';
 import { packages } from './packages.js';
 
 export const packageVersions = pgTable('package_versions', {
@@ -10,4 +10,6 @@ export const packageVersions = pgTable('package_versions', {
   checksum: varchar('checksum', { length: 128 }),
   publishedAt: timestamp('published_at', { withTimezone: true }).notNull().defaultNow(),
   yanked: boolean('yanked').notNull().default(false),
-});
+}, (table) => ({
+  packageIdIdx: index('package_versions_package_id_idx').on(table.packageId),
+}));

@@ -12,6 +12,15 @@ async function main() {
     server.log.error(err);
     process.exit(1);
   }
+
+  // Graceful shutdown
+  const shutdown = async () => {
+    server.log.info('Shutting down...');
+    await server.close();
+    process.exit(0);
+  };
+  process.on('SIGTERM', shutdown);
+  process.on('SIGINT', shutdown);
 }
 
 main();

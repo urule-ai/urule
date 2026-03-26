@@ -1,4 +1,4 @@
-import { pgTable, varchar, text, jsonb, timestamp, boolean, integer } from 'drizzle-orm/pg-core';
+import { pgTable, varchar, text, jsonb, timestamp, boolean, integer, index } from 'drizzle-orm/pg-core';
 
 export const packages = pgTable('packages', {
   id: varchar('id', { length: 26 }).primaryKey(),
@@ -14,4 +14,7 @@ export const packages = pgTable('packages', {
   tags: jsonb('tags').notNull().default([]),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-});
+}, (table) => ({
+  nameIdx: index('packages_name_idx').on(table.name),
+  typeIdx: index('packages_type_idx').on(table.type),
+}));
