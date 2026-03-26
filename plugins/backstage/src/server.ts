@@ -1,4 +1,5 @@
 import Fastify from 'fastify';
+import { authMiddleware } from '@urule/auth-middleware';
 import { CatalogSyncService, type RegistryClient } from './catalog/sync-service.js';
 import type { UruleOrg, UruleWorkspace, UruleAgent } from './catalog/entity-mapper.js';
 import { getUruleScaffolderActions } from './scaffolder/actions.js';
@@ -30,6 +31,9 @@ export async function buildServer(config: Config) {
     logger: true,
     genReqId: () => crypto.randomUUID(),
   });
+
+  // Auth middleware
+  await app.register(authMiddleware, { publicRoutes: ['/healthz'] });
 
   // Health check
   app.get('/healthz', async () => ({ status: 'ok', service: config.serviceName }));

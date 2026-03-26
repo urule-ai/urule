@@ -1,5 +1,6 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
+import { authMiddleware } from '@urule/auth-middleware';
 import { PresenceManager } from './services/presence-manager.js';
 import { RoomManager } from './services/room-manager.js';
 import { TaskManager } from './services/task-manager.js';
@@ -11,6 +12,9 @@ export async function buildServer() {
 
   // Register CORS
   await app.register(cors, { origin: true });
+
+  // Auth middleware
+  await app.register(authMiddleware, { publicRoutes: ['/healthz'] });
 
   const presenceManager = new PresenceManager();
   const roomManager = new RoomManager();

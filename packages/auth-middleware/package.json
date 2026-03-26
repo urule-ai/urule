@@ -1,0 +1,38 @@
+{
+  "name": "@urule/auth-middleware",
+  "version": "0.1.0",
+  "description": "Fastify JWT authentication middleware for Urule services — validates Keycloak-issued tokens via JWKS",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/index.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/urule-os/urule.git",
+    "directory": "packages/auth-middleware"
+  },
+  "dependencies": {
+    "@fastify/jwt": "^9.0.0",
+    "fastify": "^5.0.0",
+    "fastify-plugin": "^5.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.5.0",
+    "vitest": "^2.0.0"
+  }
+}

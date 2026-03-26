@@ -1,4 +1,5 @@
 import Fastify from 'fastify';
+import { authMiddleware } from '@urule/auth-middleware';
 import type { Config } from './config.js';
 import { DependencyResolver } from './services/dependency-resolver.js';
 import { ManifestLoader } from './services/manifest-loader.js';
@@ -11,6 +12,9 @@ export async function buildServer(config: Config) {
     logger: true,
     genReqId: () => crypto.randomUUID(),
   });
+
+  // Auth middleware
+  await app.register(authMiddleware, { publicRoutes: ['/healthz'] });
 
   // Health check
   app.get('/healthz', async () => ({ status: 'ok', service: config.serviceName }));

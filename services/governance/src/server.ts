@@ -1,5 +1,6 @@
 import Fastify from "fastify";
 import type { Config } from "./config.js";
+import { authMiddleware } from "@urule/auth-middleware";
 import { errorHandler } from "./middleware/error-handler.js";
 import { governanceRoutes } from "./routes/governance.routes.js";
 import { InMemoryPolicyEngine } from "./services/policy-engine.js";
@@ -12,6 +13,9 @@ export async function buildServer(config: Config) {
   });
 
   app.setErrorHandler(errorHandler);
+
+  // Auth middleware
+  await app.register(authMiddleware, { publicRoutes: ["/healthz"] });
 
   app.get("/healthz", async () => {
     return { status: "ok", service: config.serviceName };

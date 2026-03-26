@@ -1,5 +1,6 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
+import { authMiddleware } from '@urule/auth-middleware';
 import { createDb } from './db/connection.js';
 import { registerOrgRoutes } from './routes/orgs.routes.js';
 import { registerWorkspaceRoutes } from './routes/workspaces.routes.js';
@@ -10,6 +11,7 @@ import { registerConversationRoutes } from './routes/conversations.routes.js';
 import { registerIntegrationRoutes } from './routes/integrations.routes.js';
 import { registerLogRoutes } from './routes/logs.routes.js';
 import { registerStatsRoutes } from './routes/stats.routes.js';
+import { registerAuthRoutes } from './routes/auth.routes.js';
 import { errorHandler } from './middleware/error-handler.js';
 import type { Config } from './config.js';
 
@@ -21,6 +23,11 @@ export async function buildServer(config: Config) {
 
   // CORS — allow browser requests from the Office UI
   await app.register(cors, { origin: true });
+
+  // JWT auth — validates Keycloak tokens, decorates request.uruleUser
+  await app.register(authMiddleware, {
+    publicRoutes: ['/healthz', '/api/v1/infrastructure', '/auth/login'],
+  });
 
   // Error handler
   app.setErrorHandler(errorHandler);
@@ -54,6 +61,7 @@ export async function buildServer(config: Config) {
   registerIntegrationRoutes(app);
   registerLogRoutes(app);
   registerStatsRoutes(app, db);
+  registerAuthRoutes(app);
 
   return app;
 }
