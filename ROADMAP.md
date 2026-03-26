@@ -144,27 +144,29 @@ Replace silent failures and `alert()` calls with proper UI feedback.
 - [ ] **office-ui** — Add email verification flow after registration
 - [ ] **office-ui** — Add logout confirmation dialog
 
-### 3.4 Loading States
-- [ ] **office-ui** — Add skeleton loaders for chat conversation list
-- [ ] **office-ui** — Add skeleton loaders for agent catalog
-- [ ] **office-ui** — Ensure consistent loading patterns across all pages (some use spinners, some use skeletons)
+### 3.4 Loading States ✅
+- [x] **office-ui** — Reusable Skeleton/SkeletonCard/SkeletonList components
+- [x] **office-ui** — Skeleton loaders for chat list, agent catalog, dashboard stats, approvals, agent wizard
+- [x] **office-ui** — Consistent skeleton pattern replacing all spinner-based loading states
 
-### 3.5 Notification System
-- [ ] **office-ui** — Create toast notification component (success, error, warning, info)
+### 3.5 Notification System (partial ✅)
+- [x] **office-ui** — Toast notification component (success/error/warning/info) — done in 3.1
 - [ ] **office-ui** — Add notification center (bell icon in header with notification history)
 - [ ] **office-ui** — Wire approval events to real-time notifications via WebSocket
 
-### 3.6 Theme & Visual
-- [ ] **office-ui** — Add light mode support (currently dark-only)
-- [ ] **office-ui** — Create theme toggle in settings
-- [ ] **office-ui** — Add `useThemeStore` to persist user preference
-- [ ] **office-ui** — Respect `prefers-color-scheme` system preference
+### 3.6 Theme & Visual ✅
+- [x] **office-ui** — Light mode CSS variables + Tailwind mapped to CSS vars
+- [x] **office-ui** — Theme toggle in Settings (Dark/Light/System cards)
+- [x] **office-ui** — `useThemeStore` with Zustand persist
+- [x] **office-ui** — Respects `prefers-color-scheme` via "System" option
+- [x] **office-ui** — Flash-free theme init via inline script before hydration
 
-### 3.7 Mobile UX
-- [ ] **office-ui** — Add collapsible sidebar for mobile (hamburger menu)
-- [ ] **office-ui** — Optimize agent creation wizard for narrow screens
+### 3.7 Mobile UX ✅
+- [x] **office-ui** — Collapsible sidebar with hamburger menu (`useSidebarStore`)
+- [x] **office-ui** — Overlay backdrop on mobile, auto-close on nav link click
+- [x] **office-ui** — Agent wizard: full-screen modal, stacked fields, compact step bar
+- [x] **office-ui** — Chat: fixed input above keyboard, horizontal-scroll action pills
 - [ ] **office-ui** — Add bottom navigation bar for mobile
-- [ ] **office-ui** — Test and fix chat interface on small screens
 
 ---
 
