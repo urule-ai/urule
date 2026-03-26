@@ -78,7 +78,7 @@ export default function LoginPage() {
           <form method="POST" action="" onSubmit={handleSubmit(onSubmit)} className="space-y-4" autoComplete="on">
             {/* Email */}
             <div className="space-y-1">
-              <label className="text-sm font-semibold text-text-muted uppercase tracking-wider">
+              <label htmlFor="login-email" className="text-sm font-semibold text-text-muted uppercase tracking-wider">
                 Work Email
               </label>
               <div className="relative group">
@@ -86,22 +86,25 @@ export default function LoginPage() {
                   mail
                 </span>
                 <input
+                  id="login-email"
                   type="email"
                   placeholder="name@company.ai"
                   autoComplete="email"
+                  aria-invalid={errors.email ? "true" : undefined}
+                  aria-describedby={errors.email ? "login-email-error" : undefined}
                   className="w-full pl-10 pr-4 py-3 bg-background-dark/50 border border-primary/10 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
                   {...register("email")}
                 />
               </div>
               {errors.email && (
-                <p className="text-xs text-accent-warning">{errors.email.message}</p>
+                <p id="login-email-error" className="text-xs text-accent-warning" role="alert">{errors.email.message}</p>
               )}
             </div>
 
             {/* Password */}
             <div className="space-y-1">
               <div className="flex items-center justify-between">
-                <label className="text-sm font-semibold text-text-muted uppercase tracking-wider">
+                <label htmlFor="login-password" className="text-sm font-semibold text-text-muted uppercase tracking-wider">
                   Password
                 </label>
                 <Link href="/forgot-password" className="text-primary text-xs font-bold hover:underline">
@@ -113,9 +116,12 @@ export default function LoginPage() {
                   lock
                 </span>
                 <input
+                  id="login-password"
                   type={showPassword ? "text" : "password"}
                   placeholder="••••••••"
                   autoComplete="current-password"
+                  aria-invalid={errors.password ? "true" : undefined}
+                  aria-describedby={errors.password ? "login-password-error" : undefined}
                   className="w-full pl-10 pr-10 py-3 bg-background-dark/50 border border-primary/10 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
                   {...register("password")}
                 />
@@ -123,17 +129,18 @@ export default function LoginPage() {
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-primary transition-colors"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
                 >
                   <span className="icon text-sm">{showPassword ? "visibility_off" : "visibility"}</span>
                 </button>
               </div>
               {errors.password && (
-                <p className="text-xs text-accent-warning">{errors.password.message}</p>
+                <p id="login-password-error" className="text-xs text-accent-warning" role="alert">{errors.password.message}</p>
               )}
             </div>
 
             {serverError && (
-              <p className="text-xs text-accent-warning bg-accent-warning/10 border border-accent-warning/20 rounded-lg px-3 py-2">
+              <p className="text-xs text-accent-warning bg-accent-warning/10 border border-accent-warning/20 rounded-lg px-3 py-2" role="alert">
                 {serverError}
               </p>
             )}

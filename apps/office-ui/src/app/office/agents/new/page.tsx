@@ -122,14 +122,18 @@ const ACCENT_COLORS = [
 
 function StepBar({ current }: { current: number }) {
   return (
-    <div className="flex items-center gap-2 mb-8">
+    <div className="flex items-center gap-2 mb-8" role="group" aria-label="Agent creation progress">
       {STEPS.map((s, i) => (
-        <div key={i} className="flex-1 flex flex-col items-center gap-1">
+        <div key={i} className="flex-1 flex flex-col items-center gap-1" aria-label={`Step ${i + 1}: ${s.label}`} aria-current={i === current ? "step" : undefined}>
           <div
             className={cn(
               "h-2 w-full rounded-full transition-all",
               i <= current ? "bg-primary" : "bg-surface-dark"
             )}
+            role="progressbar"
+            aria-valuenow={i <= current ? 100 : 0}
+            aria-valuemin={0}
+            aria-valuemax={100}
           />
           <span
             className={cn(
@@ -157,7 +161,7 @@ function AgentDetailModal({
   onSelect: () => void;
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Agent details">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
       <div className="relative w-full max-w-2xl max-h-[85vh] overflow-y-auto glass-panel rounded-2xl border border-primary/20 p-8 neo-shadow">
         {/* Header */}
@@ -195,6 +199,7 @@ function AgentDetailModal({
           </div>
           <button
             onClick={onClose}
+            aria-label="Close agent details"
             className="size-8 rounded-lg bg-surface-dark border border-border-dark flex items-center justify-center hover:border-primary/30"
           >
             <span className="icon text-sm">close</span>
@@ -393,9 +398,11 @@ function Step1({
         </div>
 
         {/* Category tabs */}
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2" role="tablist" aria-label="Agent categories">
           <button
             onClick={() => setActiveCategory("all")}
+            role="tab"
+            aria-selected={activeCategory === "all"}
             className={cn(
               "px-3 py-1.5 rounded-lg text-xs font-bold transition-all",
               activeCategory === "all"
@@ -409,6 +416,8 @@ function Step1({
             <button
               key={d.id}
               onClick={() => setActiveCategory(d.id)}
+              role="tab"
+              aria-selected={activeCategory === d.id}
               className={cn(
                 "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all",
                 activeCategory === d.id
@@ -423,7 +432,7 @@ function Step1({
         </div>
 
         {/* Agent grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" role="tabpanel" aria-label={`${activeCategory === "all" ? "All" : categories.find(c => c.id === activeCategory)?.label ?? activeCategory} agents`}>
           {filtered.map((agent) => {
             const isSelected = !isCustom && selectedAgent?.name === agent.name;
             return (

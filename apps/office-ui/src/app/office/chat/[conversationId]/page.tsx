@@ -567,7 +567,7 @@ export default function ChatPage({ params }: { params: { conversationId: string 
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-5">
+      <div className="flex-1 overflow-y-auto p-6 space-y-5" role="log" aria-label="Chat messages" aria-live="polite">
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-center">
             <span className="icon text-5xl text-text-muted">forum</span>
@@ -667,7 +667,7 @@ export default function ChatPage({ params }: { params: { conversationId: string 
       {/* Input */}
       <div className="p-4 border-t border-primary/10">
         {/* Quick action pills */}
-        <div className="flex items-center gap-2 mb-3">
+        <div className="flex items-center gap-2 mb-3" role="group" aria-label="Quick actions">
           {[
             { label: "Summarize", icon: "summarize", text: "Summarize the conversation so far." },
             { label: "Assign Tasks", icon: "task_alt", text: "Assign tasks to the appropriate agents." },
@@ -695,6 +695,7 @@ export default function ChatPage({ params }: { params: { conversationId: string 
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Type a message... (Enter to send, Shift+Enter for new line)"
+              aria-label="Type a message"
               rows={1}
               className="w-full px-4 py-3 pr-12 bg-surface-dark border border-border-dark rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-none max-h-40 overflow-y-auto"
               style={{ minHeight: "48px" }}
@@ -703,6 +704,7 @@ export default function ChatPage({ params }: { params: { conversationId: string 
           <button
             onClick={handleSend}
             disabled={!input.trim() || sendMutation.isPending}
+            aria-label="Send message"
             className="size-12 bg-primary text-background-dark rounded-xl flex items-center justify-center hover:bg-primary/90 transition-all active:scale-95 disabled:opacity-50 shrink-0"
           >
             <span className="icon text-sm">

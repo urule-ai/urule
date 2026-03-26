@@ -140,7 +140,7 @@ export default function AgentLivePage({ params }: { params: { id: string } }) {
                       icon: "assignment_add",
                       title: "Assign a Task",
                       desc: "Give your agent its first mission",
-                      href: "/office/boards",
+                      href: "/office/projects",
                     },
                     {
                       icon: "terminal",

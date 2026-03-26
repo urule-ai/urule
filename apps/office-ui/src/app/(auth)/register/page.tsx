@@ -89,62 +89,62 @@ export default function RegisterPage() {
           <form method="POST" action="" onSubmit={handleSubmit(onSubmit)} className="space-y-4" autoComplete="on">
             {/* Full Name */}
             <div className="space-y-1">
-              <label className="text-sm font-semibold text-text-muted uppercase tracking-wider">Full Name</label>
+              <label htmlFor="register-name" className="text-sm font-semibold text-text-muted uppercase tracking-wider">Full Name</label>
               <div className="relative group">
                 <span className="icon absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors">person</span>
-                <input type="text" placeholder="Jane Smith" autoComplete="name" className="w-full pl-10 pr-4 py-3 bg-background-dark/50 border border-primary/10 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all" {...register("display_name")} />
+                <input id="register-name" type="text" placeholder="Jane Smith" autoComplete="name" aria-invalid={errors.display_name ? "true" : undefined} aria-describedby={errors.display_name ? "register-name-error" : undefined} className="w-full pl-10 pr-4 py-3 bg-background-dark/50 border border-primary/10 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all" {...register("display_name")} />
               </div>
-              {errors.display_name && <p className="text-xs text-accent-warning">{errors.display_name.message}</p>}
+              {errors.display_name && <p id="register-name-error" className="text-xs text-accent-warning" role="alert">{errors.display_name.message}</p>}
             </div>
 
             {/* Organization */}
             <div className="space-y-1">
-              <label className="text-sm font-semibold text-text-muted uppercase tracking-wider">Organization</label>
+              <label htmlFor="register-org" className="text-sm font-semibold text-text-muted uppercase tracking-wider">Organization</label>
               <div className="relative group">
                 <span className="icon absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors">business</span>
-                <input type="text" placeholder="Acme Corp" autoComplete="organization" className="w-full pl-10 pr-4 py-3 bg-background-dark/50 border border-primary/10 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all" {...register("organization_name")} />
+                <input id="register-org" type="text" placeholder="Acme Corp" autoComplete="organization" aria-invalid={errors.organization_name ? "true" : undefined} aria-describedby={errors.organization_name ? "register-org-error" : undefined} className="w-full pl-10 pr-4 py-3 bg-background-dark/50 border border-primary/10 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all" {...register("organization_name")} />
               </div>
-              {errors.organization_name && <p className="text-xs text-accent-warning">{errors.organization_name.message}</p>}
+              {errors.organization_name && <p id="register-org-error" className="text-xs text-accent-warning" role="alert">{errors.organization_name.message}</p>}
             </div>
 
             {/* Work Email */}
             <div className="space-y-1">
-              <label className="text-sm font-semibold text-text-muted uppercase tracking-wider">Work Email</label>
+              <label htmlFor="register-email" className="text-sm font-semibold text-text-muted uppercase tracking-wider">Work Email</label>
               <div className="relative group">
                 <span className="icon absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors">mail</span>
-                <input type="email" placeholder="jane@acme.ai" autoComplete="email" className="w-full pl-10 pr-4 py-3 bg-background-dark/50 border border-primary/10 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all" {...register("email")} />
+                <input id="register-email" type="email" placeholder="jane@acme.ai" autoComplete="email" aria-invalid={errors.email ? "true" : undefined} aria-describedby={errors.email ? "register-email-error" : undefined} className="w-full pl-10 pr-4 py-3 bg-background-dark/50 border border-primary/10 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all" {...register("email")} />
               </div>
-              {errors.email && <p className="text-xs text-accent-warning">{errors.email.message}</p>}
+              {errors.email && <p id="register-email-error" className="text-xs text-accent-warning" role="alert">{errors.email.message}</p>}
             </div>
 
             {/* Password */}
             <div className="space-y-1">
-              <label className="text-sm font-semibold text-text-muted uppercase tracking-wider">Password</label>
+              <label htmlFor="register-password" className="text-sm font-semibold text-text-muted uppercase tracking-wider">Password</label>
               <div className="relative group">
                 <span className="icon absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors">lock</span>
-                <input type={showPassword ? "text" : "password"} placeholder="••••••••" autoComplete="new-password" className="w-full pl-10 pr-10 py-3 bg-background-dark/50 border border-primary/10 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all" {...register("password")} />
-                <button type="button" onClick={() => setShowPassword((v) => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-primary transition-colors" tabIndex={-1}>
+                <input id="register-password" type={showPassword ? "text" : "password"} placeholder="••••••••" autoComplete="new-password" aria-invalid={errors.password ? "true" : undefined} aria-describedby={errors.password ? "register-password-error" : undefined} className="w-full pl-10 pr-10 py-3 bg-background-dark/50 border border-primary/10 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all" {...register("password")} />
+                <button type="button" onClick={() => setShowPassword((v) => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-primary transition-colors" tabIndex={-1} aria-label={showPassword ? "Hide password" : "Show password"}>
                   <span className="icon text-lg">{showPassword ? "visibility_off" : "visibility"}</span>
                 </button>
               </div>
-              {errors.password && <p className="text-xs text-accent-warning">{errors.password.message}</p>}
+              {errors.password && <p id="register-password-error" className="text-xs text-accent-warning" role="alert">{errors.password.message}</p>}
             </div>
 
             {/* Confirm Password */}
             <div className="space-y-1">
-              <label className="text-sm font-semibold text-text-muted uppercase tracking-wider">Confirm Password</label>
+              <label htmlFor="register-confirm-password" className="text-sm font-semibold text-text-muted uppercase tracking-wider">Confirm Password</label>
               <div className="relative group">
                 <span className="icon absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors">lock_reset</span>
-                <input type={showConfirm ? "text" : "password"} placeholder="••••••••" autoComplete="new-password" className="w-full pl-10 pr-10 py-3 bg-background-dark/50 border border-primary/10 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all" {...register("confirm_password")} />
-                <button type="button" onClick={() => setShowConfirm((v) => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-primary transition-colors" tabIndex={-1}>
+                <input id="register-confirm-password" type={showConfirm ? "text" : "password"} placeholder="••••••••" autoComplete="new-password" aria-invalid={errors.confirm_password ? "true" : undefined} aria-describedby={errors.confirm_password ? "register-confirm-password-error" : undefined} className="w-full pl-10 pr-10 py-3 bg-background-dark/50 border border-primary/10 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all" {...register("confirm_password")} />
+                <button type="button" onClick={() => setShowConfirm((v) => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-primary transition-colors" tabIndex={-1} aria-label={showConfirm ? "Hide password confirmation" : "Show password confirmation"}>
                   <span className="icon text-lg">{showConfirm ? "visibility_off" : "visibility"}</span>
                 </button>
               </div>
-              {errors.confirm_password && <p className="text-xs text-accent-warning">{errors.confirm_password.message}</p>}
+              {errors.confirm_password && <p id="register-confirm-password-error" className="text-xs text-accent-warning" role="alert">{errors.confirm_password.message}</p>}
             </div>
 
             {serverError && (
-              <p className="text-xs text-accent-warning bg-accent-warning/10 border border-accent-warning/20 rounded-lg px-3 py-2">
+              <p className="text-xs text-accent-warning bg-accent-warning/10 border border-accent-warning/20 rounded-lg px-3 py-2" role="alert">
                 {serverError}
               </p>
             )}

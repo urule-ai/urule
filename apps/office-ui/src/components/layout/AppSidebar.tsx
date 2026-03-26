@@ -30,7 +30,7 @@ export function AppSidebar() {
   }
 
   return (
-    <aside className="w-64 h-full flex flex-col border-r border-border-dark/50 bg-background-dark shrink-0">
+    <aside className="w-64 h-full flex flex-col border-r border-border-dark/50 bg-background-dark shrink-0" role="complementary" aria-label="Sidebar">
       {/* Logo */}
       <div className="p-5 border-b border-border-dark/50">
         <div className="flex items-center gap-3">
@@ -47,11 +47,12 @@ export function AppSidebar() {
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
+      <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto" aria-label="Main navigation">
         {navItems.map(({ icon, label, href }) => (
           <Link
             key={label}
             href={href}
+            aria-current={isActive(href) ? "page" : undefined}
             className={cn(
               "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
               isActive(href)
@@ -94,6 +95,7 @@ export function AppSidebar() {
               onClick={logout}
               className="text-text-muted hover:text-primary transition-colors"
               title="Log out"
+              aria-label="Log out"
             >
               <span className="icon text-[18px]">logout</span>
             </button>

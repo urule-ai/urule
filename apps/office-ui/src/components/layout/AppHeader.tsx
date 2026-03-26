@@ -31,7 +31,7 @@ export function AppHeader() {
   const { icon, title } = getPageMeta(pathname);
 
   return (
-    <header className="h-16 shrink-0 flex items-center justify-between px-6 backdrop-blur-md border-b border-primary/10 z-10">
+    <header className="h-16 shrink-0 flex items-center justify-between px-6 backdrop-blur-md border-b border-primary/10 z-10" role="banner">
       {/* Left: page title */}
       <div className="flex items-center gap-3">
         <span className="icon text-primary text-2xl">{icon}</span>
@@ -47,16 +47,17 @@ export function AppHeader() {
           <input
             type="text"
             placeholder="Search..."
+            aria-label="Search"
             className="w-64 pl-10 pr-4 py-2 bg-primary/5 border border-primary/10 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary/30 transition-all"
           />
         </div>
 
-        <button className="relative p-2 rounded-lg hover:bg-primary/10 transition-colors">
+        <button className="relative p-2 rounded-lg hover:bg-primary/10 transition-colors" aria-label="Notifications">
           <span className="icon text-text-muted text-[22px]">notifications</span>
         </button>
 
         {user && (
-          <div className="size-9 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center text-sm font-bold text-primary cursor-pointer hover:border-primary/60 transition-colors">
+          <div className="size-9 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center text-sm font-bold text-primary cursor-pointer hover:border-primary/60 transition-colors" role="button" aria-label={`User profile: ${user.display_name}`} tabIndex={0}>
             {user.display_name.charAt(0).toUpperCase()}
           </div>
         )}
