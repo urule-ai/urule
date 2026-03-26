@@ -114,29 +114,33 @@ Add browser-based testing for the Office UI.
 
 ## 3. UX & UI (High)
 
-### 3.1 Error Handling
+### 3.1 Error Handling ✅
 Replace silent failures and `alert()` calls with proper UI feedback.
 
-- [ ] **office-ui** — Create a toast/notification system (replace all `alert()` calls)
-- [ ] **office-ui** — Add React Error Boundaries for graceful crash recovery
-- [ ] **office-ui** — Show error states when API calls fail (currently many `.catch(() => {})`)
+- [x] **office-ui** — Toast notification system (success/error/warning/info, auto-dismiss, stacking)
+- [x] **office-ui** — React Error Boundaries with dark-themed fallback UI and retry
+- [x] **office-ui** — Error feedback on failed API calls (replaced `.catch(() => {})` patterns)
+- [x] **office-ui** — Replaced all `alert()` calls with toast notifications
 - [ ] **office-ui** — Add network offline detection banner
 - [ ] **office-ui** — Add retry buttons on failed data fetches
 - [ ] **office-ui** — Handle 401/403 redirects consistently
 
-### 3.2 Accessibility (WCAG 2.1)
-- [ ] **office-ui** — Add `<main>`, `<nav>`, `<header>` semantic landmarks to layout
-- [ ] **office-ui** — Add ARIA labels to all interactive elements (buttons, links, form fields)
-- [ ] **office-ui** — Add keyboard navigation for sidebar, modals, and dropdowns
-- [ ] **office-ui** — Add `aria-live` regions for dynamic content (chat messages, notifications)
-- [ ] **office-ui** — Add explicit `<label>` associations for all form inputs
+### 3.2 Accessibility (WCAG 2.1) ✅
+- [x] **office-ui** — Semantic landmarks (`<main>`, `<nav>`, `<header>` with roles) in layout
+- [x] **office-ui** — ARIA labels on all interactive elements (buttons, inputs, links, modals)
+- [x] **office-ui** — `aria-live="polite"` on chat messages, `role="log"` on message container
+- [x] **office-ui** — `aria-invalid` + `aria-describedby` for form error states (login, register)
+- [x] **office-ui** — `role="tablist/tab/tabpanel"` on agent wizard, `aria-current="step"` on steps
+- [x] **office-ui** — `aria-current="page"` on active sidebar nav links
+- [ ] **office-ui** — Keyboard navigation for sidebar, modals, and dropdowns
 - [ ] **office-ui** — Test with screen reader (VoiceOver/NVDA) and fix issues
 - [ ] **office-ui** — Ensure minimum 44px touch targets on mobile
 
-### 3.3 Missing Pages & Flows
-- [ ] **office-ui** — Implement `/forgot-password` page (currently a dead link from login)
-- [ ] **office-ui** — Implement SSO/OAuth login (Google, GitHub — currently shows "Coming soon" alert)
-- [ ] **office-ui** — Fix dead link to `/office/boards` from agent live page
+### 3.3 Missing Pages & Flows ✅
+- [x] **office-ui** — Implemented `/forgot-password` page (matching login theme, zod validation)
+- [x] **office-ui** — Fixed dead link `/office/boards` → `/office/projects`
+- [x] **office-ui** — SSO button now shows toast instead of alert
+- [ ] **office-ui** — Implement SSO/OAuth login (Google, GitHub — actual integration)
 - [ ] **office-ui** — Add email verification flow after registration
 - [ ] **office-ui** — Add logout confirmation dialog
 
