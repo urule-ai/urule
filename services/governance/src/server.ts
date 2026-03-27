@@ -1,5 +1,7 @@
 import Fastify from "fastify";
 import rateLimit from "@fastify/rate-limit";
+import swagger from "@fastify/swagger";
+import swaggerUi from "@fastify/swagger-ui";
 import type { Config } from "./config.js";
 import { authMiddleware } from "@urule/auth-middleware";
 import { errorHandler } from "./middleware/error-handler.js";
@@ -35,7 +37,24 @@ export async function buildServer(config: Config) {
   });
 
   // Auth middleware
-  await app.register(authMiddleware, { publicRoutes: ["/healthz"] });
+  await app.register(authMiddleware, { publicRoutes: ["/healthz", "/docs"] });
+
+  // OpenAPI documentation
+  await app.register(swagger, {
+    openapi: {
+      info: {
+        title: 'Urule Governance API',
+        description: 'OPA policy + OpenFGA authorization gateway',
+        version: '0.1.0',
+      },
+      servers: [{ url: 'http://localhost:3004' }],
+      tags: [{ name: 'governance' }, { name: 'policy' }, { name: 'authz' }],
+    },
+  });
+
+  await app.register(swaggerUi, {
+    routePrefix: '/docs',
+  });
 
   app.get("/healthz", async () => {
     return { status: "ok", service: config.serviceName };

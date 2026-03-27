@@ -1,6 +1,8 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
+import swagger from '@fastify/swagger';
+import swaggerUi from '@fastify/swagger-ui';
 import { authMiddleware } from '@urule/auth-middleware';
 import { createDb } from './db/connection.js';
 import { registerPackageRoutes } from './routes/packages.routes.js';
@@ -37,7 +39,24 @@ export async function buildServer(config: Config) {
   });
 
   // Auth middleware
-  await app.register(authMiddleware, { publicRoutes: ['/healthz', '/api/v1/packages'] });
+  await app.register(authMiddleware, { publicRoutes: ['/healthz', '/api/v1/packages', '/docs'] });
+
+  // OpenAPI documentation
+  await app.register(swagger, {
+    openapi: {
+      info: {
+        title: 'Urule PackageHub API',
+        description: 'Package discovery, search, and version management',
+        version: '0.1.0',
+      },
+      servers: [{ url: 'http://localhost:3009' }],
+      tags: [{ name: 'packages' }, { name: 'versions' }],
+    },
+  });
+
+  await app.register(swaggerUi, {
+    routePrefix: '/docs',
+  });
 
   // Error handler
   app.setErrorHandler(errorHandler);

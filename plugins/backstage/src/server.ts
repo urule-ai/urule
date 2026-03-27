@@ -1,5 +1,7 @@
 import Fastify from 'fastify';
 import rateLimit from '@fastify/rate-limit';
+import swagger from '@fastify/swagger';
+import swaggerUi from '@fastify/swagger-ui';
 import { authMiddleware } from '@urule/auth-middleware';
 import { CatalogSyncService, type RegistryClient } from './catalog/sync-service.js';
 import type { UruleOrg, UruleWorkspace, UruleAgent } from './catalog/entity-mapper.js';
@@ -52,7 +54,24 @@ export async function buildServer(config: Config) {
   });
 
   // Auth middleware
-  await app.register(authMiddleware, { publicRoutes: ['/healthz'] });
+  await app.register(authMiddleware, { publicRoutes: ['/healthz', '/docs'] });
+
+  // OpenAPI documentation
+  await app.register(swagger, {
+    openapi: {
+      info: {
+        title: 'Urule Backstage Plugin API',
+        description: 'Backstage catalog sync and scaffolder actions',
+        version: '0.1.0',
+      },
+      servers: [{ url: 'http://localhost:3010' }],
+      tags: [{ name: 'catalog' }, { name: 'scaffolder' }],
+    },
+  });
+
+  await app.register(swaggerUi, {
+    routePrefix: '/docs',
+  });
 
   // Health check
   app.get('/healthz', async () => ({ status: 'ok', service: config.serviceName }));

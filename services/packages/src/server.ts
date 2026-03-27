@@ -1,5 +1,7 @@
 import Fastify from 'fastify';
 import rateLimit from '@fastify/rate-limit';
+import swagger from '@fastify/swagger';
+import swaggerUi from '@fastify/swagger-ui';
 import { authMiddleware } from '@urule/auth-middleware';
 import type { Config } from './config.js';
 import { DependencyResolver } from './services/dependency-resolver.js';
@@ -33,7 +35,24 @@ export async function buildServer(config: Config) {
   });
 
   // Auth middleware
-  await app.register(authMiddleware, { publicRoutes: ['/healthz'] });
+  await app.register(authMiddleware, { publicRoutes: ['/healthz', '/docs'] });
+
+  // OpenAPI documentation
+  await app.register(swagger, {
+    openapi: {
+      info: {
+        title: 'Urule Packages API',
+        description: 'Package install/upgrade/remove lifecycle',
+        version: '0.1.0',
+      },
+      servers: [{ url: 'http://localhost:3008' }],
+      tags: [{ name: 'packages' }, { name: 'installations' }],
+    },
+  });
+
+  await app.register(swaggerUi, {
+    routePrefix: '/docs',
+  });
 
   // Health check
   app.get('/healthz', async () => ({ status: 'ok', service: config.serviceName }));
