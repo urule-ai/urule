@@ -19,5 +19,33 @@
   },
   "engines": {
     "node": ">=20.0.0"
+  },
+  "keywords": [
+    "ai-agents",
+    "ai-platform",
+    "control-plane",
+    "mcp",
+    "model-context-protocol",
+    "orchestration",
+    "langgraph",
+    "anthropic",
+    "claude",
+    "fastify",
+    "typescript",
+    "approval-workflow",
+    "human-in-the-loop",
+    "widget-sdk",
+    "multi-agent",
+    "nats",
+    "openfga",
+    "open-source"
+  ],
+  "homepage": "https://github.com/urule-os/urule",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/urule-os/urule.git"
+  },
+  "bugs": {
+    "url": "https://github.com/urule-os/urule/issues"
   }
 }

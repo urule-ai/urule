@@ -1,20 +1,68 @@
-# Urule — A Linux for AI
+<p align="center">
+  <strong>URULE</strong><br>
+  <em>A Linux for AI</em>
+</p>
 
-> A thin, open control plane for AI coworkers that composes open-source projects into one cohesive platform.
+<p align="center">
+  <a href="https://github.com/urule-os/urule/actions"><img src="https://github.com/urule-os/urule/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/urule-os/urule/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="License"></a>
+  <a href="https://github.com/urule-os/urule/stargazers"><img src="https://img.shields.io/github/stars/urule-os/urule?style=social" alt="Stars"></a>
+  <a href="https://github.com/urule-os/urule/issues"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg" alt="PRs Welcome"></a>
+  <a href="https://github.com/urule-os/urule"><img src="https://img.shields.io/badge/TypeScript-ESM-3178c6.svg" alt="TypeScript"></a>
+</p>
 
-Urule doesn't reinvent orchestration, execution, auth, or eventing. It glues together best-in-class open-source tools and only builds the coordination layer — so you can focus on what your AI agents actually do.
+<p align="center">
+  <a href="#get-started-in-60-seconds">Quick Start</a> |
+  <a href="GETTING-STARTED.md">Full Guide</a> |
+  <a href="ROADMAP.md">Roadmap</a> |
+  <a href="CONTRIBUTING.md">Contribute</a> |
+  <a href="AI-JOURNEYS.md">AI Journeys</a>
+</p>
 
-**Core principle:** Reuse execution, reuse orchestration, reuse auth, reuse eventing — only build the glue.
+---
+
+**Urule is a thin, open control plane for AI coworkers.** It composes best-in-class open-source projects into one cohesive platform and only builds the coordination glue — so you can focus on what your AI agents actually do.
+
+- **Deploy AI agents** with personality packs, system prompts, and real-time streaming chat
+- **Orchestrate with any framework** — LangGraph, CrewAI, AutoGen, ADK (pluggable adapter interface)
+- **Human-in-the-loop approvals** with risk levels, reasoning, and audit trails
+- **11 installable package types** — personalities, skills, tools, widgets, workflows, and more
+- **MCP tool registry** — connect any MCP server, discover tools, bind to workspaces
+- **Multi-channel routing** — Slack, Telegram, webhooks, with more adapters coming
+- **Office UI** — immersive Next.js dashboard with widgets, light/dark mode, and mobile support
 
 ## Why Urule?
 
-AI tooling today is fragmented. You need orchestration (LangGraph, CrewAI), sandboxed execution, approval workflows, tool registries, multi-channel routing, and a UI — but no single project provides the coordination layer that ties them together.
+| | Urule | LangGraph alone | Dify | CrewAI |
+|---|---|---|---|---|
+| **Control plane** (auth, registry, approvals) | Built-in | Build yourself | Partial | No |
+| **Pluggable orchestrators** | Any (adapter interface) | LangGraph only | Built-in only | CrewAI only |
+| **MCP tool registry** | Built-in gateway | No | No | No |
+| **Package ecosystem** (install/publish/discover) | 11 package types | No | Templates only | No |
+| **Human-in-the-loop approvals** | Rich (risk, reasoning, audit) | Manual | Basic | No |
+| **Multi-channel messaging** | Slack, Telegram, webhooks | No | No | No |
+| **Office UI** | Full-featured | No | Yes | No |
+| **Open source** | Apache 2.0 | Apache 2.0 | Apache 2.0 | MIT |
+| **Standalone components** | 7 repos usable independently | No | No | No |
 
-Urule is that layer. It's designed to be:
+**Core principle:** Reuse execution, reuse orchestration, reuse auth, reuse eventing — only build the glue.
 
-- **Composable** — Swap orchestrators, add channels, install widgets. Everything is pluggable.
-- **Extendable** — Build widgets, orchestrator adapters, channel adapters, and package types.
-- **Open** — Every component is Apache 2.0 licensed. Standalone components work outside Urule too.
+## Get Started in 60 Seconds
+
+```bash
+# Clone the repo
+git clone https://github.com/urule-os/urule.git && cd urule
+
+# Start everything with Docker
+make infra-up
+
+# Start the Office UI
+make dev-ui
+
+# Open http://localhost:3000 and click "Demo Login"
+```
+
+See [GETTING-STARTED.md](GETTING-STARTED.md) for the full setup guide including deploying your first AI agent.
 
 ## Architecture
 
@@ -24,234 +72,125 @@ Urule is that layer. It's designed to be:
    +-- Operators (Backstage UI, CLI)
    +-- End Users (Office UI, Chat Channels)
    |
-═══════════════════════════════════════════════════
+============================================================
  LAYER 1: PORTAL
-═══════════════════════════════════════════════════
-   backstage plugin ──> Backstage (OSS)
-   |
-═══════════════════════════════════════════════════
- LAYER 2: CONTROL PLANE (what Urule builds)
-═══════════════════════════════════════════════════
-   registry ─────── source of truth for all entities
-   packages ─────── install/upgrade/remove lifecycle
-   packagehub ───── discovery, search, metadata
-   governance ───── policy (OPA) + authz (OpenFGA) gateway
-   approvals ────── approval lifecycle (Temporal-backed)    ★ standalone
-   channel-router ─ message normalization                   ★ standalone
-   mcp-gateway ──── MCP server registry + tool routing      ★ standalone
-   state ────────── room presence, task ownership
-   |
-═══════════════════════════════════════════════════
- LAYER 3: ORCHESTRATION
-═══════════════════════════════════════════════════
-   langgraph-adapter ── LangGraph + Anthropic Claude        ★ standalone
-   |
-═══════════════════════════════════════════════════
- LAYER 4: EXECUTION
-═══════════════════════════════════════════════════
-   runtime-broker ──> sandboxed.sh (OSS)                    ★ standalone
-   |
-═══════════════════════════════════════════════════
- PLATFORM SERVICES (external OSS)
-═══════════════════════════════════════════════════
-   Temporal │ Keycloak │ OpenFGA │ OPA │ NATS
-   PostgreSQL │ OpenTelemetry │ Jaeger
-```
+   backstage plugin --> Backstage (OSS)
 
-Items marked with ★ are **standalone repos** that can be used independently of Urule.
+ LAYER 2: CONTROL PLANE (what Urule builds)
+   registry ------- source of truth for all entities
+   packages ------- install/upgrade/remove lifecycle
+   packagehub ----- discovery, search, metadata
+   governance ----- policy (OPA) + authz (OpenFGA) gateway
+   approvals ------ approval lifecycle (Temporal-backed)
+   channel-router - message normalization (Slack, Telegram)
+   mcp-gateway ---- MCP server registry + tool routing
+   state ---------- room presence, task ownership
+
+ LAYER 3: ORCHESTRATION
+   langgraph-adapter -- LangGraph + Anthropic Claude
+
+ LAYER 4: EXECUTION
+   runtime-broker --> sandboxed.sh (OSS)
+
+ PLATFORM SERVICES (external OSS)
+   Temporal | Keycloak | OpenFGA | OPA | NATS
+   PostgreSQL | OpenTelemetry | Jaeger
+============================================================
+```
 
 ## Ecosystem
 
-Urule is split across multiple repositories. Some are generic and usable independently; others are Urule-specific.
+Urule is split across 8 repositories. Standalone repos work independently outside Urule.
 
-### Standalone Repos (use independently or with Urule)
+### Standalone Repos
 
 | Repo | Description | Use Case |
 |------|-------------|----------|
-| [widget-sdk](https://github.com/urule-os/widget-sdk) | Widget iframe bridge protocol, manifest schema, registry | Embed micro-frontends in any app |
-| [orchestrator-contract](https://github.com/urule-os/orchestrator-contract) | Standard adapter interface + compliance test suite | Build AI orchestrator integrations |
-| [mcp-gateway](https://github.com/urule-os/mcp-gateway) | MCP server registry, workspace bindings, tool catalog | Manage MCP tools at scale |
-| [channel-router](https://github.com/urule-os/channel-router) | Multi-channel message normalization (Slack, Telegram, webhooks) | Unify messaging across channels |
-| [approvals](https://github.com/urule-os/approvals) | Temporal-backed approval workflow engine | Add approval flows to any system |
-| [runtime-broker](https://github.com/urule-os/runtime-broker) | Sandbox session allocation broker | Manage isolated execution environments |
-| [langgraph-adapter](https://github.com/urule-os/langgraph-adapter) | LangGraph + Anthropic Claude orchestrator adapter | Run AI agents with LangGraph |
+| [widget-sdk](https://github.com/urule-os/widget-sdk) | Widget iframe bridge protocol | Embed micro-frontends in any app |
+| [orchestrator-contract](https://github.com/urule-os/orchestrator-contract) | Adapter interface + compliance tests | Build AI orchestrator integrations |
+| [mcp-gateway](https://github.com/urule-os/mcp-gateway) | MCP server registry + tool catalog | Manage MCP tools at scale |
+| [channel-router](https://github.com/urule-os/channel-router) | Multi-channel message normalization | Unify messaging across channels |
+| [approvals](https://github.com/urule-os/approvals) | Temporal-backed approval workflows | Add approval flows to any system |
+| [runtime-broker](https://github.com/urule-os/runtime-broker) | Sandbox session allocation | Manage isolated execution environments |
+| [langgraph-adapter](https://github.com/urule-os/langgraph-adapter) | LangGraph + Anthropic Claude adapter | Run AI agents with LangGraph |
 
-### This Repo (Urule Core)
+### Core Packages (this repo)
 
-| Path | Package | Purpose |
-|------|---------|---------|
-| `packages/spec` | `@urule/spec` | Entity types, manifest JSON Schema, validators |
-| `packages/events` | `@urule/events` | NATS event envelope, topic conventions, typed pub/sub |
-| `packages/authz` | `@urule/authz` | OpenFGA SDK wrapper, relation types, auth model |
-| `services/registry` | `@urule/registry` | Source of truth: orgs, workspaces, agents, runtimes |
-| `services/packages` | `@urule/packages` | Install/upgrade/remove lifecycle, dependency resolution |
-| `services/packagehub` | `@urule/packagehub` | Package discovery, search, metadata |
-| `services/governance` | `@urule/governance` | Combined OPA + OpenFGA policy/authz gateway |
-| `services/state` | `@urule/state` | Room presence, task ownership, widget state |
-| `plugins/backstage` | `@urule/backstage-plugin` | Sync entities to Backstage catalog |
-| `apps/office-ui` | `@urule/office-ui` | Next.js 14 immersive office frontend |
-| `infra/` | — | Docker Compose, scripts, SQL seeds, E2E tests |
+| Path | Purpose |
+|------|---------|
+| `packages/spec` | Entity types, manifest schema, validators |
+| `packages/events` | NATS event envelope, topics, audit logger |
+| `packages/authz` | OpenFGA SDK wrapper |
+| `packages/auth-middleware` | Fastify JWT plugin (Keycloak JWKS) |
+| `services/registry` | Source of truth: orgs, workspaces, agents, runtimes |
+| `services/packagehub` | Package discovery, search, metadata |
+| `services/governance` | OPA + OpenFGA policy/authz gateway |
+| `services/state` | Room presence, task ownership, widget state |
+| `apps/office-ui` | Next.js 14 immersive office frontend |
 
-## Quick Start
+## How to Extend
 
-### Prerequisites
+| What to Build | Start Here | Time |
+|--------------|-----------|------|
+| New AI orchestrator adapter | [orchestrator-contract](https://github.com/urule-os/orchestrator-contract) | ~2 hours |
+| New messaging channel | [channel-router](https://github.com/urule-os/channel-router) | ~1 hour |
+| New UI widget | [widget-sdk](https://github.com/urule-os/widget-sdk) | ~30 min |
+| New agent personality | [CLAUDE.md](CLAUDE.md) recipes | ~15 min |
+| New MCP tool integration | [mcp-gateway](https://github.com/urule-os/mcp-gateway) | ~30 min |
+| New backend service | [CLAUDE.md](CLAUDE.md) recipes | ~1 hour |
 
-- Docker and Docker Compose v2
-- Node.js 20+ (for local development)
-
-### Run the full stack
-
-```bash
-# Clone this repo and standalone repos
-./scripts/clone-all.sh
-
-# Start infrastructure + all services
-cd infra
-docker compose -f compose/docker-compose.phase6.yaml up --build
-
-# Access the Office UI
-open http://localhost:3000
-```
-
-### Run tests
+## Examples
 
 ```bash
-# All unit tests in Docker
-cd infra/compose
-docker compose -f docker-compose.tests.yaml up --build --abort-on-container-exit
-
-# E2E integration tests (28 tests)
-cd infra
-./scripts/run-phase1.sh
+examples/
+  hello-agent/      # Deploy your first AI agent
+  custom-widget/    # Build a widget from scratch
+  mcp-tool/         # Connect an MCP server
 ```
 
-### Service Ports
-
-| Service | Default Port |
-|---------|-------------|
-| Office UI | http://localhost:3000 |
-| Registry | http://localhost:3001 |
-| LangGraph Adapter | http://localhost:3002 |
-| Approvals | http://localhost:3003 |
-| Runtime Broker | http://localhost:4500 |
-| State | http://localhost:3007 |
-| PackageHub | http://localhost:3009 |
-| PostgreSQL | localhost:5500 |
-| NATS | localhost:4222 |
-| Temporal UI | http://localhost:8280 |
-| Keycloak | http://localhost:8281 |
-| Jaeger | http://localhost:16686 |
-
-## How to Extend Urule
-
-### Build a Widget
-
-Widgets are micro-frontends that plug into the Office UI. Use the [Widget SDK](https://github.com/urule-os/widget-sdk) to build one:
-
-1. Define a `WidgetManifest` with your widget's metadata
-2. Implement your widget as a React component or iframe-based app
-3. Use the bridge protocol for host communication
-4. Register it in the widget registry
-
-See the [Widget SDK docs](https://github.com/urule-os/widget-sdk) for details.
-
-### Add an Orchestrator
-
-Implement the [Orchestrator Contract](https://github.com/urule-os/orchestrator-contract) to integrate any AI framework:
-
-1. Implement the `OrchestratorAdapter` interface (8 methods)
-2. Run the compliance test suite to verify correctness
-3. Deploy as a Fastify service
-4. Register with the Urule registry
-
-See the [langgraph-adapter](https://github.com/urule-os/langgraph-adapter) for a reference implementation.
-
-### Add a Channel
-
-Add a new messaging channel to the [Channel Router](https://github.com/urule-os/channel-router):
-
-1. Implement the `ChannelAdapter` interface
-2. Normalize messages into the unified format
-3. Register the adapter
-
-See the [Channel Router docs](https://github.com/urule-os/channel-router) for a step-by-step guide.
-
-### Create a Package
-
-Urule supports 11 package types: `personality`, `skill`, `tool`, `mcp-connector`, `widget`, `theme`, `workflow`, `integration`, `template`, `runtime-profile`, `governance-policy`.
-
-Each package has a manifest validated against the `@urule/spec` JSON Schema.
+See [examples/](examples/) for step-by-step walkthroughs.
 
 ## Tech Stack
 
 | Concern | Choice |
 |---------|--------|
-| Language | TypeScript (ESM) |
-| HTTP framework | Fastify 5 |
-| ORM | Drizzle ORM |
-| Database | PostgreSQL 16 (schema-per-service) |
-| Test runner | Vitest |
-| Container | Docker multi-stage (node:20-slim) |
-| ID generation | ULID |
+| Language | TypeScript (ESM, strict) |
+| Backend | Fastify 5, Drizzle ORM, PostgreSQL 16 |
 | Events | NATS + JetStream |
 | Auth | Keycloak (authn) + OpenFGA (authz) |
 | Frontend | Next.js 14, React 18, Tailwind CSS, Zustand |
+| Tests | Vitest (unit), Playwright (E2E) |
+| IDs | ULID |
+| Containers | Docker multi-stage (node:20-slim) |
 
-## Design Principles
+## Documentation
 
-1. **Services are glue, not business logic.** If a service exceeds ~2000 lines, it's doing too much.
-2. **Contract-first.** Types and interfaces live in library packages; services implement them.
-3. **Schema-per-service.** Each service owns its Postgres schema. Never query another service's database.
-4. **Event-driven.** Mutations publish events to NATS. Consumers are idempotent.
-5. **Auth flow.** User → Keycloak JWT → service validates → governance/authz checks.
-
-## Test Summary
-
-| Area | Tests |
-|------|-------|
-| Core libraries (spec, events, authz) | 45 |
-| Standalone services (approvals, mcp-gateway, etc.) | 133 |
-| Core services (registry, packages, governance, state) | 72 |
-| E2E integration | 28 |
-| **Total** | **278** |
-
-## Roadmap
-
-See [ROADMAP.md](ROADMAP.md) for the full improvement plan — ~140 items across security, testing, UX, infrastructure, developer experience, and features. Each item is scoped to a specific repo with actionable sub-tasks. Pick any unchecked item and contribute!
-
-## User Journeys & Testing
-
-See [USER-JOURNEYS.md](USER-JOURNEYS.md) for the complete user journey map — every screen, every flow, manual UX test checklists, and future feature ideas organized by section.
-
-## AI Agent Journeys & Skills
-
-- [AI-JOURNEYS.md](AI-JOURNEYS.md) — How AI agents interact with Urule as platform users and as developers, with test cases and improvement ideas
-- [SKILLS.md](SKILLS.md) — Machine-readable capability reference: system tools, APIs, package types, event topics, extension points
-
-## Architecture & AI-Friendly Development
-
-- [ARCHITECTURE.md](ARCHITECTURE.md) — Design decisions, system diagrams, data flow
-- [CLAUDE.md](CLAUDE.md) — AI assistant guide with code patterns, recipes, and conventions
-- [.cursorrules](.cursorrules) — Cursor AI coding rules
+| Document | For |
+|----------|-----|
+| [GETTING-STARTED.md](GETTING-STARTED.md) | First-time setup, deploy your first agent |
+| [ROADMAP.md](ROADMAP.md) | ~140 improvement items to pick up |
+| [USER-JOURNEYS.md](USER-JOURNEYS.md) | Every UI flow + Playwright test checklists |
+| [AI-JOURNEYS.md](AI-JOURNEYS.md) | How AI agents use and build on Urule |
+| [SKILLS.md](SKILLS.md) | Machine-readable platform capabilities |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Design decisions + system diagrams |
+| [CLAUDE.md](CLAUDE.md) | AI assistant patterns, recipes, conventions |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | How to contribute (human or AI) |
 
 ## Contributing
 
 We'd love your help making AI more usable. See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
-Ways to contribute:
-- Pick an item from the [Roadmap](ROADMAP.md) — security fixes, tests, UX improvements, and more
-- Build a new [widget](https://github.com/urule-os/widget-sdk)
-- Implement an [orchestrator adapter](https://github.com/urule-os/orchestrator-contract) for your favorite AI framework
-- Add a [channel adapter](https://github.com/urule-os/channel-router) for a new messaging platform
-- Improve docs, fix bugs, or suggest features via [Issues](https://github.com/urule-os/urule/issues)
+**Ways to contribute:**
+- Pick an item from the [Roadmap](ROADMAP.md)
+- Build a [widget](https://github.com/urule-os/widget-sdk), [orchestrator adapter](https://github.com/urule-os/orchestrator-contract), or [channel adapter](https://github.com/urule-os/channel-router)
+- Add [examples](examples/), improve docs, or suggest features via [Issues](https://github.com/urule-os/urule/issues)
+- AI developers: read [CLAUDE.md](CLAUDE.md) for patterns and step-by-step recipes
+
+If Urule is useful to you, please star the repo — it helps others discover it.
 
 ## Acknowledgments
 
-Agent personality templates and formats are inspired by:
-
-- [agency-agents](https://github.com/msitarzewski/agency-agents/) — Agent personality templates with markdown + YAML frontmatter
-- [gstack](https://github.com/garrytan/gstack) — Garry Tan's agent stack
-- [dexter](https://github.com/virattt/dexter) — Dexter agent framework
+Agent personality templates inspired by [agency-agents](https://github.com/msitarzewski/agency-agents/), [gstack](https://github.com/garrytan/gstack), and [dexter](https://github.com/virattt/dexter).
 
 ## License
 
