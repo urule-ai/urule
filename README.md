@@ -219,6 +219,10 @@ Each package has a manifest validated against the `@urule/spec` JSON Schema.
 
 See [ROADMAP.md](ROADMAP.md) for the full improvement plan — ~140 items across security, testing, UX, infrastructure, developer experience, and features. Each item is scoped to a specific repo with actionable sub-tasks. Pick any unchecked item and contribute!
 
+## User Journeys & Testing
+
+See [USER-JOURNEYS.md](USER-JOURNEYS.md) for the complete user journey map — every screen, every flow, manual UX test checklists, and future feature ideas organized by section.
+
 ## Contributing
 
 We'd love your help making AI more usable. See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
