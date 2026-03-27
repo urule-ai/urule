@@ -2,7 +2,7 @@
   "name": "urule",
   "version": "0.1.0",
   "private": true,
-  "description": "Urule — A Linux for AI. Thin control plane for AI coworkers.",
+  "description": "Urule — The open-source coordination layer for AI agents.",
   "license": "Apache-2.0",
   "workspaces": [
     "packages/*",

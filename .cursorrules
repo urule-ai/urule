@@ -1,4 +1,4 @@
-You are working on Urule, a thin control plane for AI coworkers.
+You are working on Urule, the open-source coordination layer for AI agents.
 
 Tech stack: TypeScript ESM, Fastify 5, Drizzle ORM, PostgreSQL 16, NATS, Vitest, Next.js 14, React 18, Tailwind CSS, Zustand.
 

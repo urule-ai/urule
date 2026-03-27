@@ -1,6 +1,6 @@
 # Urule Growth Plan
 
-A step-by-step strategy to make Urule the go-to open-source control plane for AI coworkers.
+A step-by-step strategy to make Urule the go-to open-source coordination layer for AI agents.
 
 ---
 
@@ -52,11 +52,11 @@ FIND IT          -->    TRY IT          -->    STAY & CONTRIBUTE
 - [ ] **Enable GitHub Sponsors** at github.com/sponsors/PanoramicRum
   - Set tiers: $5/mo (Individual), $25/mo (Team), $100/mo (Company)
 - [ ] **Pin the urule repo** to your GitHub profile and the urule-os org page
-- [ ] **Add org description** at github.com/urule-os: "Open-source control plane for AI coworkers"
+- [ ] **Add org description** at github.com/urule-os: "The open-source coordination layer for AI agents"
 
 ### 1.2 Create Social Presence
 - [ ] **Twitter/X**: Create @urule_os account
-  - Bio: "A Linux for AI. Open-source control plane for AI coworkers. Apache 2.0."
+  - Bio: "The open-source coordination layer for AI agents. Deploy, orchestrate, govern. Apache 2.0."
   - Pin: Launch announcement tweet with GitHub link
 - [ ] **Add social links** to README footer and GitHub org profile
 
@@ -102,7 +102,7 @@ Each requires a PR following the list's contribution format.
 - [ ] [awesome-typescript](https://github.com/dzharii/awesome-typescript) — "Frameworks" section
 
 ### 2.2 Post on Communities
-- [ ] **Hacker News**: "Show HN: Urule — A Linux for AI (open-source control plane for AI coworkers)"
+- [ ] **Hacker News**: "Show HN: Urule — Open-source coordination layer for AI agents (deploy, orchestrate, govern)"
   - Post on a weekday morning (Pacific time)
   - Be available to answer comments for 4-6 hours
 - [ ] **Reddit**: Post in r/LocalLLaMA, r/MachineLearning, r/SideProject, r/typescript

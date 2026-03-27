@@ -1,6 +1,6 @@
 # Urule — AI Assistant Guide
 
-Urule is a thin control plane for AI coworkers. It composes open-source projects (Keycloak, NATS, OpenFGA, OPA, Temporal, PostgreSQL) into a cohesive platform and only builds the coordination glue. This file helps AI coding assistants understand the codebase and contribute effectively.
+Urule is the open-source coordination layer for AI agents. It composes open-source projects (Keycloak, NATS, OpenFGA, OPA, Temporal, PostgreSQL) into a cohesive platform and only builds the coordination glue. This file helps AI coding assistants understand the codebase and contribute effectively.
 
 ## Architecture Principles
 

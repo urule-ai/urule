@@ -1,6 +1,6 @@
 # Copilot Instructions for Urule
 
-Urule is a thin control plane for AI coworkers built with TypeScript ESM, Fastify 5, and Next.js 14.
+Urule is the open-source coordination layer for AI agents, built with TypeScript ESM, Fastify 5, and Next.js 14.
 
 ## Key Conventions
 

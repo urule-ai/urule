@@ -1,6 +1,6 @@
 <p align="center">
   <strong>URULE</strong><br>
-  <em>A Linux for AI</em>
+  <em>The open-source coordination layer for AI agents</em>
 </p>
 
 <p align="center">
@@ -21,7 +21,7 @@
 
 ---
 
-**Urule is a thin, open control plane for AI coworkers.** It composes best-in-class open-source projects into one cohesive platform and only builds the coordination glue — so you can focus on what your AI agents actually do.
+**Urule is the open-source coordination layer for AI agents.** It composes best-in-class open-source projects into one cohesive platform and only builds the coordination glue — so you can focus on what your AI agents actually do.
 
 - **Deploy AI agents** with personality packs, system prompts, and real-time streaming chat
 - **Orchestrate with any framework** — LangGraph, CrewAI, AutoGen, ADK (pluggable adapter interface)

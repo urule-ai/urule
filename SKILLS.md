@@ -6,8 +6,8 @@ A machine-readable reference of everything Urule can do — for AI agents discov
 
 ```yaml
 name: Urule
-tagline: A Linux for AI
-description: Thin control plane for AI coworkers — composes open-source projects into one cohesive platform
+tagline: The open-source coordination layer for AI agents
+description: Composes open-source projects into one cohesive platform — deploy, orchestrate, and govern AI agents
 repository: https://github.com/urule-os/urule
 license: Apache-2.0
 language: TypeScript (ESM)
