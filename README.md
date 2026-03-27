@@ -223,6 +223,11 @@ See [ROADMAP.md](ROADMAP.md) for the full improvement plan — ~140 items across
 
 See [USER-JOURNEYS.md](USER-JOURNEYS.md) for the complete user journey map — every screen, every flow, manual UX test checklists, and future feature ideas organized by section.
 
+## AI Agent Journeys & Skills
+
+- [AI-JOURNEYS.md](AI-JOURNEYS.md) — How AI agents interact with Urule as platform users and as developers, with test cases and improvement ideas
+- [SKILLS.md](SKILLS.md) — Machine-readable capability reference: system tools, APIs, package types, event topics, extension points
+
 ## Architecture & AI-Friendly Development
 
 - [ARCHITECTURE.md](ARCHITECTURE.md) — Design decisions, system diagrams, data flow
