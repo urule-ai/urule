@@ -43,9 +43,9 @@
   "homepage": "https://urule.ai",
   "repository": {
     "type": "git",
-    "url": "https://github.com/urule-os/urule.git"
+    "url": "https://github.com/urule-ai/urule.git"
   },
   "bugs": {
-    "url": "https://github.com/urule-os/urule/issues"
+    "url": "https://github.com/urule-ai/urule/issues"
   }
 }

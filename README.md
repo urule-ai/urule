@@ -4,11 +4,11 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/urule-os/urule/actions"><img src="https://github.com/urule-os/urule/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="https://github.com/urule-os/urule/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="License"></a>
-  <a href="https://github.com/urule-os/urule/stargazers"><img src="https://img.shields.io/github/stars/urule-os/urule?style=social" alt="Stars"></a>
-  <a href="https://github.com/urule-os/urule/issues"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg" alt="PRs Welcome"></a>
-  <a href="https://github.com/urule-os/urule"><img src="https://img.shields.io/badge/TypeScript-ESM-3178c6.svg" alt="TypeScript"></a>
+  <a href="https://github.com/urule-ai/urule/actions"><img src="https://github.com/urule-ai/urule/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/urule-ai/urule/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="License"></a>
+  <a href="https://github.com/urule-ai/urule/stargazers"><img src="https://img.shields.io/github/stars/urule-ai/urule?style=social" alt="Stars"></a>
+  <a href="https://github.com/urule-ai/urule/issues"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg" alt="PRs Welcome"></a>
+  <a href="https://github.com/urule-ai/urule"><img src="https://img.shields.io/badge/TypeScript-ESM-3178c6.svg" alt="TypeScript"></a>
   <a href="https://x.com/uruleai"><img src="https://img.shields.io/badge/follow-%40uruleai-1DA1F2?logo=x&style=social" alt="Follow @uruleai"></a>
 </p>
 
@@ -52,7 +52,7 @@
 
 ```bash
 # Clone the repo
-git clone https://github.com/urule-os/urule.git && cd urule
+git clone https://github.com/urule-ai/urule.git && cd urule
 
 # Start everything with Docker
 make infra-up
@@ -107,13 +107,13 @@ Urule is split across 8 repositories. Standalone repos work independently outsid
 
 | Repo | Description | Use Case |
 |------|-------------|----------|
-| [widget-sdk](https://github.com/urule-os/widget-sdk) | Widget iframe bridge protocol | Embed micro-frontends in any app |
-| [orchestrator-contract](https://github.com/urule-os/orchestrator-contract) | Adapter interface + compliance tests | Build AI orchestrator integrations |
-| [mcp-gateway](https://github.com/urule-os/mcp-gateway) | MCP server registry + tool catalog | Manage MCP tools at scale |
-| [channel-router](https://github.com/urule-os/channel-router) | Multi-channel message normalization | Unify messaging across channels |
-| [approvals](https://github.com/urule-os/approvals) | Temporal-backed approval workflows | Add approval flows to any system |
-| [runtime-broker](https://github.com/urule-os/runtime-broker) | Sandbox session allocation | Manage isolated execution environments |
-| [langgraph-adapter](https://github.com/urule-os/langgraph-adapter) | LangGraph + Anthropic Claude adapter | Run AI agents with LangGraph |
+| [widget-sdk](https://github.com/urule-ai/widget-sdk) | Widget iframe bridge protocol | Embed micro-frontends in any app |
+| [orchestrator-contract](https://github.com/urule-ai/orchestrator-contract) | Adapter interface + compliance tests | Build AI orchestrator integrations |
+| [mcp-gateway](https://github.com/urule-ai/mcp-gateway) | MCP server registry + tool catalog | Manage MCP tools at scale |
+| [channel-router](https://github.com/urule-ai/channel-router) | Multi-channel message normalization | Unify messaging across channels |
+| [approvals](https://github.com/urule-ai/approvals) | Temporal-backed approval workflows | Add approval flows to any system |
+| [runtime-broker](https://github.com/urule-ai/runtime-broker) | Sandbox session allocation | Manage isolated execution environments |
+| [langgraph-adapter](https://github.com/urule-ai/langgraph-adapter) | LangGraph + Anthropic Claude adapter | Run AI agents with LangGraph |
 
 ### Core Packages (this repo)
 
@@ -133,11 +133,11 @@ Urule is split across 8 repositories. Standalone repos work independently outsid
 
 | What to Build | Start Here | Time |
 |--------------|-----------|------|
-| New AI orchestrator adapter | [orchestrator-contract](https://github.com/urule-os/orchestrator-contract) | ~2 hours |
-| New messaging channel | [channel-router](https://github.com/urule-os/channel-router) | ~1 hour |
-| New UI widget | [widget-sdk](https://github.com/urule-os/widget-sdk) | ~30 min |
+| New AI orchestrator adapter | [orchestrator-contract](https://github.com/urule-ai/orchestrator-contract) | ~2 hours |
+| New messaging channel | [channel-router](https://github.com/urule-ai/channel-router) | ~1 hour |
+| New UI widget | [widget-sdk](https://github.com/urule-ai/widget-sdk) | ~30 min |
 | New agent personality | [CLAUDE.md](CLAUDE.md) recipes | ~15 min |
-| New MCP tool integration | [mcp-gateway](https://github.com/urule-os/mcp-gateway) | ~30 min |
+| New MCP tool integration | [mcp-gateway](https://github.com/urule-ai/mcp-gateway) | ~30 min |
 | New backend service | [CLAUDE.md](CLAUDE.md) recipes | ~1 hour |
 
 ## Examples
@@ -183,8 +183,8 @@ We'd love your help making AI more usable. See [CONTRIBUTING.md](CONTRIBUTING.md
 
 **Ways to contribute:**
 - Pick an item from the [Roadmap](ROADMAP.md)
-- Build a [widget](https://github.com/urule-os/widget-sdk), [orchestrator adapter](https://github.com/urule-os/orchestrator-contract), or [channel adapter](https://github.com/urule-os/channel-router)
-- Add [examples](examples/), improve docs, or suggest features via [Issues](https://github.com/urule-os/urule/issues)
+- Build a [widget](https://github.com/urule-ai/widget-sdk), [orchestrator adapter](https://github.com/urule-ai/orchestrator-contract), or [channel adapter](https://github.com/urule-ai/channel-router)
+- Add [examples](examples/), improve docs, or suggest features via [Issues](https://github.com/urule-ai/urule/issues)
 - AI developers: read [CLAUDE.md](CLAUDE.md) for patterns and step-by-step recipes
 
 If Urule is useful to you, please star the repo — it helps others discover it.

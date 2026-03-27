@@ -9,7 +9,7 @@ name: Urule
 tagline: The open-source coordination layer for AI agents
 description: Composes open-source projects into one cohesive platform — deploy, orchestrate, and govern AI agents
 website: https://urule.ai
-repository: https://github.com/urule-os/urule
+repository: https://github.com/urule-ai/urule
 twitter: https://x.com/uruleai
 license: Apache-2.0
 language: TypeScript (ESM)
@@ -20,14 +20,14 @@ framework: Fastify 5 + Next.js 14
 
 | Repository | Purpose | Standalone |
 |-----------|---------|-----------|
-| [urule](https://github.com/urule-os/urule) | Core platform (registry, state, governance, UI) | No |
-| [widget-sdk](https://github.com/urule-os/widget-sdk) | Widget iframe bridge protocol | Yes |
-| [orchestrator-contract](https://github.com/urule-os/orchestrator-contract) | Adapter interface for AI orchestrators | Yes |
-| [mcp-gateway](https://github.com/urule-os/mcp-gateway) | MCP server registry + tool catalog | Yes |
-| [channel-router](https://github.com/urule-os/channel-router) | Multi-channel message normalization | Yes |
-| [approvals](https://github.com/urule-os/approvals) | Temporal-backed approval workflows | Yes |
-| [runtime-broker](https://github.com/urule-os/runtime-broker) | Sandbox session allocation | Yes |
-| [langgraph-adapter](https://github.com/urule-os/langgraph-adapter) | LangGraph + Anthropic Claude adapter | Yes |
+| [urule](https://github.com/urule-ai/urule) | Core platform (registry, state, governance, UI) | No |
+| [widget-sdk](https://github.com/urule-ai/widget-sdk) | Widget iframe bridge protocol | Yes |
+| [orchestrator-contract](https://github.com/urule-ai/orchestrator-contract) | Adapter interface for AI orchestrators | Yes |
+| [mcp-gateway](https://github.com/urule-ai/mcp-gateway) | MCP server registry + tool catalog | Yes |
+| [channel-router](https://github.com/urule-ai/channel-router) | Multi-channel message normalization | Yes |
+| [approvals](https://github.com/urule-ai/approvals) | Temporal-backed approval workflows | Yes |
+| [runtime-broker](https://github.com/urule-ai/runtime-broker) | Sandbox session allocation | Yes |
+| [langgraph-adapter](https://github.com/urule-ai/langgraph-adapter) | LangGraph + Anthropic Claude adapter | Yes |
 
 ## System Tools (Available to AI Agents)
 
@@ -242,12 +242,12 @@ Where widgets can be placed in the Office UI:
 
 | What to Build | Interface/Pattern | Documentation |
 |--------------|------------------|---------------|
-| New AI orchestrator | `OrchestratorAdapter` (8 methods) | [orchestrator-contract](https://github.com/urule-os/orchestrator-contract) |
-| New messaging channel | `ChannelAdapter` (4 methods) | [channel-router](https://github.com/urule-os/channel-router) |
-| New UI widget | `WidgetManifest` + component | [widget-sdk](https://github.com/urule-os/widget-sdk) |
+| New AI orchestrator | `OrchestratorAdapter` (8 methods) | [orchestrator-contract](https://github.com/urule-ai/orchestrator-contract) |
+| New messaging channel | `ChannelAdapter` (4 methods) | [channel-router](https://github.com/urule-ai/channel-router) |
+| New UI widget | `WidgetManifest` + component | [widget-sdk](https://github.com/urule-ai/widget-sdk) |
 | New agent personality | `personality` package manifest | CLAUDE.md recipes |
-| New MCP integration | MCP server registration | [mcp-gateway](https://github.com/urule-os/mcp-gateway) |
-| New approval rules | Approval routing rules API | [approvals](https://github.com/urule-os/approvals) |
+| New MCP integration | MCP server registration | [mcp-gateway](https://github.com/urule-ai/mcp-gateway) |
+| New approval rules | Approval routing rules API | [approvals](https://github.com/urule-ai/approvals) |
 | New governance policy | OPA/OpenFGA rules | `services/governance/` |
 | New backend service | Fastify service scaffold | CLAUDE.md "How to add a new service" |
 

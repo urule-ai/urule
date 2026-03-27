@@ -92,4 +92,4 @@ Go to **Integrations** in the sidebar. Your MCP server should appear under "Cust
 
 Full MCP Gateway API docs: http://localhost:3005/docs
 
-See the [MCP Gateway repo](https://github.com/urule-os/mcp-gateway) for more details.
+See the [MCP Gateway repo](https://github.com/urule-ai/mcp-gateway) for more details.

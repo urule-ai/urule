@@ -10,7 +10,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/), and this pro
 
 **Platform**
 - 18 packages across libraries, services, plugins, and frontend
-- 8 GitHub repositories under the urule-os organization
+- 8 GitHub repositories under the urule-ai organization
 - 278+ unit tests, 15 Playwright E2E specs
 
 **Security**

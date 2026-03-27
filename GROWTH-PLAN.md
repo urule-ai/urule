@@ -7,7 +7,7 @@ A step-by-step strategy to make Urule the go-to open-source coordination layer f
 ## What We Have Today
 
 ### Technical Foundation (Complete)
-- 18 packages across 8 GitHub repos (urule-os org)
+- 18 packages across 8 GitHub repos (urule-ai org)
 - 308+ tests (unit + E2E Playwright)
 - Full security stack (JWT auth, Zod validation, CORS, rate limiting, audit logging)
 - Office UI with light/dark mode, mobile support, skeleton loaders, accessibility
@@ -47,12 +47,12 @@ FIND IT          -->    TRY IT          -->    STAY & CONTRIBUTE
 ## Phase 1: Launch (Week 1)
 
 ### 1.1 Enable GitHub Features
-- [ ] **Enable Discussions** on urule-os/urule (Settings > Features > Discussions)
+- [ ] **Enable Discussions** on urule-ai/urule (Settings > Features > Discussions)
   - Create categories: Announcements, Q&A, Show & Tell, Ideas
 - [ ] **Enable GitHub Sponsors** at github.com/sponsors/PanoramicRum
   - Set tiers: $5/mo (Individual), $25/mo (Team), $100/mo (Company)
-- [ ] **Pin the urule repo** to your GitHub profile and the urule-os org page
-- [ ] **Add org description** at github.com/urule-os: "The open-source coordination layer for AI agents"
+- [ ] **Pin the urule repo** to your GitHub profile and the urule-ai org page
+- [ ] **Add org description** at github.com/urule-ai: "The open-source coordination layer for AI agents"
 
 ### 1.2 Create Social Presence
 - [x] **Twitter/X**: Created [@uruleai](https://x.com/uruleai)
@@ -267,7 +267,7 @@ Each requires a PR following the list's contribution format.
 | Channel | URL | Priority |
 |---------|-----|----------|
 | Website | [urule.ai](https://urule.ai) | Landing page |
-| GitHub (main) | [github.com/urule-os/urule](https://github.com/urule-os/urule) | Primary |
+| GitHub (main) | [github.com/urule-ai/urule](https://github.com/urule-ai/urule) | Primary |
 | GitHub Discussions | (enable in repo settings) | Community hub |
 | Twitter/X | [@uruleai](https://x.com/uruleai) | Announcements |
 | npm | @urule/* packages (publish) | Developer reach |

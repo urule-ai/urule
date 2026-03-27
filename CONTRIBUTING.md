@@ -6,7 +6,7 @@ Thank you for your interest in contributing! Urule is an open platform for makin
 
 ```bash
 # Clone and set up
-git clone https://github.com/urule-os/urule.git
+git clone https://github.com/urule-ai/urule.git
 cd urule
 make setup          # Clones ecosystem repos, installs deps
 
@@ -157,7 +157,7 @@ See [ROADMAP.md](ROADMAP.md) for improvement items to pick up, and [USER-JOURNEY
 
 ## Reporting Issues
 
-- Use [GitHub Issues](https://github.com/urule-os/urule/issues) to report bugs or request features
+- Use [GitHub Issues](https://github.com/urule-ai/urule/issues) to report bugs or request features
 - Use the bug report or feature request templates
 - Include steps to reproduce for bugs
 - For security issues, please email the maintainers directly

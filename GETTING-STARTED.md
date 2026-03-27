@@ -11,7 +11,7 @@ Deploy your first AI agent in 5 minutes.
 ## Step 1: Clone and Setup
 
 ```bash
-git clone https://github.com/urule-os/urule.git
+git clone https://github.com/urule-ai/urule.git
 cd urule
 make setup
 ```
@@ -77,8 +77,8 @@ The agent has three built-in tools:
 | Create a project | `/office/projects` — timeline and kanban views |
 | Connect tools | `/office/integrations` — Slack, GitHub, MCP servers |
 | Customize theme | `/office/settings` — dark/light/system toggle |
-| Build a widget | [widget-sdk](https://github.com/urule-os/widget-sdk) |
-| Add an orchestrator | [orchestrator-contract](https://github.com/urule-os/orchestrator-contract) |
+| Build a widget | [widget-sdk](https://github.com/urule-ai/widget-sdk) |
+| Add an orchestrator | [orchestrator-contract](https://github.com/urule-ai/orchestrator-contract) |
 | Run tests | `make test` (unit) or `make e2e-playwright` (E2E) |
 | Read the architecture | [ARCHITECTURE.md](ARCHITECTURE.md) |
 | Browse the roadmap | [ROADMAP.md](ROADMAP.md) |

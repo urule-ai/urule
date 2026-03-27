@@ -101,4 +101,4 @@ bridge.on('host:theme', (theme) => {
 bridge.emit('widget:ready');
 ```
 
-See the [Widget SDK docs](https://github.com/urule-os/widget-sdk) for the full API.
+See the [Widget SDK docs](https://github.com/urule-ai/widget-sdk) for the full API.

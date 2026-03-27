@@ -50,7 +50,7 @@ infra/
   e2e/             — backend E2E tests (phase1.test.mjs)
 ```
 
-## Standalone Repos (separate GitHub repos under urule-os org)
+## Standalone Repos (separate GitHub repos under urule-ai org)
 
 - `widget-sdk` — Widget iframe bridge protocol
 - `orchestrator-contract` — Adapter interface for AI orchestrators
