@@ -22,10 +22,12 @@ export function loadConfig(): Config {
 
 export function validateConfig(config: Config): void {
   const missing: string[] = [];
-  if (!config.openfgaStoreId) {
-    missing.push("OPENFGA_STORE_ID (empty)");
-  }
+  if (!process.env.NATS_URL) missing.push("NATS_URL");
   if (missing.length > 0) {
-    console.warn(`[${config.serviceName}] Config warnings: ${missing.join(", ")}`);
+    throw new Error(`[${config.serviceName}] Missing required env vars: ${missing.join(", ")}`);
+  }
+  // OPENFGA_STORE_ID stays warn-only — some dev setups intentionally skip authz.
+  if (!config.openfgaStoreId) {
+    console.warn(`[${config.serviceName}] Config warnings: OPENFGA_STORE_ID (empty)`);
   }
 }
