@@ -1,3 +1,12 @@
+# Anchor reused below; each compose file that includes this one defines
+# its own copy because docker-compose `include:` does not propagate
+# YAML anchors across files.
+x-default-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: '10m'
+    max-file: '3'
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -10,6 +19,7 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./init-db.sql:/docker-entrypoint-initdb.d/01-init-db.sql
+    logging: *default-logging
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U urule']
       interval: 5s
@@ -24,6 +34,7 @@ services:
       - '${URULE_NATS_MONITOR_PORT:-8222}:8222'
     volumes:
       - natsdata:/data
+    logging: *default-logging
     healthcheck:
       test: ['CMD-SHELL', 'wget -qO- http://localhost:8222/healthz || exit 1']
       interval: 5s
@@ -43,6 +54,15 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    logging: *default-logging
+    healthcheck:
+      # tctl is bundled in the auto-setup image; checking namespace list
+      # confirms both gRPC reachability and DB-side readiness.
+      test: ['CMD-SHELL', 'tctl --address localhost:7233 namespace list >/dev/null 2>&1 || exit 1']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
 
   temporal-ui:
     image: temporalio/ui:latest
@@ -53,6 +73,7 @@ services:
       - '${URULE_TEMPORAL_UI_PORT:-8280}:8080'
     depends_on:
       - temporal
+    logging: *default-logging
 
   keycloak:
     image: quay.io/keycloak/keycloak:latest
@@ -70,6 +91,15 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    logging: *default-logging
+    healthcheck:
+      # KC_HEALTH_ENABLED exposes /health/ready on the management port (9000)
+      # in modern Keycloak; fall back to / on the main port for older builds.
+      test: ['CMD-SHELL', 'curl -fsS http://localhost:9000/health/ready || curl -fsS http://localhost:8080/ || exit 1']
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 30s
 
   openfga:
     image: openfga/openfga:latest
@@ -83,12 +113,26 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    logging: *default-logging
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://localhost:8080/healthz || exit 1']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
 
   opa:
     image: openpolicyagent/opa:latest
     command: run --server --addr :8181
     ports:
       - '${URULE_OPA_PORT:-8284}:8181'
+    logging: *default-logging
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://localhost:8181/health || exit 1']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
 
   otel-collector:
     image: otel/opentelemetry-collector-contrib:latest
@@ -98,6 +142,7 @@ services:
     ports:
       - '${URULE_OTEL_GRPC_PORT:-4317}:4317'
       - '${URULE_OTEL_HTTP_PORT:-4318}:4318'
+    logging: *default-logging
 
   jaeger:
     image: jaegertracing/all-in-one:latest
@@ -107,6 +152,7 @@ services:
       - '${URULE_JAEGER_UI_PORT:-16686}:16686'
       - '${URULE_JAEGER_HTTP_PORT:-14268}:14268'
       - '${URULE_JAEGER_GRPC_PORT:-14250}:14250'
+    logging: *default-logging
 
 volumes:
   pgdata:

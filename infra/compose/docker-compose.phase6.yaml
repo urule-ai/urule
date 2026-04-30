@@ -14,10 +14,19 @@
 include:
   - docker-compose.infra.yaml
 
+# Anchor reused below; redefined here because docker-compose `include:` does
+# not propagate YAML anchors across files.
+x-default-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: '10m'
+    max-file: '3'
+
 services:
   # Override postgres with schema init + seed scripts
   postgres:
     restart: unless-stopped
+    logging: *default-logging
     deploy:
       resources:
         limits:
@@ -35,6 +44,7 @@ services:
 
   nats:
     restart: unless-stopped
+    logging: *default-logging
     deploy:
       resources:
         limits:
@@ -46,6 +56,7 @@ services:
       context: ../../services/registry
       dockerfile: Dockerfile
     restart: unless-stopped
+    logging: *default-logging
     deploy:
       resources:
         limits:
@@ -76,6 +87,7 @@ services:
       context: ../../../orchestrator-adapters/langgraph-adapter
       dockerfile: Dockerfile
     restart: unless-stopped
+    logging: *default-logging
     deploy:
       resources:
         limits:
@@ -107,6 +119,7 @@ services:
       context: ../../../approvals
       dockerfile: Dockerfile
     restart: unless-stopped
+    logging: *default-logging
     deploy:
       resources:
         limits:
@@ -132,6 +145,7 @@ services:
       context: ../../services/state
       dockerfile: Dockerfile
     restart: unless-stopped
+    logging: *default-logging
     deploy:
       resources:
         limits:
@@ -157,6 +171,7 @@ services:
       context: ../../services/packagehub
       dockerfile: Dockerfile
     restart: unless-stopped
+    logging: *default-logging
     deploy:
       resources:
         limits:
@@ -184,6 +199,7 @@ services:
       context: ../../apps/office-ui
       dockerfile: Dockerfile
     restart: unless-stopped
+    logging: *default-logging
     deploy:
       resources:
         limits:

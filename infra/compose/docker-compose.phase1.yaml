@@ -1,6 +1,14 @@
 include:
   - docker-compose.infra.yaml
 
+# Anchor reused below; redefined here because docker-compose `include:` does
+# not propagate YAML anchors across files.
+x-default-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: '10m'
+    max-file: '3'
+
 services:
   # Add registry schema init to postgres
   postgres:
@@ -13,6 +21,7 @@ services:
     build:
       context: ../../services/registry
       dockerfile: Dockerfile
+    logging: *default-logging
     ports:
       - '${URULE_REGISTRY_PORT:-3001}:3000'
     environment:
@@ -36,6 +45,7 @@ services:
     build:
       context: ../../../orchestrator-adapters/langgraph-adapter
       dockerfile: Dockerfile
+    logging: *default-logging
     ports:
       - '${URULE_ADAPTER_PORT:-3002}:3000'
     environment:
@@ -59,6 +69,7 @@ services:
     build:
       context: ../../../runtime-broker
       dockerfile: Dockerfile
+    logging: *default-logging
     ports:
       - '${URULE_BROKER_PORT:-4500}:4500'
     environment:
@@ -81,6 +92,7 @@ services:
     build:
       context: ../e2e
       dockerfile: Dockerfile
+    logging: *default-logging
     environment:
       REGISTRY_URL: http://registry:3000
       ADAPTER_URL: http://langgraph-adapter:3000

@@ -188,8 +188,8 @@ Replace fragile init scripts with proper versioned migrations.
 - [x] **All 12 Dockerfiles** — Added `HEALTHCHECK` instruction
 - [x] **All services in compose** — `restart: unless-stopped` policy
 - [x] **All services in compose** — Memory/CPU resource limits (512M services, 1G postgres, 256M nats)
-- [ ] **All services in compose** — Configure log rotation (`max-size`, `max-file`)
-- [ ] **infra compose** — Add health checks for Temporal, Keycloak, OpenFGA, OPA
+- [x] **All services in compose** — Configured `json-file` log rotation with `max-size: 10m` / `max-file: 3` across `docker-compose.{infra,phase1,phase6}.yaml`. Each file declares its own `x-default-logging` anchor (compose `include:` doesn't propagate YAML anchors across files) and every service references it via `logging: *default-logging`. Validated with `docker compose config` on all three files.
+- [x] **infra compose** — Added healthchecks to Temporal (via bundled `tctl namespace list`), Keycloak (`KC_HEALTH_ENABLED=true` exposes `/health/ready` on port 9000, with a fallback to `/` on 8080 for older builds), OpenFGA (`/healthz` on 8080) and OPA (`/health` on 8181). Devtools (otel-collector, jaeger) intentionally left without checks.
 
 ### 4.3 Structured Logging ✅
 - [x] **All 11 services** — Enhanced Pino config with `LOG_LEVEL` env var, custom request serializer
