@@ -11,7 +11,7 @@ services:
 
   registry:
     build:
-      context: ../../urule-registry
+      context: ../../services/registry
       dockerfile: Dockerfile
     ports:
       - '${URULE_REGISTRY_PORT:-3001}:3000'
@@ -34,7 +34,7 @@ services:
 
   langgraph-adapter:
     build:
-      context: ../../urule-langgraph-adapter
+      context: ../../../langgraph-adapter
       dockerfile: Dockerfile
     ports:
       - '${URULE_ADAPTER_PORT:-3002}:3000'
@@ -57,7 +57,7 @@ services:
 
   runtime-broker:
     build:
-      context: ../../urule-runtime-broker
+      context: ../../../runtime-broker
       dockerfile: Dockerfile
     ports:
       - '${URULE_BROKER_PORT:-4500}:4500'

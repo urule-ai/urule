@@ -1,0 +1,24 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+.next/
+out/
+coverage/
+*.tsbuildinfo
+
+# Environment / secrets
+.env
+.env.local
+.env.*.local
+*.local
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+
+# npm/pnpm/yarn caches
+.turbo/
+*.tgz

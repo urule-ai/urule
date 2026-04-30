@@ -43,7 +43,7 @@ services:
 
   registry:
     build:
-      context: ../../urule-registry
+      context: ../../services/registry
       dockerfile: Dockerfile
     restart: unless-stopped
     deploy:
@@ -73,7 +73,7 @@ services:
 
   adapter:
     build:
-      context: ../../urule-langgraph-adapter
+      context: ../../../langgraph-adapter
       dockerfile: Dockerfile
     restart: unless-stopped
     deploy:
@@ -104,7 +104,7 @@ services:
 
   approvals:
     build:
-      context: ../../urule-approvals
+      context: ../../../approvals
       dockerfile: Dockerfile
     restart: unless-stopped
     deploy:
@@ -129,7 +129,7 @@ services:
 
   state:
     build:
-      context: ../../urule-state
+      context: ../../services/state
       dockerfile: Dockerfile
     restart: unless-stopped
     deploy:
@@ -154,7 +154,7 @@ services:
 
   packagehub:
     build:
-      context: ../../urule-packagehub
+      context: ../../services/packagehub
       dockerfile: Dockerfile
     restart: unless-stopped
     deploy:
@@ -181,7 +181,7 @@ services:
 
   office-ui:
     build:
-      context: ../../urule-office-ui
+      context: ../../apps/office-ui
       dockerfile: Dockerfile
     restart: unless-stopped
     deploy:

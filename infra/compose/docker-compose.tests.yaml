@@ -3,106 +3,113 @@
 #   docker compose -f docker-compose.tests.yaml up --build --abort-on-container-exit
 #   # or run a single repo's tests:
 #   docker compose -f docker-compose.tests.yaml up --build test-spec
+#
+# Path conventions (relative to this file at urule-repos/urule/infra/compose/):
+#   monorepo packages/services/plugins → ../../packages/<x>, ../../services/<x>, ../../plugins/<x>
+#   monorepo apps                       → ../../apps/<x>
+#   standalone repos                    → ../../../<repo>
+#   shared test Dockerfile              → ../../infra/docker/Dockerfile.test (monorepo)
+#                                         ../urule/infra/docker/Dockerfile.test (standalone)
 
 services:
   test-spec:
     build:
-      context: ../../urule-spec
-      dockerfile: ../urule-infra/docker/Dockerfile.test
+      context: ../../packages/spec
+      dockerfile: ../../infra/docker/Dockerfile.test
     working_dir: /app
 
   test-events:
     build:
-      context: ../../urule-events
-      dockerfile: ../urule-infra/docker/Dockerfile.test
+      context: ../../packages/events
+      dockerfile: ../../infra/docker/Dockerfile.test
     working_dir: /app
 
   test-orchestrator-contract:
     build:
-      context: ../../urule-orchestrator-contract
-      dockerfile: ../urule-infra/docker/Dockerfile.test
+      context: ../../../orchestrator-contract
+      dockerfile: ../urule/infra/docker/Dockerfile.test
     working_dir: /app
 
   test-langgraph-adapter:
     build:
-      context: ../../urule-langgraph-adapter
-      dockerfile: ../urule-infra/docker/Dockerfile.test
+      context: ../../../langgraph-adapter
+      dockerfile: ../urule/infra/docker/Dockerfile.test
     working_dir: /app
 
   test-runtime-broker:
     build:
-      context: ../../urule-runtime-broker
-      dockerfile: ../urule-infra/docker/Dockerfile.test
+      context: ../../../runtime-broker
+      dockerfile: ../urule/infra/docker/Dockerfile.test
     working_dir: /app
 
   # Phase 2 repos
   test-authz:
     build:
-      context: ../../urule-authz
-      dockerfile: ../urule-infra/docker/Dockerfile.test
+      context: ../../packages/authz
+      dockerfile: ../../infra/docker/Dockerfile.test
     working_dir: /app
 
   test-packages:
     build:
-      context: ../../urule-packages
-      dockerfile: ../urule-infra/docker/Dockerfile.test
+      context: ../../services/packages
+      dockerfile: ../../infra/docker/Dockerfile.test
     working_dir: /app
 
   test-packagehub:
     build:
-      context: ../../urule-packagehub
-      dockerfile: ../urule-infra/docker/Dockerfile.test
+      context: ../../services/packagehub
+      dockerfile: ../../infra/docker/Dockerfile.test
     working_dir: /app
 
   test-mcp-gateway:
     build:
-      context: ../../urule-mcp-gateway
-      dockerfile: ../urule-infra/docker/Dockerfile.test
+      context: ../../../mcp-gateway
+      dockerfile: ../urule/infra/docker/Dockerfile.test
     working_dir: /app
 
   test-backstage-plugin:
     build:
-      context: ../../backstage-urule-plugin
-      dockerfile: ../urule-infra/docker/Dockerfile.test
+      context: ../../plugins/backstage
+      dockerfile: ../../infra/docker/Dockerfile.test
     working_dir: /app
 
   # Phase 3 repos
   test-approvals:
     build:
-      context: ../../urule-approvals
-      dockerfile: ../urule-infra/docker/Dockerfile.test
+      context: ../../../approvals
+      dockerfile: ../urule/infra/docker/Dockerfile.test
     working_dir: /app
 
   test-governance:
     build:
-      context: ../../urule-governance
-      dockerfile: ../urule-infra/docker/Dockerfile.test
+      context: ../../services/governance
+      dockerfile: ../../infra/docker/Dockerfile.test
     working_dir: /app
 
   # Phase 4 repos
   test-channel-router:
     build:
-      context: ../../urule-channel-router
-      dockerfile: ../urule-infra/docker/Dockerfile.test
+      context: ../../../channel-router
+      dockerfile: ../urule/infra/docker/Dockerfile.test
     working_dir: /app
 
   test-widget-sdk:
     build:
-      context: ../../urule-widget-sdk
-      dockerfile: ../urule-infra/docker/Dockerfile.test
+      context: ../../../widget-sdk
+      dockerfile: ../urule/infra/docker/Dockerfile.test
     working_dir: /app
 
   test-state:
     build:
-      context: ../../urule-state
-      dockerfile: ../urule-infra/docker/Dockerfile.test
+      context: ../../services/state
+      dockerfile: ../../infra/docker/Dockerfile.test
     working_dir: /app
 
   # Registry integration tests (needs PostgreSQL)
   test-registry:
     build:
-      context: ../../urule-registry
-      dockerfile: ../urule-infra/docker/Dockerfile.test
+      context: ../../services/registry
+      dockerfile: ../../infra/docker/Dockerfile.test
     environment:
       DATABASE_URL: postgres://urule:urule@postgres:5432/registry
       NATS_URL: nats://nats:4222
