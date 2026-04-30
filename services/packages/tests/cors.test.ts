@@ -1,62 +1,18 @@
 import { describe, it, expect } from 'vitest';
-import { buildServer } from '../../src/server.js';
-import { validateConfig, loadConfig } from '../../src/config.js';
+import { buildServer } from '../src/server.js';
 
-describe('registry — config validation', () => {
-  it('throws when DATABASE_URL is missing', () => {
-    const original = process.env['DATABASE_URL'];
-    delete process.env['DATABASE_URL'];
-    try {
-      const cfg = loadConfig();
-      expect(() => validateConfig(cfg)).toThrowError(/DATABASE_URL/);
-    } finally {
-      if (original !== undefined) process.env['DATABASE_URL'] = original;
-    }
-  });
+describe('packages — CORS lockdown via real buildServer + CORS_ORIGINS env', () => {
+  // Exercises the actual server.ts wiring. CORS only landed on this service
+  // in the §1.3 expansion.
 
-  it('throws when NATS_URL is missing', () => {
-    const origDb = process.env['DATABASE_URL'];
-    const origNats = process.env['NATS_URL'];
-    process.env['DATABASE_URL'] = 'postgres://example.host:5432/test';
-    delete process.env['NATS_URL'];
-    try {
-      const cfg = loadConfig();
-      expect(() => validateConfig(cfg)).toThrowError(/NATS_URL/);
-    } finally {
-      if (origDb !== undefined) process.env['DATABASE_URL'] = origDb;
-      else delete process.env['DATABASE_URL'];
-      if (origNats !== undefined) process.env['NATS_URL'] = origNats;
-    }
-  });
-
-  it('does not throw when both DATABASE_URL and NATS_URL are set', () => {
-    const origDb = process.env['DATABASE_URL'];
-    const origNats = process.env['NATS_URL'];
-    process.env['DATABASE_URL'] = 'postgres://example.host:5432/test';
-    process.env['NATS_URL'] = 'nats://example.host:4222';
-    try {
-      const cfg = loadConfig();
-      expect(() => validateConfig(cfg)).not.toThrow();
-    } finally {
-      if (origDb !== undefined) process.env['DATABASE_URL'] = origDb;
-      else delete process.env['DATABASE_URL'];
-      if (origNats !== undefined) process.env['NATS_URL'] = origNats;
-      else delete process.env['NATS_URL'];
-    }
-  });
-});
-
-describe('registry — CORS lockdown via real buildServer + CORS_ORIGINS env', () => {
-  // Exercises the actual server.ts wiring (env read, comma split, fastify-cors
-  // registration) instead of stubbing fastify-cors itself. A typo in
-  // process.env.CORS_ORIGINS would fail these tests where the old stub-based
-  // tests would have silently passed.
   const FAKE_CONFIG = {
     port: 0,
     host: '127.0.0.1',
-    databaseUrl: 'postgres://fake:fake@127.0.0.1:1/fake',
     natsUrl: 'nats://127.0.0.1:1',
-    serviceName: 'registry-test',
+    registryUrl: 'http://127.0.0.1:1',
+    packagehubUrl: 'http://127.0.0.1:2',
+    workDir: '/tmp/urule-packages-test',
+    serviceName: 'packages-test',
   };
 
   async function buildAppWithCorsOrigins(origins: string | undefined) {
@@ -82,8 +38,6 @@ describe('registry — CORS lockdown via real buildServer + CORS_ORIGINS env', (
   });
 
   it('echoes Access-Control-Allow-Origin for the second comma-separated origin', async () => {
-    // Proves the comma split actually runs — a typo like CORS_ORIGIN (singular)
-    // would fall back to localhost:3000 and this would fail.
     const app = await buildAppWithCorsOrigins('http://allowed.example,http://other.example');
     const res = await app.inject({
       method: 'OPTIONS',

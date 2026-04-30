@@ -1,68 +1,16 @@
 import { describe, it, expect } from 'vitest';
 import { buildServer } from '../src/server.js';
-import { validateConfig, loadConfig } from '../src/config.js';
 
-describe('packagehub — config validation', () => {
-  it('throws when DATABASE_URL is missing', () => {
-    const original = process.env['DATABASE_URL'];
-    delete process.env['DATABASE_URL'];
-    try {
-      const cfg = loadConfig();
-      expect(() => validateConfig(cfg)).toThrowError(/DATABASE_URL/);
-    } finally {
-      if (original !== undefined) process.env['DATABASE_URL'] = original;
-    }
-  });
-
-  it('throws when NATS_URL is missing', () => {
-    const origDb = process.env['DATABASE_URL'];
-    const origNats = process.env['NATS_URL'];
-    process.env['DATABASE_URL'] = 'postgres://example.host:5432/test';
-    delete process.env['NATS_URL'];
-    try {
-      const cfg = loadConfig();
-      expect(() => validateConfig(cfg)).toThrowError(/NATS_URL/);
-    } finally {
-      if (origDb !== undefined) process.env['DATABASE_URL'] = origDb;
-      else delete process.env['DATABASE_URL'];
-      if (origNats !== undefined) process.env['NATS_URL'] = origNats;
-    }
-  });
-
-  it('does not throw when both DATABASE_URL and NATS_URL are set', () => {
-    const origDb = process.env['DATABASE_URL'];
-    const origNats = process.env['NATS_URL'];
-    process.env['DATABASE_URL'] = 'postgres://example.host:5432/test';
-    process.env['NATS_URL'] = 'nats://example.host:4222';
-    try {
-      const cfg = loadConfig();
-      expect(() => validateConfig(cfg)).not.toThrow();
-    } finally {
-      if (origDb !== undefined) process.env['DATABASE_URL'] = origDb;
-      else delete process.env['DATABASE_URL'];
-      if (origNats !== undefined) process.env['NATS_URL'] = origNats;
-      else delete process.env['NATS_URL'];
-    }
-  });
-});
-
-describe('packagehub — CORS lockdown via real buildServer + CORS_ORIGINS env', () => {
+describe('state — CORS lockdown via real buildServer + CORS_ORIGINS env', () => {
   // Exercises the actual server.ts wiring (env read, comma split, fastify-cors
   // registration) instead of stubbing fastify-cors itself.
-  const FAKE_CONFIG = {
-    port: 0,
-    host: '127.0.0.1',
-    databaseUrl: 'postgres://fake:fake@127.0.0.1:1/fake',
-    natsUrl: 'nats://127.0.0.1:1',
-    serviceName: 'packagehub-test',
-  };
 
   async function buildAppWithCorsOrigins(origins: string | undefined) {
     const orig = process.env['CORS_ORIGINS'];
     if (origins === undefined) delete process.env['CORS_ORIGINS'];
     else process.env['CORS_ORIGINS'] = origins;
     try {
-      return await buildServer(FAKE_CONFIG);
+      return await buildServer();
     } finally {
       if (orig !== undefined) process.env['CORS_ORIGINS'] = orig;
       else delete process.env['CORS_ORIGINS'];

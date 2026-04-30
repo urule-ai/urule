@@ -39,13 +39,10 @@ Add request body/query validation on all API routes.
 - [x] **All services**: Using Zod `safeParse()` with 400 error responses including detailed issue descriptions
 
 ### 1.3 CORS Lockdown ✅
-Replace `origin: true` (allow all) with explicit origin whitelist.
+Replace `origin: true` (allow all) with explicit origin whitelist. All 10 services that office-ui calls from the browser ([apps/office-ui/src/lib/api.ts](apps/office-ui/src/lib/api.ts) `SERVICE_URLS` map) now register `@fastify/cors` with `process.env.CORS_ORIGINS` (comma-split, defaults to `http://localhost:3000`). The backstage plugin is intentionally excluded — it's a backend-to-Backstage sync, not browser-facing.
 
-- [x] **registry** — Configurable via `CORS_ORIGINS` env var (defaults to `http://localhost:3000`)
-- [x] **packagehub** — Same configurable origin whitelist
-- [x] **state** — Same configurable origin whitelist
-- [x] **langgraph-adapter** — Same configurable origin whitelist
-- [x] **approvals** — Same configurable origin whitelist
+- [x] **registry, packagehub, state, langgraph-adapter, approvals** — Original wave (configurable via `CORS_ORIGINS`).
+- [x] **governance, packages, mcp-gateway, channel-router, runtime-broker** — Added in expansion wave: same canonical pattern, `@fastify/cors` dep added to each `package.json` (mcp-gateway already had it). Without this, browser preflight from a non-localhost origin would have produced no `Access-Control-Allow-Origin` header in production and the UI couldn't have called these services.
 
 ### 1.4 Rate Limiting ✅
 Add `@fastify/rate-limit` to prevent abuse.
@@ -110,7 +107,7 @@ Add browser-based testing for the Office UI.
 - [x] **All services** — Each of the 11 services now has `tests/auth-401.test.ts` (registry's lives in `tests/unit/`) that registers `@urule/auth-middleware` with `failClosed: true` + an unreachable `jwksUrl` and the same `publicRoutes` list as production, then asserts: (a) unauthenticated requests to a representative protected route return 401, (b) `/healthz` and `/docs/*` remain 200, (c) any service-specific public prefix (`/api/v1/infrastructure` and `/auth/login` for registry, `/api/v1/packages` for packagehub, `/api/v1/channels` for channel-router) also remains 200. The publicRoutes list is duplicated from server.ts deliberately so config drift in either direction shows up as a test failure.
 - [x] **All services** — Tests verifying invalid input returns 400 (not 500) — landed in earlier waves (registry/packagehub/mcp-gateway/etc. `routes.test.ts` files exercise Zod 400s)
 - [x] **registry, packagehub, mcp-gateway** — CORS validation tests added (`tests/{unit/,}security.test.ts` — preflight from non-allow-listed origin produces no `Access-Control-Allow-Origin`)
-- [ ] **All services** — Replace today's `buildCorsApp()` test helpers with tests that import `buildServer()` and exercise the *real* `CORS_ORIGINS` env wiring. Today's tests validate `@fastify/cors` itself, not each service's wiring.
+- [x] **All services** — Replaced today's `buildCorsApp()` test helpers (registry/packagehub/mcp-gateway) with tests that import `buildServer()` and exercise the real `process.env.CORS_ORIGINS` wiring; added equivalent `tests/cors.test.ts` to the seven services that lacked any CORS test (state, langgraph-adapter, approvals, governance, packages, channel-router, runtime-broker). Each suite asserts: first allow-listed origin echoed, second comma-separated origin echoed (proves the comma split), non-allow-listed origin rejected, and the unset-env fallback to `http://localhost:3000`. A typo like `CORS_ORIGIN` (singular) in the service code would now fail tests.
 - [x] **Infra** — `npm audit --audit-level=high` step in `.github/workflows/ci.yml` (already landed; warn-only via `continue-on-error: true`)
 
 ---
