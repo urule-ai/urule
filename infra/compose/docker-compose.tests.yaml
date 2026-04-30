@@ -32,8 +32,8 @@ services:
 
   test-langgraph-adapter:
     build:
-      context: ../../../langgraph-adapter
-      dockerfile: ../urule/infra/docker/Dockerfile.test
+      context: ../../../orchestrator-adapters/langgraph-adapter
+      dockerfile: ../../urule/infra/docker/Dockerfile.test
     working_dir: /app
 
   test-runtime-broker:

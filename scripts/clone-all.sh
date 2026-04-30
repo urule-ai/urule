@@ -8,7 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(dirname "$SCRIPT_DIR")"
 PARENT_DIR="$(dirname "$ROOT_DIR")"
 
-ORG="urule-os"
+ORG="urule-ai"
 REPOS=(
   widget-sdk
   orchestrator-contract
@@ -16,7 +16,7 @@ REPOS=(
   channel-router
   approvals
   runtime-broker
-  langgraph-adapter
+  orchestrator-adapters
 )
 
 echo "Cloning Urule ecosystem repos into $PARENT_DIR..."

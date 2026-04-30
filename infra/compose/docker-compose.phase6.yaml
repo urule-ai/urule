@@ -73,7 +73,7 @@ services:
 
   adapter:
     build:
-      context: ../../../langgraph-adapter
+      context: ../../../orchestrator-adapters/langgraph-adapter
       dockerfile: Dockerfile
     restart: unless-stopped
     deploy:

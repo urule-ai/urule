@@ -34,7 +34,7 @@ services:
 
   langgraph-adapter:
     build:
-      context: ../../../langgraph-adapter
+      context: ../../../orchestrator-adapters/langgraph-adapter
       dockerfile: Dockerfile
     ports:
       - '${URULE_ADAPTER_PORT:-3002}:3000'

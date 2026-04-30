@@ -38,12 +38,12 @@ REPOS=(
   urule/plugins/backstage
   orchestrator-contract
   widget-sdk
-  langgraph-adapter
+  orchestrator-adapters/langgraph-adapter
   runtime-broker
   mcp-gateway
   approvals
   channel-router
-  goose-adapter
+  orchestrator-adapters/goose-adapter
 )
 
 SKIPPED=(

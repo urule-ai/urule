@@ -88,7 +88,7 @@ See [GETTING-STARTED.md](GETTING-STARTED.md) for the full setup guide including 
    state ---------- room presence, task ownership
 
  LAYER 3: ORCHESTRATION
-   langgraph-adapter -- LangGraph + Anthropic Claude
+   orchestrator-adapters -- LangGraph + Goose adapters (CrewAI/AutoGen/ADK planned)
 
  LAYER 4: EXECUTION
    runtime-broker --> sandboxed.sh (OSS)
@@ -113,7 +113,7 @@ Urule is split across 8 repositories. Standalone repos work independently outsid
 | [channel-router](https://github.com/urule-ai/channel-router) | Multi-channel message normalization | Unify messaging across channels |
 | [approvals](https://github.com/urule-ai/approvals) | Temporal-backed approval workflows | Add approval flows to any system |
 | [runtime-broker](https://github.com/urule-ai/runtime-broker) | Sandbox session allocation | Manage isolated execution environments |
-| [langgraph-adapter](https://github.com/urule-ai/langgraph-adapter) | LangGraph + Anthropic Claude adapter | Run AI agents with LangGraph |
+| [orchestrator-adapters](https://github.com/urule-ai/orchestrator-adapters) | Monorepo of orchestrator adapters (LangGraph, Goose) | Run AI agents via supported orchestrators |
 
 ### Core Packages (this repo)
 

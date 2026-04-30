@@ -58,7 +58,7 @@ infra/
 - `channel-router` — Multi-channel message normalization
 - `approvals` — Temporal-backed approval workflows
 - `runtime-broker` — Sandbox session allocation
-- `langgraph-adapter` — LangGraph + Anthropic Claude adapter
+- `orchestrator-adapters` — Monorepo of orchestrator adapters (LangGraph, Goose; CrewAI/AutoGen/ADK planned)
 
 ## Code Conventions
 
