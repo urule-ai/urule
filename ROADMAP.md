@@ -270,7 +270,7 @@ Replace fragile init scripts with proper versioned migrations.
 - [ ] **registry** — Implement real agent health checks (currently hardcoded)
 - [ ] **langgraph-adapter** — Add support for multiple AI providers (OpenAI, Gemini, local models)
 - [ ] **langgraph-adapter** — Add conversation branching/forking
-- [ ] **langgraph-adapter** — Fix `pauseForApproval` ID mismatch: `pendingApprovals.push(ulid())` generates a fresh ID, but `resumeRun(input.approvalId)` filters by that exact ID, so the filter never matches. Use the approval's actual ID (`_approval.id`) when one is supplied.
+- [x] **orchestrator-contract + adapters** — Fixed `pauseForApproval` ID mismatch. `ApprovalRequest` now carries an optional `id`; both langgraph-adapter and goose-adapter (and the contract's mock-adapter) use it when provided so `resumeRun({approvalId})` can target a specific pending approval. Compliance suite extended with a roundtrip test.
 - [ ] **orchestrator-adapters** — Add CrewAI, AutoGen, and ADK adapters as new workspace packages in the [orchestrator-adapters](https://github.com/urule-ai/orchestrator-adapters) monorepo (alongside `goose-adapter` and `langgraph-adapter`). Each new adapter implements `OrchestratorAdapter` from `@urule/orchestrator-contract` and runs its compliance suite.
 - [ ] **governance** — Replace `(request as any)`, `(decision as any)` casts in `src/routes/governance.routes.ts` with proper types matching the adapter contracts. Project ESLint warns on `@typescript-eslint/no-explicit-any`.
 - [ ] **governance** — Audit emit failures in `governance.routes.ts` are silenced with `.catch(() => {})`. Either log them at warn level or push to a dead-letter topic so they're visible.
