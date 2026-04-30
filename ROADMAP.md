@@ -175,11 +175,11 @@ Replace silent failures and `alert()` calls with proper UI feedback.
 ### 4.1 Database Migrations
 Replace fragile init scripts with proper versioned migrations.
 
-- [ ] **registry** — Generate Drizzle migration files from schema (currently empty `migrations/` dir)
-- [ ] **packagehub** — Generate Drizzle migration files
-- [ ] **mcp-gateway** — Generate Drizzle migration files
-- [ ] **infra** — Document migration strategy (how to apply, rollback, test)
-- [ ] **infra** — Add migration step to Docker Compose startup
+- [x] **registry** — Generated `migrations/0000_brave_silver_surfer.sql` from the existing `src/db/schema/*.ts` files. drizzle-kit was bumped 0.24→0.31 and drizzle-orm 0.33→0.45 to make `db:generate` work; `drizzle.config.ts` at the service root drives both `db:generate` and `db:migrate`.
+- [x] **packagehub** — Generated `migrations/0000_tense_frank_castle.sql` (packages + package_versions tables) the same way.
+- [x] **mcp-gateway** — Generated `migrations/0000_damp_eddie_brock.sql` (mcp_servers + workspace_bindings + tools). Added `db:generate` and `db:migrate` to package.json (registry/packagehub already had them).
+- [x] **infra** — Documented in [docs/MIGRATIONS.md](docs/MIGRATIONS.md): generation, application, rollback (forward-only — write a new migration that undoes the previous), testing, and the temporary co-existence with the init-*.sh scripts. Includes the workaround SQL for seeding `drizzle.__drizzle_migrations` against a Postgres that was bootstrapped by the legacy init script.
+- [ ] **infra** — Add migration step to Docker Compose startup. *Deferred:* needs a design choice between (a) one-shot `migrate` service with `depends_on: postgres healthy`, (b) services running `db:migrate` at startup before `app.listen`, or (c) init container pattern. Once chosen, the existing init-{registry,packagehub}-schema.sh scripts can be retired.
 
 ### 4.2 Docker Improvements ✅
 - [x] **All 12 Dockerfiles** — Added `HEALTHCHECK` instruction
