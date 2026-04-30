@@ -211,8 +211,8 @@ Replace fragile init scripts with proper versioned migrations.
 
 ### 4.6 Graceful Shutdown ✅
 - [x] **All 11 services** — SIGTERM/SIGINT handlers calling `app.close()` + `process.exit(0)`
-- [ ] **langgraph-adapter** — Close WebSocket connections on shutdown
-- [ ] **state** — Flush NATS KV state before shutdown
+- [x] **langgraph-adapter** — Close WebSocket connections on shutdown. New `closeAllConnections()` in `src/routes/ws.routes.ts` walks the conversation→sockets map and sends a 1001 ("going away") close frame to every open client. The SIGTERM/SIGINT handler in `src/index.ts` now calls it (logging the closed count) before `app.close()`, so clients see an immediate disconnect instead of waiting for a TCP timeout.
+- [ ] ~~**state** — Flush NATS KV state before shutdown~~ — N/A: the state service is currently in-memory only (`Map`-backed managers in `src/services/`); the CLAUDE.md description is aspirational. If/when state is migrated to NATS KV, the shutdown handler will need to flush. Tracked as part of that future migration, not as a graceful-shutdown gap.
 
 ---
 
