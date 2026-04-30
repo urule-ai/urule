@@ -61,7 +61,7 @@ Validate required environment variables at startup; fail fast if missing.
 - [x] **registry, packagehub, mcp-gateway** — Removed hardcoded `urule:urule@localhost` defaults; `validateConfig()` now throws (not warns) when `DATABASE_URL` or `NATS_URL` is missing
 - [x] **langgraph-adapter** — Added `src/middleware/error-handler.ts` with `redactSecrets()` covering `sk-ant-…`, OpenAI `sk-…`, `Bearer …`, `authorization:`, `x-api-key:`, and `?api_key=`/`?access_token=` query params. Redacts both response bodies AND log lines (incl. `error.message` and `error.stack`)
 - [ ] **state, governance, approvals, channel-router, langgraph-adapter, runtime-broker** — Extend fail-fast pattern to remaining 6 services (currently warn-only). Mirror the registry/packagehub/mcp-gateway pattern.
-- [ ] **registry, packagehub, governance, mcp-gateway** — Lift `redactSecrets` from langgraph-adapter into a shared util (e.g. `@urule/events/redaction` or new `@urule/errors`) and import from each service's `src/middleware/error-handler.ts`. Today only langgraph-adapter redacts; other services' error paths can still leak secrets in error messages or stack traces.
+- [x] **registry, packagehub, governance, mcp-gateway** — Lifted `redactSecrets` into `@urule/events` (`src/redaction/redact-secrets.ts`) with 9 unit tests. All four services' `src/middleware/error-handler.ts` now redact `error.message` and `error.stack` before logging *and* before returning to the client. langgraph-adapter switched from its local copy to the shared util; its duplicate tests were removed (the canonical tests live in `@urule/events`).
 
 ### 1.6 Audit Logging ✅
 Track who did what and when for compliance.

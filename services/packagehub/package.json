@@ -22,6 +22,7 @@
     "@fastify/swagger": "^9.7.0",
     "@fastify/swagger-ui": "^5.2.5",
     "@urule/auth-middleware": "*",
+    "@urule/events": "*",
     "drizzle-orm": "^0.33.0",
     "fastify": "^5.0.0",
     "nats": "^2.28.0",

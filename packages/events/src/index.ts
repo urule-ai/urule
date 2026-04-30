@@ -57,3 +57,6 @@ export { AuditLogger } from './audit/audit-logger.js';
 
 // ─── Idempotency ────────────────────────────────────────────────────
 export { generateIdempotencyKey, deterministicKey } from './idempotency/key-generator.js';
+
+// ─── Redaction ──────────────────────────────────────────────────────
+export { redactSecrets } from './redaction/redact-secrets.js';
