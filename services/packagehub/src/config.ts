@@ -10,7 +10,7 @@ export function loadConfig(): Config {
   return {
     port: parseInt(process.env['PORT'] ?? '3000', 10),
     host: process.env['HOST'] ?? '0.0.0.0',
-    databaseUrl: process.env['DATABASE_URL'] ?? 'postgres://urule:urule@localhost:5432/packagehub',
+    databaseUrl: process.env['DATABASE_URL'] ?? '',
     natsUrl: process.env['NATS_URL'] ?? 'localhost:4222',
     serviceName: 'urule-packagehub',
   };
@@ -18,10 +18,11 @@ export function loadConfig(): Config {
 
 export function validateConfig(config: Config): void {
   const missing: string[] = [];
-  if (!process.env['DATABASE_URL'] && config.databaseUrl.includes('localhost')) {
-    missing.push('DATABASE_URL (using default)');
-  }
+  if (!config.databaseUrl) missing.push('DATABASE_URL');
+  if (!process.env['NATS_URL']) missing.push('NATS_URL');
   if (missing.length > 0) {
-    console.warn(`[${config.serviceName}] Config warnings: ${missing.join(', ')}`);
+    throw new Error(
+      `[${config.serviceName}] Missing required env vars: ${missing.join(', ')}`,
+    );
   }
 }

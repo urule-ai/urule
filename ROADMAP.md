@@ -58,8 +58,10 @@ Validate required environment variables at startup; fail fast if missing.
 
 - [x] **9 services** — `validateConfig()` checks DATABASE_URL, NATS_URL, REGISTRY_URL at startup
 - [x] **governance** — Warns if `OPENFGA_STORE_ID` is empty
-- [ ] **All services** — Remove hardcoded default database credentials from config files
-- [ ] **langgraph-adapter** — Never expose API keys or secrets in error messages
+- [x] **registry, packagehub, mcp-gateway** — Removed hardcoded `urule:urule@localhost` defaults; `validateConfig()` now throws (not warns) when `DATABASE_URL` or `NATS_URL` is missing
+- [x] **langgraph-adapter** — Added `src/middleware/error-handler.ts` with `redactSecrets()` covering `sk-ant-…`, OpenAI `sk-…`, `Bearer …`, `authorization:`, `x-api-key:`, and `?api_key=`/`?access_token=` query params. Redacts both response bodies AND log lines (incl. `error.message` and `error.stack`)
+- [ ] **state, governance, approvals, channel-router, langgraph-adapter, runtime-broker** — Extend fail-fast pattern to remaining 6 services (currently warn-only). Mirror the registry/packagehub/mcp-gateway pattern.
+- [ ] **registry, packagehub, governance, mcp-gateway** — Lift `redactSecrets` from langgraph-adapter into a shared util (e.g. `@urule/events/redaction` or new `@urule/errors`) and import from each service's `src/middleware/error-handler.ts`. Today only langgraph-adapter redacts; other services' error paths can still leak secrets in error messages or stack traces.
 
 ### 1.6 Audit Logging ✅
 Track who did what and when for compliance.
@@ -105,10 +107,11 @@ Add browser-based testing for the Office UI.
 - [ ] **office-ui** — Test responsive layout (mobile, tablet, desktop)
 
 ### 2.4 Security Testing
-- [ ] **All services** — Add tests verifying unauthenticated requests return 401
-- [ ] **All services** — Add tests verifying invalid input returns 400 (not 500)
-- [ ] **All services** — Add CORS validation tests
-- [ ] **Infra** — Add `npm audit` step to CI pipeline
+- [ ] **All services** — Add tests verifying unauthenticated requests return 401 — *blocked: `@urule/auth-middleware` falls back to a mock user when JWKS is unreachable, masking 401s in tests; needs a `failClosed` option on the plugin first*
+- [x] **All services** — Tests verifying invalid input returns 400 (not 500) — landed in earlier waves (registry/packagehub/mcp-gateway/etc. `routes.test.ts` files exercise Zod 400s)
+- [x] **registry, packagehub, mcp-gateway** — CORS validation tests added (`tests/{unit/,}security.test.ts` — preflight from non-allow-listed origin produces no `Access-Control-Allow-Origin`)
+- [ ] **All services** — Replace today's `buildCorsApp()` test helpers with tests that import `buildServer()` and exercise the *real* `CORS_ORIGINS` env wiring. Today's tests validate `@fastify/cors` itself, not each service's wiring.
+- [x] **Infra** — `npm audit --audit-level=high` step in `.github/workflows/ci.yml` (already landed; warn-only via `continue-on-error: true`)
 
 ---
 
@@ -267,7 +270,10 @@ Replace fragile init scripts with proper versioned migrations.
 - [ ] **registry** — Implement real agent health checks (currently hardcoded)
 - [ ] **langgraph-adapter** — Add support for multiple AI providers (OpenAI, Gemini, local models)
 - [ ] **langgraph-adapter** — Add conversation branching/forking
+- [ ] **langgraph-adapter** — Fix `pauseForApproval` ID mismatch: `pendingApprovals.push(ulid())` generates a fresh ID, but `resumeRun(input.approvalId)` filters by that exact ID, so the filter never matches. Use the approval's actual ID (`_approval.id`) when one is supplied.
 - [ ] **orchestrator-contract** — Add adapter implementations for CrewAI, AutoGen, ADK
+- [ ] **governance** — Replace `(request as any)`, `(decision as any)` casts in `src/routes/governance.routes.ts` with proper types matching the adapter contracts. Project ESLint warns on `@typescript-eslint/no-explicit-any`.
+- [ ] **governance** — Audit emit failures in `governance.routes.ts` are silenced with `.catch(() => {})`. Either log them at warn level or push to a dead-letter topic so they're visible.
 
 ### 6.3 Package Ecosystem
 - [ ] **packagehub** — Add package ratings and reviews
@@ -314,4 +320,4 @@ Replace fragile init scripts with proper versioned migrations.
 
 ---
 
-*Last updated: 2026-03-26*
+*Last updated: 2026-04-29*
