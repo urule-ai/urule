@@ -61,7 +61,13 @@ async function uruleAuthPlugin(app: FastifyInstance, opts: AuthMiddlewareOptions
   const jwksUrl = opts.jwksUrl ?? `${keycloakUrl}/protocol/openid-connect/certs`;
   const audience = opts.audience ?? 'urule-office';
   const skipAuth = opts.skipAuth ?? (process.env['SKIP_AUTH'] === 'true');
+  const failClosed = opts.failClosed ?? (process.env['AUTH_FAIL_CLOSED'] === 'true');
   const publicRoutes = [...DEFAULT_PUBLIC_ROUTES, ...(opts.publicRoutes ?? [])];
+
+  function isPublicRoute(url: string): boolean {
+    const path = url.split('?')[0] ?? '';
+    return publicRoutes.some((route) => path === route || path.startsWith(route + '/'));
+  }
 
   // Decorate requests with uruleUser
   app.decorateRequest('uruleUser', null);
@@ -80,6 +86,16 @@ async function uruleAuthPlugin(app: FastifyInstance, opts: AuthMiddlewareOptions
     publicKey = await fetchJwksPublicKey(jwksUrl);
     app.log.info(`Auth middleware: loaded public key from ${jwksUrl}`);
   } catch (err) {
+    if (failClosed) {
+      app.log.error(
+        `Auth middleware: failClosed=true and JWKS fetch from ${jwksUrl} failed (${err}); all non-public requests will return 401`,
+      );
+      app.addHook('onRequest', async (request: FastifyRequest, reply: FastifyReply) => {
+        if (isPublicRoute(request.url)) return;
+        reply.code(401).send({ error: 'Unauthorized', message: 'Auth not available' });
+      });
+      return;
+    }
     app.log.warn(`Auth middleware: could not fetch JWKS from ${jwksUrl}, falling back to SKIP_AUTH mode. Error: ${err}`);
     app.addHook('onRequest', async (request: FastifyRequest) => {
       (request as FastifyRequest & { uruleUser: UruleUser }).uruleUser = MOCK_USER;
@@ -101,8 +117,7 @@ async function uruleAuthPlugin(app: FastifyInstance, opts: AuthMiddlewareOptions
   // Auth hook — validate JWT on every request except public routes
   app.addHook('onRequest', async (request: FastifyRequest, reply: FastifyReply) => {
     // Skip auth for public routes
-    const url = request.url.split('?')[0] ?? '';
-    if (publicRoutes.some(route => url === route || url.startsWith(route + '/'))) {
+    if (isPublicRoute(request.url)) {
       return;
     }
 

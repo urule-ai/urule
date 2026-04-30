@@ -87,4 +87,19 @@ export interface AuthMiddlewareOptions {
    * @default false
    */
   skipAuth?: boolean;
+
+  /**
+   * Refuse to fall back to mock-user mode when the JWKS endpoint is
+   * unreachable. When `true` and JWKS fetch fails, the plugin still
+   * registers (so `/healthz` and any other `publicRoutes` keep working
+   * for k8s liveness/readiness probes) but every non-public request
+   * returns 401 instead of being silently authenticated as the
+   * MOCK_USER. Use this in production-style deployments and in service
+   * test fixtures that want to exercise real 401 behavior.
+   *
+   * Defaults to `process.env.AUTH_FAIL_CLOSED === 'true'` so production
+   * pods can opt in via env without a code change.
+   * @default false
+   */
+  failClosed?: boolean;
 }

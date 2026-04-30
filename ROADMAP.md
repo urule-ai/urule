@@ -107,7 +107,7 @@ Add browser-based testing for the Office UI.
 - [ ] **office-ui** — Test responsive layout (mobile, tablet, desktop)
 
 ### 2.4 Security Testing
-- [ ] **All services** — Add tests verifying unauthenticated requests return 401 — *blocked: `@urule/auth-middleware` falls back to a mock user when JWKS is unreachable, masking 401s in tests; needs a `failClosed` option on the plugin first*
+- [ ] **All services** — Add tests verifying unauthenticated requests return 401 — *unblocked: `@urule/auth-middleware` now has a `failClosed` option (default off; opt in via env `AUTH_FAIL_CLOSED=true` or per-call). Test fixtures should register the plugin with `failClosed: true` and an unreachable `jwksUrl` so the mock-user fallback is disabled. The 5 plugin-level tests covering this behavior are in `packages/auth-middleware/tests/plugin.test.ts`. Per-service test work is what remains.*
 - [x] **All services** — Tests verifying invalid input returns 400 (not 500) — landed in earlier waves (registry/packagehub/mcp-gateway/etc. `routes.test.ts` files exercise Zod 400s)
 - [x] **registry, packagehub, mcp-gateway** — CORS validation tests added (`tests/{unit/,}security.test.ts` — preflight from non-allow-listed origin produces no `Access-Control-Allow-Origin`)
 - [ ] **All services** — Replace today's `buildCorsApp()` test helpers with tests that import `buildServer()` and exercise the *real* `CORS_ORIGINS` env wiring. Today's tests validate `@fastify/cors` itself, not each service's wiring.

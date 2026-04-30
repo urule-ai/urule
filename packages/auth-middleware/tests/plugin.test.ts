@@ -130,4 +130,96 @@ describe('urule-auth-middleware', () => {
       });
     });
   });
+
+  describe('failClosed mode', () => {
+    it('returns 401 on protected routes when JWKS is unreachable', async () => {
+      const app = Fastify({ logger: false });
+      await app.register(authMiddleware, {
+        failClosed: true,
+        jwksUrl: 'http://localhost:99999/nonexistent',
+      });
+      app.get('/api/v1/protected', async () => ({ ok: true }));
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/v1/protected',
+      });
+      expect(response.statusCode).toBe(401);
+      const body = JSON.parse(response.body);
+      expect(body.error).toBe('Unauthorized');
+    });
+
+    it('still allows /healthz when JWKS is unreachable (so liveness probes pass)', async () => {
+      const app = Fastify({ logger: false });
+      await app.register(authMiddleware, {
+        failClosed: true,
+        jwksUrl: 'http://localhost:99999/nonexistent',
+      });
+      app.get('/healthz', async () => ({ status: 'ok' }));
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/healthz',
+      });
+      expect(response.statusCode).toBe(200);
+    });
+
+    it('still allows custom public routes when JWKS is unreachable', async () => {
+      const app = Fastify({ logger: false });
+      await app.register(authMiddleware, {
+        failClosed: true,
+        jwksUrl: 'http://localhost:99999/nonexistent',
+        publicRoutes: ['/api/v1/webhooks'],
+      });
+      app.post('/api/v1/webhooks/slack', async () => ({ received: true }));
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/v1/webhooks/slack',
+      });
+      expect(response.statusCode).toBe(200);
+    });
+
+    it('does NOT run the route handler on requests it 401s', async () => {
+      const app = Fastify({ logger: false });
+      await app.register(authMiddleware, {
+        failClosed: true,
+        jwksUrl: 'http://localhost:99999/nonexistent',
+      });
+
+      let handlerRan = false;
+      app.get('/api/v1/protected', async () => {
+        handlerRan = true;
+        return { ok: true };
+      });
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/v1/protected',
+      });
+      expect(response.statusCode).toBe(401);
+      expect(handlerRan).toBe(false);
+    });
+
+    it('opts in via AUTH_FAIL_CLOSED env var when option is omitted', async () => {
+      const original = process.env['AUTH_FAIL_CLOSED'];
+      process.env['AUTH_FAIL_CLOSED'] = 'true';
+      try {
+        const app = Fastify({ logger: false });
+        await app.register(authMiddleware, {
+          jwksUrl: 'http://localhost:99999/nonexistent',
+        });
+        app.get('/api/v1/protected', async () => ({ ok: true }));
+
+        const response = await app.inject({
+          method: 'GET',
+          url: '/api/v1/protected',
+        });
+        expect(response.statusCode).toBe(401);
+      } finally {
+        if (original !== undefined) process.env['AUTH_FAIL_CLOSED'] = original;
+        else delete process.env['AUTH_FAIL_CLOSED'];
+      }
+    });
+  });
 });
