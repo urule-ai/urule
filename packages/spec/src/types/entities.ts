@@ -77,7 +77,8 @@ export type PackageType =
   | 'office'
   | 'channel'
   | 'orchestrator'
-  | 'runtime';
+  | 'runtime'
+  | 'goose_recipe';
 
 export interface PackageDependency {
   packageName: string;

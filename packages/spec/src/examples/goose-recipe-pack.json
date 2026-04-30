@@ -1,0 +1,26 @@
+{
+  "name": "release-risk-check",
+  "version": "0.2.0",
+  "type": "goose_recipe",
+  "description": "Goose recipe that inspects a candidate release for high-risk changes and emits a structured risk report",
+  "author": "urule",
+  "license": "Apache-2.0",
+  "keywords": ["goose", "release", "risk", "review"],
+  "compatibility": {
+    "orchestrators": ["goose"]
+  },
+  "permissions": [
+    { "resource": "mcp:tool:github:read-repo", "level": "required" },
+    { "resource": "mcp:tool:semgrep:scan", "level": "optional" }
+  ],
+  "gooseRecipe": {
+    "recipePath": "recipes/release-risk-check.yaml",
+    "defaultModel": "claude-opus-4-7",
+    "defaultProvider": "anthropic",
+    "extensions": ["github", "semgrep"],
+    "parameters": {
+      "owner": "urule",
+      "repo": "urule"
+    }
+  }
+}

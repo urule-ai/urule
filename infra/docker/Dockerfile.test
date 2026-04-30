@@ -1,0 +1,9 @@
+# Generic test runner for all urule repos.
+# Build context should be set to the repo directory.
+# Gates on both typecheck and tests — see ROADMAP §2.5.
+FROM node:20-slim
+WORKDIR /app
+COPY package.json package-lock.json* ./
+RUN npm ci
+COPY . .
+CMD ["sh", "-c", "npm run typecheck && npm test"]

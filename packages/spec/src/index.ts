@@ -45,6 +45,7 @@ export type {
   ChannelManifest,
   OrchestratorManifest,
   RuntimeManifest,
+  GooseRecipeManifest,
   InstallHooks,
 } from './types/manifest.js';
 

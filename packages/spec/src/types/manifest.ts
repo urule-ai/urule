@@ -137,6 +137,17 @@ export interface RuntimeManifest extends PackageManifestBase {
   };
 }
 
+export interface GooseRecipeManifest extends PackageManifestBase {
+  type: 'goose_recipe';
+  gooseRecipe: {
+    recipePath: string;
+    defaultModel?: string;
+    defaultProvider?: string;
+    extensions?: string[];
+    parameters?: Record<string, unknown>;
+  };
+}
+
 /** Union of all package manifest types */
 export type PackageManifest =
   | PersonalityManifest
@@ -149,4 +160,5 @@ export type PackageManifest =
   | OfficeManifest
   | ChannelManifest
   | OrchestratorManifest
-  | RuntimeManifest;
+  | RuntimeManifest
+  | GooseRecipeManifest;

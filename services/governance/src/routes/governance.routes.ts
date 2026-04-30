@@ -30,11 +30,14 @@ export async function governanceRoutes(
 
       const body = request.body;
       const user = (request as any).uruleUser;
+      const workspaceId = typeof body.context?.["workspaceId"] === "string"
+        ? (body.context["workspaceId"] as string)
+        : undefined;
       audit.configChanged(
-        { id: user?.id ?? body.agentId ?? "system", username: user?.username ?? "system" },
-        "governance-decision", body.agentId ?? "unknown",
+        { id: user?.id ?? body.subject.id ?? "system", username: user?.username ?? "system" },
+        "governance-decision", body.subject.id,
         `Governance decision: ${(decision as any).decision ?? "evaluated"}`,
-        { workspaceId: body.workspaceId, metadata: { action: body.action, decision } },
+        { workspaceId, metadata: { action: body.action, decision } },
       ).catch(() => {});
 
       return reply.send(decision);
@@ -50,7 +53,7 @@ export async function governanceRoutes(
       const user = (request as any).uruleUser;
       audit.configChanged(
         { id: user?.id ?? "system", username: user?.username ?? "system" },
-        "policy", body.policyId ?? "unknown",
+        "policy", body.action,
         `Policy evaluated: ${(result as any).allowed ? "allowed" : "denied"}`,
         { metadata: { input: body, result } },
       ).catch(() => {});
@@ -66,10 +69,11 @@ export async function governanceRoutes(
 
       const body = request.body;
       if (!(result as any).allowed) {
+        const [resourceType = "resource", resourceId = "unknown"] = body.object.split(":");
         audit.accessDenied(
-          { id: body.subjectId ?? "unknown", username: body.subjectId ?? "unknown" },
-          body.resourceType ?? "resource", body.resourceId ?? "unknown",
-          `Access denied: ${body.action ?? "unknown action"} on ${body.resourceType ?? "resource"}`,
+          { id: body.user, username: body.user },
+          resourceType, resourceId,
+          `Access denied: ${body.relation} on ${resourceType}`,
           { metadata: { input: body, result } },
         ).catch(() => {});
       }

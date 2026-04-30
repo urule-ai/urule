@@ -31,7 +31,8 @@
         "office",
         "channel",
         "orchestrator",
-        "runtime"
+        "runtime",
+        "goose_recipe"
       ],
       "description": "Package type"
     },
@@ -121,7 +122,8 @@
     "office": { "$ref": "#/definitions/officeConfig" },
     "channel": { "$ref": "#/definitions/channelConfig" },
     "orchestrator": { "$ref": "#/definitions/orchestratorConfig" },
-    "runtime": { "$ref": "#/definitions/runtimeConfig" }
+    "runtime": { "$ref": "#/definitions/runtimeConfig" },
+    "gooseRecipe": { "$ref": "#/definitions/gooseRecipeConfig" }
   },
   "allOf": [
     {
@@ -167,6 +169,10 @@
     {
       "if": { "properties": { "type": { "const": "runtime" } } },
       "then": { "required": ["runtime"] }
+    },
+    {
+      "if": { "properties": { "type": { "const": "goose_recipe" } } },
+      "then": { "required": ["gooseRecipe"] }
     }
   ],
   "definitions": {
@@ -293,6 +299,18 @@
         "image": { "type": "string" },
         "profile": { "type": "string" },
         "capabilities": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": false
+    },
+    "gooseRecipeConfig": {
+      "type": "object",
+      "required": ["recipePath"],
+      "properties": {
+        "recipePath": { "type": "string" },
+        "defaultModel": { "type": "string" },
+        "defaultProvider": { "type": "string" },
+        "extensions": { "type": "array", "items": { "type": "string" } },
+        "parameters": { "type": "object" }
       },
       "additionalProperties": false
     }

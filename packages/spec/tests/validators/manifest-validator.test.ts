@@ -4,6 +4,7 @@ import { validateManifest } from '../../src/validators/manifest-validator.js';
 import personalityExample from '../../src/examples/personality-pack.json';
 import skillExample from '../../src/examples/skill-pack.json';
 import mcpConnectorExample from '../../src/examples/mcp-connector-pack.json';
+import gooseRecipeExample from '../../src/examples/goose-recipe-pack.json';
 
 describe('validateManifest', () => {
   describe('valid manifests', () => {
@@ -21,6 +22,12 @@ describe('validateManifest', () => {
 
     it('validates an MCP connector pack manifest', () => {
       const result = validateManifest(mcpConnectorExample);
+      expect(result.valid).toBe(true);
+      expect(result.errors).toHaveLength(0);
+    });
+
+    it('validates a goose-recipe pack manifest', () => {
+      const result = validateManifest(gooseRecipeExample);
       expect(result.valid).toBe(true);
       expect(result.errors).toHaveLength(0);
     });
@@ -93,6 +100,18 @@ describe('validateManifest', () => {
         name: 'test-pack',
         version: '1.0.0',
         type: 'personality',
+        description: 'Test',
+        author: 'test',
+        license: 'MIT',
+      });
+      expect(result.valid).toBe(false);
+    });
+
+    it('rejects goose_recipe manifest without gooseRecipe config', () => {
+      const result = validateManifest({
+        name: 'test-pack',
+        version: '1.0.0',
+        type: 'goose_recipe',
         description: 'Test',
         author: 'test',
         license: 'MIT',

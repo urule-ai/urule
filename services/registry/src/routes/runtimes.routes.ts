@@ -9,7 +9,7 @@ const createRuntimeSchema = z.object({
   workspaceId: z.string().min(1),
   provider: z.string().min(1),
   profile: z.string().min(1),
-  capabilities: z.record(z.unknown()).optional(),
+  capabilities: z.record(z.string(), z.unknown()).optional(),
 });
 
 export function registerRuntimeRoutes(app: FastifyInstance, db: Database) {

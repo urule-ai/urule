@@ -17,7 +17,7 @@ const createAgentSchema = z.object({
   workspaceId: z.string().optional(),
   name: z.string().min(1).max(100),
   description: z.string().optional(),
-  config: z.record(z.unknown()).optional(),
+  config: z.record(z.string(), z.unknown()).optional(),
 });
 
 const agentStatusSchema = z.object({
@@ -27,7 +27,7 @@ const agentStatusSchema = z.object({
 const updateAgentSchema = z.object({
   name: z.string().min(1).max(100).optional(),
   description: z.string().optional(),
-  config: z.record(z.unknown()).optional(),
+  config: z.record(z.string(), z.unknown()).optional(),
   status: z.string().optional(),
   workspaceId: z.string().optional(),
   personalityPackId: z.string().optional(),
