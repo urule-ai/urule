@@ -23,7 +23,9 @@ x-default-logging: &default-logging
     max-file: '3'
 
 services:
-  # Override postgres with schema init + seed scripts
+  # Postgres only needs database creation; per-service schemas are applied by
+  # the *-migrate one-shot services below using drizzle-kit, and seed data is
+  # loaded by the *-seed one-shot services that run after each migrator.
   postgres:
     restart: unless-stopped
     logging: *default-logging
@@ -35,10 +37,6 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./init-db.sql:/docker-entrypoint-initdb.d/01-init-db.sql
-      - ./init-registry-schema.sh:/docker-entrypoint-initdb.d/02-init-registry-schema.sh:ro
-      - ./init-packagehub-schema.sh:/docker-entrypoint-initdb.d/03-init-packagehub-schema.sh:ro
-      - ./seed-packagehub.sql:/docker-entrypoint-initdb.d/04-seed-packagehub.sql:ro
-      - ./seed-registry.sql:/docker-entrypoint-initdb.d/05-seed-registry.sql:ro
 
   # ── Core Services ──────────────────────────────────────────────────────────
 
@@ -50,6 +48,61 @@ services:
         limits:
           memory: 256M
           cpus: '1.0'
+
+  registry-migrate:
+    build:
+      context: ../../services/registry
+      dockerfile: Dockerfile
+      target: migrator
+    logging: *default-logging
+    environment:
+      DATABASE_URL: postgres://urule:urule@postgres:5432/registry
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: 'no'
+
+  packagehub-migrate:
+    build:
+      context: ../../services/packagehub
+      dockerfile: Dockerfile
+      target: migrator
+    logging: *default-logging
+    environment:
+      DATABASE_URL: postgres://urule:urule@postgres:5432/packagehub
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: 'no'
+
+  # Seed jobs — idempotent (INSERT ... ON CONFLICT DO NOTHING). Run after
+  # each schema migrator completes, populating demo data so first-boot users
+  # see something. Safe to re-run; safe to remove from the stack if not wanted.
+  registry-seed:
+    image: postgres:16-alpine
+    logging: *default-logging
+    volumes:
+      - ./seed-registry.sql:/seed.sql:ro
+    environment:
+      PGPASSWORD: urule
+    entrypoint: ['psql', '-h', 'postgres', '-U', 'urule', '-d', 'registry', '-v', 'ON_ERROR_STOP=1', '-f', '/seed.sql']
+    depends_on:
+      registry-migrate:
+        condition: service_completed_successfully
+    restart: 'no'
+
+  packagehub-seed:
+    image: postgres:16-alpine
+    logging: *default-logging
+    volumes:
+      - ./seed-packagehub.sql:/seed.sql:ro
+    environment:
+      PGPASSWORD: urule
+    entrypoint: ['psql', '-h', 'postgres', '-U', 'urule', '-d', 'packagehub', '-v', 'ON_ERROR_STOP=1', '-f', '/seed.sql']
+    depends_on:
+      packagehub-migrate:
+        condition: service_completed_successfully
+    restart: 'no'
 
   registry:
     build:
@@ -71,8 +124,10 @@ services:
       NATS_URL: nats://nats:4222
       ADAPTER_URL: http://adapter:3000
     depends_on:
-      postgres:
-        condition: service_healthy
+      registry-migrate:
+        condition: service_completed_successfully
+      registry-seed:
+        condition: service_completed_successfully
       nats:
         condition: service_healthy
     healthcheck:
@@ -183,8 +238,10 @@ services:
       PORT: '3000'
       DATABASE_URL: postgres://urule:urule@postgres:5432/packagehub
     depends_on:
-      postgres:
-        condition: service_healthy
+      packagehub-migrate:
+        condition: service_completed_successfully
+      packagehub-seed:
+        condition: service_completed_successfully
     healthcheck:
       test: ['CMD-SHELL', "node -e \"fetch('http://localhost:3000/healthz').then(r=>{if(!r.ok)throw 1}).catch(()=>process.exit(1))\""]
       interval: 5s

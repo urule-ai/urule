@@ -10,12 +10,25 @@ x-default-logging: &default-logging
     max-file: '3'
 
 services:
-  # Add registry schema init to postgres
+  # Postgres only needs database creation; per-service schemas are applied by
+  # the *-migrate one-shot services below using drizzle-kit.
   postgres:
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./init-db.sql:/docker-entrypoint-initdb.d/01-init-db.sql
-      - ./init-registry-schema.sh:/docker-entrypoint-initdb.d/02-init-registry-schema.sh:ro
+
+  registry-migrate:
+    build:
+      context: ../../services/registry
+      dockerfile: Dockerfile
+      target: migrator
+    logging: *default-logging
+    environment:
+      DATABASE_URL: postgres://urule:urule@postgres:5432/registry
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: 'no'
 
   registry:
     build:
@@ -30,8 +43,8 @@ services:
       DATABASE_URL: postgres://urule:urule@postgres:5432/registry
       NATS_URL: nats://nats:4222
     depends_on:
-      postgres:
-        condition: service_healthy
+      registry-migrate:
+        condition: service_completed_successfully
       nats:
         condition: service_healthy
     healthcheck:

@@ -219,7 +219,7 @@ export default function ThingsPage() {
    - `Dockerfile` (multi-stage: builder + runner, with HEALTHCHECK)
    - `tests/`
 2. Register in `server.ts`: correlationIdPlugin → CORS → rate limit → auth middleware → swagger → error handler → healthz → routes. The correlation-id plugin must be first so all subsequent middleware logs (auth failures, rate-limit rejections) carry the same `x-correlation-id`.
-3. Add to `docker-compose.phase6.yaml`
+3. Add to `docker-compose.phase6.yaml`. If the service owns a Postgres schema, also add a `migrator` stage to its Dockerfile (see existing services for the canonical shape) and a `<service>-migrate` one-shot Compose service that the app service `depends_on` with `condition: service_completed_successfully`.
 4. Add to `scripts/clone-all.sh` if standalone
 
 ### How to Add a New Widget

@@ -45,25 +45,43 @@ DATABASE_URL=postgres://urule:urule@localhost:5500/registry \
 
 Hash mismatch (e.g. someone hand-edited a previously-applied migration) will fail loudly rather than silently re-running.
 
-## Initial-schema vs. migration
+## How fresh installs get the schema
 
-Today's [infra/compose/init-{registry,packagehub}-schema.sh](../infra/compose/) scripts run as Postgres `docker-entrypoint-initdb.d` hooks on **first** container init. They create tables idempotently with `CREATE TABLE IF NOT EXISTS`. They do NOT seed `drizzle.__drizzle_migrations`, so the first `db:migrate` against a Postgres instance that was bootstrapped by those scripts will try to re-create existing tables.
+A `*-migrate` one-shot Compose service runs `npx drizzle-kit migrate` against each schema-owning database before the long-running app service starts. The pattern uses a multi-stage Dockerfile target named `migrator` (see [services/registry/Dockerfile](../services/registry/Dockerfile), [services/packagehub/Dockerfile](../services/packagehub/Dockerfile), [mcp-gateway/Dockerfile](../../mcp-gateway/Dockerfile)) that includes drizzle-kit + the migrations dir; the runner stage stays lean (`npm ci --omit=dev` keeps drizzle-kit out of production).
 
-Until the init scripts are retired (see roadmap §4.1 line 185 — adding migrate as a Compose step), run migrations only against a Postgres that was started **without** the init scripts, or seed the tracking table manually:
+Compose wires it via `service_completed_successfully`:
 
-```sql
--- one-time, against a DB that was bootstrapped by the init script:
-CREATE TABLE IF NOT EXISTS drizzle.__drizzle_migrations (
-  id SERIAL PRIMARY KEY,
-  hash TEXT NOT NULL,
-  created_at BIGINT
-);
--- then for each migration already represented in the init script:
-INSERT INTO drizzle.__drizzle_migrations (hash, created_at)
-  VALUES ('<hash from migrations/meta/0000_snapshot.json>', extract(epoch from now())::bigint * 1000);
+```yaml
+registry-migrate:
+  build: { context: ../../services/registry, target: migrator }
+  environment: { DATABASE_URL: postgres://urule:urule@postgres:5432/registry }
+  depends_on: { postgres: { condition: service_healthy } }
+  restart: 'no'
+
+registry:
+  depends_on:
+    registry-migrate:
+      condition: service_completed_successfully
 ```
 
-The cleaner long-term fix is to delete the init scripts and rely on `db:migrate` for both fresh installs and upgrades. Tracked as roadmap §4.1.
+Seed data (`seed-registry.sql`, `seed-packagehub.sql`) loads via separate one-shot `*-seed` services that depend on the matching migrator. Seeds use `INSERT ... ON CONFLICT DO NOTHING` so they're safe to re-run.
+
+Idempotency: drizzle-kit tracks applied migrations in `drizzle.__drizzle_migrations` and skips already-applied ones, so bringing the stack up a second time without a fresh volume is a no-op.
+
+**Upgrading from a stack that used the retired `init-*-schema.sh` scripts**: those scripts created tables but never wrote to `drizzle.__drizzle_migrations`, so the first `db:migrate` against an old DB volume will fail trying to re-create the existing tables. Two recovery paths:
+
+1. **Recommended (local dev)**: drop the volume and start fresh — `docker compose -f infra/compose/docker-compose.phase6.yaml down -v && up -d`. Seed services rebuild the demo data.
+2. **Preserve data**: manually mark the 0000 migration as applied:
+   ```sql
+   CREATE SCHEMA IF NOT EXISTS drizzle;
+   CREATE TABLE IF NOT EXISTS drizzle.__drizzle_migrations (
+     id SERIAL PRIMARY KEY, hash TEXT NOT NULL, created_at BIGINT
+   );
+   INSERT INTO drizzle.__drizzle_migrations (hash, created_at)
+     VALUES ('<hash from migrations/meta/0000_snapshot.json>',
+             extract(epoch from now())::bigint * 1000);
+   ```
+   Subsequent migrations (0001+) will then apply normally.
 
 ## Rolling back
 
@@ -84,7 +102,16 @@ Two layers of testing.
 
 **Generation correctness** — covered by typecheck. Schema files are TypeScript; if they don't compile, `db:generate` fails before producing SQL.
 
-**Apply correctness** — apply the migration against a throwaway Postgres and run integration tests. The existing [infra/compose/docker-compose.tests.yaml](../infra/compose/docker-compose.tests.yaml) starts a Postgres with the init scripts; for migration testing specifically, start one without them and run `db:migrate` first:
+**Apply correctness** — apply the migration against a throwaway Postgres and run integration tests. Easiest is the same `*-migrate` Compose service used in the main stack, run alone:
+
+```bash
+docker compose -f infra/compose/docker-compose.phase6.yaml \
+  up -d postgres registry-migrate packagehub-migrate
+# both migrators exit 0 when done; check with:
+docker compose -f infra/compose/docker-compose.phase6.yaml ps registry-migrate
+```
+
+For an isolated throwaway DB (no compose):
 
 ```bash
 docker run -d --name urule-pg-test -p 5599:5432 \
@@ -96,12 +123,13 @@ DATABASE_URL=postgres://urule:urule@localhost:5599/registry \
 docker rm -f urule-pg-test
 ```
 
-A future improvement (roadmap §4.1) is to add a `migrate` step to the test compose file so this is a single command.
-
 ## Adding a new schema-owning service
 
 1. Add `drizzle-orm` and `drizzle-kit` to the service's `package.json`.
 2. Create `drizzle.config.ts` at the service root pointing at `./src/db/schema/*.ts` and `./migrations`.
 3. Add `db:generate` and `db:migrate` scripts to `package.json`.
 4. Run `db:generate` to produce the initial `0000_…sql`.
-5. Document the new service in this file and in roadmap §4.1.
+5. Add a `migrator` stage to the service's Dockerfile (see [services/registry/Dockerfile](../services/registry/Dockerfile) for the canonical shape — copies `drizzle.config.ts`, `migrations/`, `src/db/`, and runs `npx drizzle-kit migrate`).
+6. Add a `<service>-migrate` Compose service in [infra/compose/docker-compose.phase6.yaml](../infra/compose/docker-compose.phase6.yaml) (and phase1 if applicable) and make the long-running service `depends_on` it with `condition: service_completed_successfully`.
+7. If the service needs Postgres extensions (e.g. `pg_trgm`), add them via a custom migration (`npx drizzle-kit generate --custom --name <name>`).
+8. Document the new service in this file.
