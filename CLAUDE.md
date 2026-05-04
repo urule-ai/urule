@@ -219,7 +219,7 @@ export default function ThingsPage() {
    - `Dockerfile` (multi-stage: builder + runner, with HEALTHCHECK)
    - `tests/`
 2. Register in `server.ts`: correlationIdPlugin → CORS → rate limit → auth middleware → swagger → error handler → healthz → routes. The correlation-id plugin must be first so all subsequent middleware logs (auth failures, rate-limit rejections) carry the same `x-correlation-id`.
-3. Add to `docker-compose.phase6.yaml`. If the service owns a Postgres schema, also add a `migrator` stage to its Dockerfile (see existing services for the canonical shape) and a `<service>-migrate` one-shot Compose service that the app service `depends_on` with `condition: service_completed_successfully`.
+3. Add to `docker-compose.phase6.yaml` with `build.context: ../..` (monorepo root) and `dockerfile: services/<name>/Dockerfile`. The Dockerfile uses Pattern A (see [services/registry/Dockerfile](services/registry/Dockerfile)): copy every workspace `package.json` first, `npm ci` once, then `npm run build -w @urule/<name>`. If the service owns a Postgres schema, append a `migrator` stage and add a `<service>-migrate` one-shot Compose service that the app service `depends_on` with `condition: service_completed_successfully`. Standalones (separate repos) use Pattern B with `build.context: ../../..` (urule-repos parent) — see [orchestrator-adapters/langgraph-adapter/Dockerfile](../orchestrator-adapters/langgraph-adapter/Dockerfile) and the §4.1.1 ROADMAP note.
 4. Add to `scripts/clone-all.sh` if standalone
 
 ### How to Add a New Widget

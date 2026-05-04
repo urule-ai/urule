@@ -1,0 +1,25 @@
+# Keep build context small. Match what's safe to exclude regardless of which
+# Dockerfile is being built; per-stage COPY directives select what's actually
+# needed.
+**/node_modules
+**/.next
+**/.turbo
+**/.cache
+**/coverage
+**/*.tsbuildinfo
+**/.git
+**/.github
+**/.vscode
+**/.idea
+**/tests
+**/e2e
+**/*.test.ts
+**/*.test.js
+**/*.spec.ts
+**/*.spec.js
+**/playwright-report
+**/test-results
+# Keep packages/*/dist (referenced by Pattern B builds outside this context).
+# Within urule/, dist is rebuilt during builder stage so excluding it here is
+# fine; uncomment to skip pre-existing local dist:
+#**/dist

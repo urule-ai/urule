@@ -51,8 +51,8 @@ services:
 
   registry-migrate:
     build:
-      context: ../../services/registry
-      dockerfile: Dockerfile
+      context: ../..
+      dockerfile: services/registry/Dockerfile
       target: migrator
     logging: *default-logging
     environment:
@@ -64,8 +64,8 @@ services:
 
   packagehub-migrate:
     build:
-      context: ../../services/packagehub
-      dockerfile: Dockerfile
+      context: ../..
+      dockerfile: services/packagehub/Dockerfile
       target: migrator
     logging: *default-logging
     environment:
@@ -106,8 +106,8 @@ services:
 
   registry:
     build:
-      context: ../../services/registry
-      dockerfile: Dockerfile
+      context: ../..
+      dockerfile: services/registry/Dockerfile
     restart: unless-stopped
     logging: *default-logging
     deploy:
@@ -139,8 +139,8 @@ services:
 
   adapter:
     build:
-      context: ../../../orchestrator-adapters/langgraph-adapter
-      dockerfile: Dockerfile
+      context: ../../..
+      dockerfile: orchestrator-adapters/langgraph-adapter/Dockerfile
     restart: unless-stopped
     logging: *default-logging
     deploy:
@@ -171,8 +171,8 @@ services:
 
   approvals:
     build:
-      context: ../../../approvals
-      dockerfile: Dockerfile
+      context: ../../..
+      dockerfile: approvals/Dockerfile
     restart: unless-stopped
     logging: *default-logging
     deploy:
@@ -197,8 +197,8 @@ services:
 
   state:
     build:
-      context: ../../services/state
-      dockerfile: Dockerfile
+      context: ../..
+      dockerfile: services/state/Dockerfile
     restart: unless-stopped
     logging: *default-logging
     deploy:
@@ -223,8 +223,8 @@ services:
 
   packagehub:
     build:
-      context: ../../services/packagehub
-      dockerfile: Dockerfile
+      context: ../..
+      dockerfile: services/packagehub/Dockerfile
     restart: unless-stopped
     logging: *default-logging
     deploy:
@@ -253,8 +253,8 @@ services:
 
   office-ui:
     build:
-      context: ../../apps/office-ui
-      dockerfile: Dockerfile
+      context: ../..
+      dockerfile: apps/office-ui/Dockerfile
     restart: unless-stopped
     logging: *default-logging
     deploy:

@@ -49,6 +49,17 @@ Hash mismatch (e.g. someone hand-edited a previously-applied migration) will fai
 
 A `*-migrate` one-shot Compose service runs `npx drizzle-kit migrate` against each schema-owning database before the long-running app service starts. The pattern uses a multi-stage Dockerfile target named `migrator` (see [services/registry/Dockerfile](../services/registry/Dockerfile), [services/packagehub/Dockerfile](../services/packagehub/Dockerfile), [mcp-gateway/Dockerfile](../../mcp-gateway/Dockerfile)) that includes drizzle-kit + the migrations dir; the runner stage stays lean (`npm ci --omit=dev` keeps drizzle-kit out of production).
 
+**Pre-build step required.** Standalone services (langgraph-adapter, approvals, etc.) consume `@urule/*` workspace packages via `file:../urule/packages/*` refs. Their Docker builds COPY the consumed packages' `dist/` into the build context, so those `dist/` directories must exist on the host *before* `docker compose build`. Run once before bringing the stack up:
+
+```bash
+npm --prefix urule run build:all
+npm --prefix orchestrator-contract run build
+docker compose -f urule/infra/compose/docker-compose.phase6.yaml build
+docker compose -f urule/infra/compose/docker-compose.phase6.yaml up -d
+```
+
+Monorepo services (registry, packagehub, state, office-ui) build their workspace deps inside the Docker builder stage and don't need the pre-build, but running it first is cheap and keeps the `dist/` directories in sync for IDE / test workflows.
+
 Compose wires it via `service_completed_successfully`:
 
 ```yaml
