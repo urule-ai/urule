@@ -12,8 +12,11 @@ processors:
     send_batch_size: 1024
 
 exporters:
+  # Jaeger has COLLECTOR_OTLP_ENABLED=true and accepts OTLP on :4317 (the same
+  # gRPC port as the otel-collector receiver). The legacy jaeger.api_v2 was
+  # removed in newer jaeger releases.
   otlp/jaeger:
-    endpoint: jaeger:14250
+    endpoint: jaeger:4317
     tls:
       insecure: true
   debug:
