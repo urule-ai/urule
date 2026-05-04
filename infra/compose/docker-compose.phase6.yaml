@@ -185,8 +185,11 @@ services:
     environment:
       PORT: '3000'
       NATS_URL: nats://nats:4222
+      TEMPORAL_ADDRESS: temporal:7233
     depends_on:
       nats:
+        condition: service_healthy
+      temporal:
         condition: service_healthy
     healthcheck:
       test: ['CMD-SHELL', "node -e \"fetch('http://localhost:3000/healthz').then(r=>{if(!r.ok)throw 1}).catch(()=>process.exit(1))\""]
@@ -212,6 +215,109 @@ services:
       PORT: '3000'
       NATS_URL: nats://nats:4222
     depends_on:
+      nats:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD-SHELL', "node -e \"fetch('http://localhost:3000/healthz').then(r=>{if(!r.ok)throw 1}).catch(()=>process.exit(1))\""]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  channel-router:
+    build:
+      context: ../../..
+      dockerfile: channel-router/Dockerfile
+    restart: unless-stopped
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '1.0'
+    ports:
+      - '${URULE_CHANNEL_ROUTER_PORT:-3006}:3000'
+    environment:
+      PORT: '3000'
+      NATS_URL: nats://nats:4222
+      REGISTRY_URL: http://registry:3000
+    depends_on:
+      registry:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD-SHELL', "node -e \"fetch('http://localhost:3000/healthz').then(r=>{if(!r.ok)throw 1}).catch(()=>process.exit(1))\""]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  runtime-broker:
+    build:
+      context: ../../..
+      dockerfile: runtime-broker/Dockerfile
+    restart: unless-stopped
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '1.0'
+    ports:
+      - '${URULE_BROKER_PORT:-4500}:4500'
+    environment:
+      PORT: '4500'
+      NATS_URL: nats://nats:4222
+      REGISTRY_URL: http://registry:3000
+    depends_on:
+      registry:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD-SHELL', "node -e \"fetch('http://localhost:4500/healthz').then(r=>{if(!r.ok)throw 1}).catch(()=>process.exit(1))\""]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  mcp-gateway-migrate:
+    build:
+      context: ../../..
+      dockerfile: mcp-gateway/Dockerfile
+      target: migrator
+    logging: *default-logging
+    environment:
+      DATABASE_URL: postgres://urule:urule@postgres:5432/mcp_gateway
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: 'no'
+
+  mcp-gateway:
+    build:
+      context: ../../..
+      dockerfile: mcp-gateway/Dockerfile
+    restart: unless-stopped
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '1.0'
+    ports:
+      - '${URULE_MCP_GATEWAY_PORT:-3005}:3000'
+    environment:
+      PORT: '3000'
+      DATABASE_URL: postgres://urule:urule@postgres:5432/mcp_gateway
+      NATS_URL: nats://nats:4222
+      REGISTRY_URL: http://registry:3000
+    depends_on:
+      mcp-gateway-migrate:
+        condition: service_completed_successfully
+      registry:
+        condition: service_healthy
       nats:
         condition: service_healthy
     healthcheck:

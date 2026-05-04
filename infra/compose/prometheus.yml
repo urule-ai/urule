@@ -16,14 +16,11 @@ scrape_configs:
           - state:3000
           - adapter:3000        # langgraph-adapter, named `adapter` in compose
           - approvals:3000
+          - channel-router:3000
+          - mcp-gateway:3000
         labels:
           tier: 'core'
       - targets:
-          - postgres:5432       # not scraped — postgres doesn't expose Prometheus on this port; placeholder commented for future postgres-exporter
+          - runtime-broker:4500
         labels:
-          tier: 'infra'
-    relabel_configs:
-      # Drop the placeholder so Prometheus doesn't show postgres as DOWN
-      - source_labels: [__address__]
-        regex: 'postgres:5432'
-        action: drop
+          tier: 'core'
