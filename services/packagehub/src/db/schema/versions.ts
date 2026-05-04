@@ -10,6 +10,11 @@ export const packageVersions = pgTable('package_versions', {
   checksum: varchar('checksum', { length: 128 }),
   publishedAt: timestamp('published_at', { withTimezone: true }).notNull().defaultNow(),
   yanked: boolean('yanked').notNull().default(false),
+  // Signature over the canonical (manifest || readme || version) digest.
+  // NULL when the parent package has no publisher_pubkey (back-compat path).
+  signature: varchar('signature', { length: 256 }),
+  signatureKind: varchar('signature_kind', { length: 20 }).notNull().default('ed25519'),
+  signedAt: timestamp('signed_at', { withTimezone: true }),
 }, (table) => ({
   packageIdIdx: index('package_versions_package_id_idx').on(table.packageId),
 }));

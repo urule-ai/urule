@@ -15,6 +15,13 @@
       "when": 1777860489795,
       "tag": "0001_pg_trgm",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1777933268160,
+      "tag": "0002_signing_and_marketplace",
+      "breakpoints": true
     }
   ]
 }

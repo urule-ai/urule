@@ -16,6 +16,17 @@ const publishPackageSchema = z.object({
   homepage: z.string().url().optional(),
   license: z.string().optional(),
   tags: z.array(z.string()).optional(),
+  // Signing: opt-in. When set, every version publish must verify against
+  // this key. Once set on first publish, cannot be changed (immutable
+  // identity binding).
+  publisherPubkey: z.string().optional(),
+  pubkeyKind: z.enum(['ed25519']).optional(),
+  // Marketplace: opt-in. Default 'free' keeps the open-source path; 'paid'
+  // and 'subscription' gate install via the entitlement check.
+  licenseTier: z.enum(['free', 'paid', 'subscription']).optional(),
+  priceCents: z.number().int().nonnegative().optional(),
+  paymentProvider: z.enum(['stripe', 'lemonsqueezy']).optional(),
+  paymentLink: z.string().url().optional(),
 });
 
 const searchQuerySchema = z.object({
@@ -100,7 +111,10 @@ export function registerPackageRoutes(app: FastifyInstance, db: Database) {
     if (!parsed.success) {
       return reply.code(400).send({ error: 'Validation failed', details: parsed.error.issues });
     }
-    const { name, type, description, author, repository, homepage, license, tags } = parsed.data;
+    const {
+      name, type, description, author, repository, homepage, license, tags,
+      publisherPubkey, pubkeyKind, licenseTier, priceCents, paymentProvider, paymentLink,
+    } = parsed.data;
     const id = ulid();
     const now = new Date();
 
@@ -116,6 +130,12 @@ export function registerPackageRoutes(app: FastifyInstance, db: Database) {
       verified: false,
       downloads: 0,
       tags: tags ?? [],
+      publisherPubkey: publisherPubkey ?? null,
+      pubkeyKind: pubkeyKind ?? 'ed25519',
+      licenseTier: licenseTier ?? 'free',
+      priceCents: priceCents ?? null,
+      paymentProvider: paymentProvider ?? null,
+      paymentLink: paymentLink ?? null,
       createdAt: now,
       updatedAt: now,
     }).returning();

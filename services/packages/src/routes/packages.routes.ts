@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { EntitlementRequiredError } from '../services/package-manager.js';
 import type { PackageManager } from '../services/package-manager.js';
 import type { PackageInstallRequest } from '../types.js';
 
@@ -28,10 +29,37 @@ export function registerPackageRoutes(app: FastifyInstance, manager: PackageMana
       const installation = await manager.install(body);
       return reply.status(201).send(installation);
     } catch (err) {
+      if (err instanceof EntitlementRequiredError) {
+        return reply.status(402).send({
+          error: { code: 'ENTITLEMENT_REQUIRED', message: err.message },
+          ...err.details,
+        });
+      }
       const message = err instanceof Error ? err.message : 'Install failed';
       return reply.status(409).send({ error: message });
     }
   });
+
+  // Rollback to the immediately-previous installed version of this package.
+  app.post<{ Params: { installId: string } }>(
+    '/api/v1/packages/:installId/rollback',
+    async (request, reply) => {
+      const { installId } = request.params;
+      try {
+        const installation = await manager.rollback(installId);
+        return installation;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Rollback failed';
+        const code = (err as Error & { code?: string }).code;
+        if (code === 'NO_HISTORY' || message.includes('not found')) {
+          return reply.status(404).send({
+            error: { code: code ?? 'NOT_FOUND', message },
+          });
+        }
+        return reply.status(409).send({ error: message });
+      }
+    },
+  );
 
   app.post<{
     Params: { installId: string };

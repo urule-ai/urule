@@ -1,17 +1,68 @@
 import { ulid } from 'ulid';
+import { fetchWithCorrelation } from '@urule/correlation-id';
 import type { PackageInstallRequest, InstalledPackage, PackageManifest } from '../types.js';
 import type { DependencyResolver } from './dependency-resolver.js';
 import type { ManifestLoader } from './manifest-loader.js';
 
+/**
+ * Thrown when a paid/subscription package's entitlement check fails. Caller
+ * (the route handler) translates this to HTTP 402 Payment Required and
+ * surfaces the paymentLink in the response body.
+ */
+export class EntitlementRequiredError extends Error {
+  constructor(public readonly details: { packageName: string; licenseTier: string; priceCents?: number; paymentLink?: string }) {
+    super(`Package "${details.packageName}" requires purchase (tier=${details.licenseTier})`);
+    this.name = 'EntitlementRequiredError';
+  }
+}
+
 export class PackageManager {
   private installations = new Map<string, InstalledPackage>();
+  // Per (workspaceId|packageName) → version history stack. Each rollback
+  // pops the top entry. Stack of length <2 → 404 from the route handler.
+  private versionHistory = new Map<string, string[]>();
 
   constructor(
     private resolver: DependencyResolver,
     private loader: ManifestLoader,
+    private packagehubUrl: string = process.env['PACKAGEHUB_URL'] ?? 'http://packagehub:3000',
   ) {}
 
+  private historyKey(workspaceId: string, packageName: string): string {
+    return `${workspaceId}::${packageName}`;
+  }
+
+  /** Throw EntitlementRequiredError if the package isn't free and the consumer has no entitlement. */
+  private async checkEntitlement(workspaceId: string, packageName: string): Promise<void> {
+    const url = `${this.packagehubUrl}/api/v1/entitlements?packageName=${encodeURIComponent(packageName)}&workspaceId=${encodeURIComponent(workspaceId)}`;
+    let res: Response;
+    try {
+      res = await fetchWithCorrelation(url);
+    } catch {
+      // packagehub unreachable — let the manifest-loader produce a clearer
+      // error a few lines later. Don't block install on a transient outage.
+      return;
+    }
+    if (!res.ok) {
+      if (res.status === 404) return;
+      throw new Error(`Entitlement check failed: ${res.status} ${res.statusText}`);
+    }
+    const body = await res.json() as { allowed: boolean; reason: string; licenseTier?: string; priceCents?: number; paymentLink?: string };
+    if (!body.allowed) {
+      throw new EntitlementRequiredError({
+        packageName,
+        licenseTier: body.licenseTier ?? 'paid',
+        priceCents: body.priceCents,
+        paymentLink: body.paymentLink,
+      });
+    }
+  }
+
   async install(request: PackageInstallRequest): Promise<InstalledPackage> {
+    // Entitlement gate first — cheaper than loading the manifest, and
+    // rejecting before we mutate state keeps the error path clean.
+    await this.checkEntitlement(request.workspaceId, request.packageName);
+
     const id = ulid();
     const installation: InstalledPackage = {
       id,
@@ -46,6 +97,12 @@ export class PackageManager {
       installation.version = request.version ?? manifest.version;
       installation.type = manifest.type;
       installation.status = 'installed';
+
+      // Initialize history with the freshly-installed version.
+      this.versionHistory.set(
+        this.historyKey(request.workspaceId, request.packageName),
+        [installation.version],
+      );
 
       return { ...installation };
     } catch (err) {
@@ -90,6 +147,11 @@ export class PackageManager {
       installation.type = manifest.type;
       installation.status = 'installed';
 
+      const key = this.historyKey(installation.workspaceId, installation.packageName);
+      const history = this.versionHistory.get(key) ?? [previousVersion];
+      history.push(installation.version);
+      this.versionHistory.set(key, history);
+
       return { ...installation };
     } catch (err) {
       if (installation.status === 'installing') {
@@ -98,6 +160,31 @@ export class PackageManager {
       }
       throw err;
     }
+  }
+
+  /**
+   * Roll back to the immediately-previous installed version. Throws an
+   * Error with code 'NO_HISTORY' when the stack has no prior entry; the
+   * route handler translates that to HTTP 404.
+   */
+  async rollback(installationId: string): Promise<InstalledPackage> {
+    const installation = this.installations.get(installationId);
+    if (!installation) {
+      throw new Error(`Installation ${installationId} not found`);
+    }
+    const key = this.historyKey(installation.workspaceId, installation.packageName);
+    const history = this.versionHistory.get(key) ?? [installation.version];
+    if (history.length < 2) {
+      const err = new Error(`No prior version to roll back to for ${installation.packageName}`);
+      (err as Error & { code: string }).code = 'NO_HISTORY';
+      throw err;
+    }
+    history.pop();
+    const previous = history[history.length - 1]!;
+    this.versionHistory.set(key, history);
+    installation.version = previous;
+    installation.status = 'installed';
+    return { ...installation };
   }
 
   async remove(installationId: string): Promise<void> {

@@ -12,6 +12,18 @@ export const packages = pgTable('packages', {
   verified: boolean('verified').notNull().default(false),
   downloads: integer('downloads').notNull().default(0),
   tags: jsonb('tags').notNull().default([]),
+  // Signing: when set, all version publishes for this package must include
+  // a valid signature over (manifest || readme || version) verifiable
+  // against this key. NULL means anonymous / unsigned (back-compat).
+  publisherPubkey: varchar('publisher_pubkey', { length: 64 }),
+  pubkeyKind: varchar('pubkey_kind', { length: 20 }).notNull().default('ed25519'),
+  // Marketplace: tier governs whether install requires an entitlement.
+  // 'free' (default) skips the entitlement check; 'paid' / 'subscription'
+  // require a row in `entitlements` for the consuming workspace/user.
+  licenseTier: varchar('license_tier', { length: 20 }).notNull().default('free'),
+  priceCents: integer('price_cents'),
+  paymentProvider: varchar('payment_provider', { length: 20 }),
+  paymentLink: varchar('payment_link', { length: 500 }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => ({

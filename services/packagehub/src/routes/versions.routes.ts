@@ -5,12 +5,14 @@ import { eq, and, desc } from 'drizzle-orm';
 import type { Database } from '../db/connection.js';
 import { packages } from '../db/schema/packages.js';
 import { packageVersions } from '../db/schema/versions.js';
+import { canonicalDigest, verifyEd25519 } from '../services/signing.js';
 
 const publishVersionSchema = z.object({
   version: z.string().regex(/^\d+\.\d+\.\d+/),
   manifest: z.object({}).passthrough(),
   readme: z.string().optional(),
   checksum: z.string().optional(),
+  signature: z.string().optional(),
 });
 
 export function registerVersionRoutes(app: FastifyInstance, db: Database) {
@@ -51,7 +53,7 @@ export function registerVersionRoutes(app: FastifyInstance, db: Database) {
       return reply.code(400).send({ error: 'Validation failed', details: parsed.error.issues });
     }
     const { name } = request.params;
-    const { version, manifest, readme, checksum } = parsed.data;
+    const { version, manifest, readme, checksum, signature } = parsed.data;
 
     const [pkg] = await db.select().from(packages).where(eq(packages.name, name));
     if (!pkg) {
@@ -59,6 +61,30 @@ export function registerVersionRoutes(app: FastifyInstance, db: Database) {
         error: { code: 'PACKAGE_NOT_FOUND', message: `Package "${name}" not found` },
       });
       return;
+    }
+
+    // Signing: if the parent package was published with a publisher_pubkey,
+    // every subsequent version MUST be signed and verifiable. Anonymous
+    // packages (no pubkey) skip this check for back-compat.
+    if (pkg.publisherPubkey) {
+      if (!signature) {
+        return reply.code(400).send({
+          error: {
+            code: 'SIGNATURE_REQUIRED',
+            message: `Package "${name}" requires signed version publishes`,
+          },
+        });
+      }
+      const digest = canonicalDigest(manifest, readme ?? '', version);
+      const ok = verifyEd25519(pkg.publisherPubkey, signature, digest);
+      if (!ok) {
+        return reply.code(401).send({
+          error: {
+            code: 'SIGNATURE_INVALID',
+            message: 'Signature does not verify against the package publisher key',
+          },
+        });
+      }
     }
 
     const id = ulid();
@@ -73,6 +99,9 @@ export function registerVersionRoutes(app: FastifyInstance, db: Database) {
       checksum: checksum ?? null,
       publishedAt: now,
       yanked: false,
+      signature: signature ?? null,
+      signatureKind: 'ed25519',
+      signedAt: signature ? now : null,
     }).returning();
 
     // Update the package's updatedAt timestamp
@@ -119,6 +148,50 @@ export function registerVersionRoutes(app: FastifyInstance, db: Database) {
       }
 
       return ver;
+    },
+  );
+
+  // Verify a published version's signature on-demand. Useful for clients
+  // about to install: they fetch the version, verify, then install.
+  app.get<{ Params: { name: string; version: string } }>(
+    '/api/v1/packages/:name/versions/:version/verify',
+    async (request, reply) => {
+      const { name, version } = request.params;
+
+      const [pkg] = await db.select().from(packages).where(eq(packages.name, name));
+      if (!pkg) {
+        return reply.code(404).send({
+          error: { code: 'PACKAGE_NOT_FOUND', message: `Package "${name}" not found` },
+        });
+      }
+
+      const [ver] = await db
+        .select()
+        .from(packageVersions)
+        .where(
+          and(
+            eq(packageVersions.packageId, pkg.id),
+            eq(packageVersions.version, version),
+          ),
+        );
+      if (!ver) {
+        return reply.code(404).send({
+          error: { code: 'VERSION_NOT_FOUND', message: `Version "${version}" not found` },
+        });
+      }
+
+      if (!pkg.publisherPubkey || !ver.signature) {
+        return { verified: false, kind: null, publisher: null, reason: 'unsigned' };
+      }
+
+      const digest = canonicalDigest(ver.manifest, ver.readme ?? '', ver.version);
+      const ok = verifyEd25519(pkg.publisherPubkey, ver.signature, digest);
+      return {
+        verified: ok,
+        kind: pkg.pubkeyKind ?? 'ed25519',
+        publisher: pkg.publisherPubkey,
+        ...(ok ? {} : { reason: 'signature_invalid' }),
+      };
     },
   );
 }
