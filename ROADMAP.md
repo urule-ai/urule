@@ -241,8 +241,10 @@ Replace fragile init scripts with proper versioned migrations.
 - [x] **urule** — GitHub Actions: lint + typecheck, test, security audit, Docker validation
 - [x] **urule** — Issue templates (bug report, feature request)
 - [x] **urule** — PR template with testing checklist
-- [ ] **urule** — Docker image build + push to GHCR on tag
-- [x] **All standalone repos** — CI workflows already configured
+- [x] **urule** — Docker image build + push to GHCR on `v*` tag (matrix: registry, packagehub, state, office-ui). Uses `docker/build-push-action@v6` with GHA cache, `docker/metadata-action@v5` for semver+latest tagging. Builds `ghcr.io/urule-ai/<service>:<tag>` plus `:major.minor` and `:latest`.
+- [x] **approvals, orchestrator-adapters (langgraph)** — Pattern B: GHA workflow checks out urule (and orchestrator-contract for langgraph) alongside the standalone, runs `npm run build:all` host-side to populate `dist/`, then `docker build` with parent-of-both as build context. Triggered on `v*` tag in the standalone repo.
+- [x] **All standalone repos** — CI workflows already configured for build+test
+- [ ] **channel-router, runtime-broker, mcp-gateway** — Add docker-publish workflow when their Dockerfiles get the Pattern B treatment (tracked as the open §4.1.1 sub-bullet).
 
 ### 5.5 API Documentation ✅
 - [x] **All 11 services** — `@fastify/swagger` + `@fastify/swagger-ui` with OpenAPI 3.0 specs
