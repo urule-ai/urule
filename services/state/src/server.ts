@@ -5,6 +5,7 @@ import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 import { authMiddleware } from '@urule/auth-middleware';
 import { correlationIdPlugin } from '@urule/correlation-id';
+import { metricsPlugin } from '@urule/observability';
 import { PresenceManager } from './services/presence-manager.js';
 import { RoomManager } from './services/room-manager.js';
 import { TaskManager } from './services/task-manager.js';
@@ -31,6 +32,9 @@ export async function buildServer() {
   // Correlation ID — must be the first plugin so all other middleware logs carry it
   await app.register(correlationIdPlugin);
 
+  // Prometheus /metrics endpoint
+  await app.register(metricsPlugin, { serviceName: 'state' });
+
   // Register CORS
   const allowedOrigins = (process.env['CORS_ORIGINS'] ?? 'http://localhost:3000').split(',');
   await app.register(cors, { origin: allowedOrigins });
@@ -42,7 +46,7 @@ export async function buildServer() {
   });
 
   // Auth middleware
-  await app.register(authMiddleware, { publicRoutes: ['/healthz', '/docs'] });
+  await app.register(authMiddleware, { publicRoutes: ['/healthz', '/metrics', '/docs'] });
 
   // OpenAPI documentation
   await app.register(swagger, {

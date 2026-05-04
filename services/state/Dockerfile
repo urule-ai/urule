@@ -11,6 +11,7 @@ COPY packages/auth-middleware/package.json packages/auth-middleware/
 COPY packages/authz/package.json packages/authz/
 COPY packages/correlation-id/package.json packages/correlation-id/
 COPY packages/events/package.json packages/events/
+COPY packages/observability/package.json packages/observability/
 COPY packages/spec/package.json packages/spec/
 COPY services/governance/package.json services/governance/
 COPY services/packagehub/package.json services/packagehub/
@@ -23,7 +24,7 @@ RUN npm ci
 
 FROM deps AS builder
 COPY packages packages
-RUN npm run build -w @urule/auth-middleware -w @urule/correlation-id
+RUN npm run build -w @urule/auth-middleware -w @urule/correlation-id -w @urule/observability
 COPY services/state services/state
 RUN npm run build -w @urule/state
 
@@ -33,10 +34,12 @@ ENV NODE_ENV=production
 COPY package.json package-lock.json ./
 COPY packages/auth-middleware/package.json packages/auth-middleware/
 COPY packages/correlation-id/package.json packages/correlation-id/
+COPY packages/observability/package.json packages/observability/
 COPY services/state/package.json services/state/
 RUN npm ci -w @urule/state --omit=dev --include-workspace-root
 COPY --from=builder /app/packages/auth-middleware/dist packages/auth-middleware/dist
 COPY --from=builder /app/packages/correlation-id/dist packages/correlation-id/dist
+COPY --from=builder /app/packages/observability/dist packages/observability/dist
 COPY --from=builder /app/services/state/dist services/state/dist
 EXPOSE 3000
 HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=3 \

@@ -21,6 +21,7 @@
     "@fastify/swagger-ui": "^5.2.5",
     "@urule/auth-middleware": "*",
     "@urule/correlation-id": "*",
+    "@urule/observability": "*",
     "fastify": "^5.0.0",
     "semver": "^7.6.0",
     "simple-git": "^3.27.0",

@@ -154,6 +154,36 @@ services:
       - '${URULE_JAEGER_GRPC_PORT:-14250}:14250'
     logging: *default-logging
 
+  prometheus:
+    image: prom/prometheus:v2.55.0
+    command: ['--config.file=/etc/prometheus/prometheus.yml', '--storage.tsdb.path=/prometheus']
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheusdata:/prometheus
+    ports:
+      - '${URULE_PROMETHEUS_PORT:-9090}:9090'
+    logging: *default-logging
+
+  grafana:
+    image: grafana/grafana:11.3.0
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: urule
+      GF_AUTH_ANONYMOUS_ENABLED: 'true'
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_USERS_ALLOW_SIGN_UP: 'false'
+    volumes:
+      - ./grafana-datasources.yml:/etc/grafana/provisioning/datasources/prometheus.yml:ro
+      - ./grafana-dashboards.yml:/etc/grafana/provisioning/dashboards/dashboards.yml:ro
+      - ./grafana-dashboard-services.json:/var/lib/grafana/dashboards/services.json:ro
+      - grafanadata:/var/lib/grafana
+    ports:
+      - '${URULE_GRAFANA_PORT:-3030}:3000'
+    depends_on:
+      - prometheus
+    logging: *default-logging
+
 volumes:
   pgdata:
   natsdata:
+  prometheusdata:
+  grafanadata:

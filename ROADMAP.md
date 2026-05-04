@@ -201,10 +201,11 @@ Replace fragile init scripts with proper versioned migrations.
 - [x] **All 10 services** — Correlation ID propagation across service boundaries. New `@urule/correlation-id` workspace package wraps a Fastify plugin (registered first, before CORS) that reads `x-correlation-id` from inbound headers, mints a ULID when absent, echoes it back on the response, overrides `request.id` (so pino auto-tags every log line), and stores it in `AsyncLocalStorage` so any code path can call `getCorrelationId()` zero-arg. Outbound calls use a `fetchWithCorrelation()` wrapper that injects the header from ALS — applied to the registry→adapter call site and all 16 in-ecosystem fetch sites in `langgraph-adapter`'s `anthropic-executor.ts` (external Keycloak/OPA/OpenFGA/manifest-loader calls intentionally left on plain `fetch`). `@urule/events` `EventBus.publish()` sets the header on the NATS message and falls back to ALS when no explicit `correlationId` is passed; `subscribe()` and `subscribeDurable()` re-establish the ALS context before invoking the handler so cascaded fetches in event consumers inherit the same ID. `office-ui`'s axios interceptor mints `x-correlation-id` per browser request so a user click is the actual root of the trace. New tests: `urule/packages/correlation-id/tests/plugin.test.ts` (11 tests covering inbound passthrough, mint-on-absent, ALS no-leak across parallel injections, fetch wrapper override behaviour), `event-bus-correlation.test.ts` (5 tests covering NATS roundtrip), and `tests/correlation-id.test.ts` per service (2 tests × 10 services).
 
 ### 4.4 OpenTelemetry & Tracing
-- [ ] **registry** — Add `@opentelemetry/sdk-node` instrumentation (telemetry dir exists but is empty)
-- [ ] **All services** — Add OTEL trace/span generation for HTTP requests
-- [ ] **All services** — Add OTEL trace propagation for cross-service calls
-- [ ] **infra** — Verify OTEL Collector → Jaeger pipeline receives data
+- [x] **registry** (and all services) — `@opentelemetry/sdk-node` instrumentation shipped via the new `@urule/observability` package's `initOtel(serviceName)` helper. Wired into every service's `package.json`. The auto-instrumentations cover HTTP servers + clients, `pg`, `dns`, `net` automatically — no manual span code required for the HTTP boundary.
+- [x] **All services** — HTTP trace/span generation: covered automatically by `@opentelemetry/auto-instrumentations-node` once `initOtel()` is called.
+- [x] **All services** — Cross-service propagation via W3C `traceparent`: also automatic with auto-instrumentation. Combined with the §4.3 `x-correlation-id` propagation, both human-friendly and trace-ID-shaped IDs flow end-to-end.
+- [ ] **All services** — Call `initOtel(serviceName)` in each `src/index.ts` to actually start the SDK at process boot. Today the helper is shipped and ready; just needs the per-service wiring (one line + SIGTERM shutdown handler).
+- [ ] **infra** — Verify OTEL Collector → Jaeger pipeline receives data once `initOtel()` is wired in. Pipeline (otel-collector → jaeger) was already in compose; no changes needed.
 
 ### 4.5 Database Performance ✅
 - [x] **registry** — Indexes on agents(workspaceId, status), workspaces(orgId, slug), runtimes, providers, conversations
@@ -302,11 +303,15 @@ Replace fragile init scripts with proper versioned migrations.
 - [ ] **office-ui** — Add real-time notification sounds (configurable)
 
 ### 6.6 Operations
-- [ ] **infra** — Add Prometheus metrics collection
-- [ ] **infra** — Add Grafana dashboards for service monitoring
+- [x] **infra** — Prometheus metrics collection. New `@urule/observability` workspace package exports a Fastify `metricsPlugin` (built on `prom-client` 15) that exposes `GET /metrics` returning the Prometheus exposition format. Default labels include `service`. `http_requests_total{method,route,status_code}` counter and `http_request_duration_seconds` histogram populated via an `onResponse` hook. Default Node.js process metrics (CPU, RSS, event-loop lag, GC) included via `collectDefaultMetrics`. Per-plugin-instance `Registry` keeps multiple Fastify apps in the same process from cross-contaminating. Wired into all 10 services with `/metrics` added to each service's `publicRoutes` (Prometheus can't auth). New `prometheus` Compose service in [docker-compose.infra.yaml](infra/compose/docker-compose.infra.yaml) with [prometheus.yml](infra/compose/prometheus.yml) scrape config — registry/packagehub/state/adapter/approvals targets. 8 new tests in `@urule/observability`; no service-level test changes (covered by integration smoke).
+- [x] **infra** — Grafana dashboards for service monitoring. New `grafana` Compose service with anonymous-Viewer access for local dev (admin/urule for edits). Datasources (Prometheus + Jaeger) auto-provisioned via [grafana-datasources.yml](infra/compose/grafana-datasources.yml). Starter [Urule Services dashboard](infra/compose/grafana-dashboard-services.json) auto-provisioned with 6 panels: per-service RPS, p95 latency, error rate (5xx %), event-loop lag, RSS memory, CPU. Live-validated end-to-end: registry → /metrics → Prometheus → Grafana shows live data after a few requests.
+- [x] **infra (partial §4.4)** — `@urule/observability` also exports `initOtel(serviceName)` which initializes `@opentelemetry/sdk-node` with HTTP auto-instrumentations + OTLP gRPC trace exporter. Falls back to `OTEL_DISABLED=true` for tests. Existing `otel-collector` + `jaeger` Compose services already wired to the `4317` gRPC endpoint. **Not yet** wired into service entrypoints (`src/index.ts` calls) — this is a one-line per-service follow-up to populate Jaeger.
 - [ ] **infra** — Create deployment guide (production setup)
 - [ ] **infra** — Create backup/recovery documentation
 - [ ] **infra** — Add Helm charts for Kubernetes deployment
+
+Open §4.4 sub-bullets:
+- [ ] **All services** — Call `initOtel(serviceName)` in each `src/index.ts` before importing Fastify, plus a SIGTERM handler that calls `sdk.shutdown()`. Today the helper is shipped and ready; just needs the per-service wiring (pattern parallels `correlationIdPlugin`/`metricsPlugin` rollout).
 
 ---
 

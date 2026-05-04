@@ -1,0 +1,29 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  - job_name: 'urule-services'
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - registry:3000
+          - packagehub:3000
+          - state:3000
+          - adapter:3000        # langgraph-adapter, named `adapter` in compose
+          - approvals:3000
+        labels:
+          tier: 'core'
+      - targets:
+          - postgres:5432       # not scraped — postgres doesn't expose Prometheus on this port; placeholder commented for future postgres-exporter
+        labels:
+          tier: 'infra'
+    relabel_configs:
+      # Drop the placeholder so Prometheus doesn't show postgres as DOWN
+      - source_labels: [__address__]
+        regex: 'postgres:5432'
+        action: drop

@@ -19,6 +19,7 @@
     "@urule/auth-middleware": "*",
     "@urule/correlation-id": "*",
     "@urule/events": "*",
+    "@urule/observability": "*",
     "fastify": "^5.3.3",
     "nats": "^2.29.1",
     "ulid": "^2.3.0"

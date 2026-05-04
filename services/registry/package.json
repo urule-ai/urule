@@ -25,6 +25,7 @@
     "@urule/auth-middleware": "*",
     "@urule/correlation-id": "*",
     "@urule/events": "*",
+    "@urule/observability": "*",
     "drizzle-orm": "^0.45.2",
     "fastify": "^5.0.0",
     "nats": "^2.28.0",
