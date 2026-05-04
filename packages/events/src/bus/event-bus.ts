@@ -6,11 +6,15 @@ import {
   StringCodec,
   type ConsumerConfig,
   AckPolicy,
+  headers as natsHeaders,
 } from 'nats';
+import { runWithCorrelationId } from '@urule/correlation-id';
 import type { UruleEvent } from '../envelope.js';
 import { createEvent } from '../envelope.js';
 
 const sc = StringCodec();
+
+const CORRELATION_HEADER = 'x-correlation-id';
 
 export type EventHandler<T = unknown> = (event: UruleEvent<T>) => void | Promise<void>;
 
@@ -71,10 +75,13 @@ export class EventBus {
     const event = createEvent(topic, this.source, data, options);
     const payload = sc.encode(JSON.stringify(event));
 
+    const hdrs = natsHeaders();
+    hdrs.set(CORRELATION_HEADER, event.correlationId);
+
     if (this.js) {
-      await this.js.publish(topic, payload);
+      await this.js.publish(topic, payload, { headers: hdrs });
     } else {
-      this.conn.publish(topic, payload);
+      this.conn.publish(topic, payload, { headers: hdrs });
     }
 
     return event;
@@ -83,6 +90,8 @@ export class EventBus {
   /**
    * Subscribe to a topic with a handler.
    * Uses core NATS (non-durable) subscription.
+   * The handler runs inside an AsyncLocalStorage context tagged with the
+   * incoming correlation ID, so downstream fetches/publishes inherit it.
    */
   subscribe<T = unknown>(topic: string, handler: EventHandler<T>): EventBusSubscription {
     const sub: Subscription = this.conn.subscribe(topic);
@@ -91,7 +100,8 @@ export class EventBus {
       for await (const msg of sub) {
         try {
           const event = JSON.parse(sc.decode(msg.data)) as UruleEvent<T>;
-          await handler(event);
+          const id = msg.headers?.get(CORRELATION_HEADER) || event.correlationId;
+          await runWithCorrelationId(id, () => handler(event));
         } catch (err) {
           console.error(`Error processing event on ${topic}:`, err);
         }
@@ -106,6 +116,8 @@ export class EventBus {
   /**
    * Subscribe to a topic with a durable consumer (JetStream).
    * Messages are acknowledged after successful handler execution.
+   * The handler runs inside an AsyncLocalStorage context tagged with the
+   * incoming correlation ID, so downstream fetches/publishes inherit it.
    */
   async subscribeDurable<T = unknown>(
     topic: string,
@@ -130,7 +142,8 @@ export class EventBus {
       for await (const msg of messages) {
         try {
           const event = JSON.parse(sc.decode(msg.data)) as UruleEvent<T>;
-          await handler(event);
+          const id = msg.headers?.get(CORRELATION_HEADER) || event.correlationId;
+          await runWithCorrelationId(id, () => handler(event));
           msg.ack();
         } catch (err) {
           console.error(`Error processing durable event on ${topic}:`, err);

@@ -23,6 +23,7 @@
   "files": ["dist"],
   "license": "MIT",
   "dependencies": {
+    "@urule/correlation-id": "*",
     "nats": "^2.28.0",
     "ulid": "^2.3.0"
   },

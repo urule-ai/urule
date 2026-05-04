@@ -218,7 +218,7 @@ export default function ThingsPage() {
    - `src/routes/`, `src/middleware/error-handler.ts`
    - `Dockerfile` (multi-stage: builder + runner, with HEALTHCHECK)
    - `tests/`
-2. Register in `server.ts`: CORS → rate limit → auth middleware → swagger → error handler → healthz → routes
+2. Register in `server.ts`: correlationIdPlugin → CORS → rate limit → auth middleware → swagger → error handler → healthz → routes. The correlation-id plugin must be first so all subsequent middleware logs (auth failures, rate-limit rejections) carry the same `x-correlation-id`.
 3. Add to `docker-compose.phase6.yaml`
 4. Add to `scripts/clone-all.sh` if standalone
 

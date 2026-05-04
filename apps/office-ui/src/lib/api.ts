@@ -100,6 +100,14 @@ api.interceptors.request.use((config) => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+
+  // Mint a correlation ID at the browser so every backend hop logs the same value
+  if (!config.headers["x-correlation-id"]) {
+    config.headers["x-correlation-id"] =
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `cid-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  }
   return config;
 });
 

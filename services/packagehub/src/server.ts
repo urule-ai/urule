@@ -4,6 +4,7 @@ import rateLimit from '@fastify/rate-limit';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 import { authMiddleware } from '@urule/auth-middleware';
+import { correlationIdPlugin } from '@urule/correlation-id';
 import { createDb } from './db/connection.js';
 import { registerPackageRoutes } from './routes/packages.routes.js';
 import { registerVersionRoutes } from './routes/versions.routes.js';
@@ -25,8 +26,10 @@ export async function buildServer(config: Config) {
         },
       },
     },
-    genReqId: () => crypto.randomUUID(),
   });
+
+  // Correlation ID — must be the first plugin so all other middleware logs carry it
+  await app.register(correlationIdPlugin);
 
   // Register CORS
   const allowedOrigins = (process.env['CORS_ORIGINS'] ?? 'http://localhost:3000').split(',');

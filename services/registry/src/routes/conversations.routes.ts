@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { ulid } from 'ulid';
 import { eq, desc, sql } from 'drizzle-orm';
 import { z } from 'zod';
+import { fetchWithCorrelation } from '@urule/correlation-id';
 import type { Database } from '../db/connection.js';
 import { conversations, conversationAgents, messages } from '../db/schema/conversations.js';
 import { agents } from '../db/schema/agents.js';
@@ -239,7 +240,7 @@ export function registerConversationRoutes(app: FastifyInstance, db: Database) {
         const agentId = agentLinks[0].agentId;
         const adapterUrl = process.env['ADAPTER_URL'] ?? 'http://localhost:3002';
 
-        fetch(`${adapterUrl}/api/v1/chat`, {
+        fetchWithCorrelation(`${adapterUrl}/api/v1/chat`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

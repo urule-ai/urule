@@ -1,4 +1,5 @@
 import { ulid } from 'ulid';
+import { getCorrelationId } from '@urule/correlation-id';
 
 /** Event envelope that wraps all Urule domain events */
 export interface UruleEvent<T = unknown> {
@@ -31,7 +32,7 @@ export function createEvent<T>(
     source,
     timestamp: new Date().toISOString(),
     version: options?.version ?? 1,
-    correlationId: options?.correlationId ?? ulid(),
+    correlationId: options?.correlationId ?? getCorrelationId() ?? ulid(),
     data,
   };
 }
