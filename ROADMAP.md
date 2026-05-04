@@ -87,11 +87,13 @@ Fill gaps in services that lack route-level tests.
 ### 2.2 E2E Integration Tests
 Extend the Phase 1 E2E suite to cover all phases.
 
-- [ ] **Phase 2 E2E** — Test package install lifecycle: publish to PackageHub → install via packages service → verify in registry
-- [ ] **Phase 3 E2E** — Test approval workflow: create approval → approve/deny → verify event published
-- [ ] **Phase 4 E2E** — Test channel routing: send webhook → verify normalized message → check state updates
-- [ ] **Phase 5 E2E** — Test widget lifecycle: register widget → mount in UI → verify bridge communication
-- [ ] **Phase 6 E2E** — Test full UX flow: configure API key → install personality → chat with AI → agent hiring
+- [x] **Phase 2 E2E** — [infra/e2e/phase2.test.mjs](infra/e2e/phase2.test.mjs). Publishes a package to PackageHub (with rejected duplicate), publishes a version, browses for it, fetches by name and by name+version, then installs via the packages service into a workspace, lists installations, rejects duplicate install, fetches by id, uninstalls, verifies 404 on subsequent fetch.
+- [x] **Phase 3 E2E** — [infra/e2e/phase3.test.mjs](infra/e2e/phase3.test.mjs). Exercises every approval transition: approve, deny, reject (terminal), cancel (requester withdraws), and escalate (priority bump). Creates an approval rule first to verify rule routing. Final list endpoint verifies all 5 approvals with correct statuses.
+- [x] **Phase 4 E2E** — [infra/e2e/phase4.test.mjs](infra/e2e/phase4.test.mjs). State service: room create + task create + agent assignment + status update + cleanup. Channel-router: binding create + slack-shaped inbound webhook normalization + identity-mapping create/lookup + cleanup. Tolerant of impl variation (PATCH vs POST for task status, list vs object response shapes) so it doesn't break on response-shape evolution.
+- [ ] **Phase 5 E2E** — Widget lifecycle requires office-ui's bridge protocol — covered by §2.3 Playwright suite (browser-side; not a backend HTTP flow).
+- [ ] **Phase 6 E2E** — Chat-with-AI flow needs an Anthropic API key + outbound network access; not appropriate for a CI E2E. Phase 1's run lifecycle + the langgraph-adapter unit tests cover the orchestrator boundary; the configure-API-key + install-personality parts are already exercised by Phase 2.
+
+Shared helpers live in [infra/e2e/lib.mjs](infra/e2e/lib.mjs) (assert / test / post / get / del / patch / waitForService / summary). [infra/e2e/run-all.mjs](infra/e2e/run-all.mjs) chains phases 1-4; honors `PHASE=N` to scope to a single phase. The Dockerfile copies all four phase files + helpers and defaults to running them all on container start.
 
 ### 2.3 UI Testing
 Add browser-based testing for the Office UI.
