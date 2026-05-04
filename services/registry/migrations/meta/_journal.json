@@ -8,6 +8,13 @@
       "when": 1777555679003,
       "tag": "0000_brave_silver_surfer",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1777862998488,
+      "tag": "0001_agent_memories",
+      "breakpoints": true
     }
   ]
 }

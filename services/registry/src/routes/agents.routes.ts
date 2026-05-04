@@ -1,9 +1,11 @@
 import type { FastifyInstance } from 'fastify';
 import { ulid } from 'ulid';
-import { eq } from 'drizzle-orm';
+import { and, desc, eq, gte, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Database } from '../db/connection.js';
 import { agents } from '../db/schema/agents.js';
+import { agentMemories } from '../db/schema/agent_memories.js';
+import { conversationAgents, messages } from '../db/schema/conversations.js';
 import { providers } from '../db/schema/providers.js';
 import { workspaces } from '../db/schema/workspaces.js';
 import { AuditLogger } from '@urule/events';
@@ -22,6 +24,12 @@ const createAgentSchema = z.object({
 
 const agentStatusSchema = z.object({
   status: z.enum(['active', 'idle', 'offline', 'error', 'paused']),
+});
+
+const memoryCreateSchema = z.object({
+  content: z.string().min(1).max(10000),
+  kind: z.string().max(50).optional(),
+  tags: z.array(z.string()).max(20).optional(),
 });
 
 const updateAgentSchema = z.object({
@@ -160,22 +168,74 @@ export function registerAgentRoutes(app: FastifyInstance, db: Database) {
     return toUiAgent(agent as Record<string, unknown>, provider);
   });
 
-  // Agent metrics stub
-  app.get<{ Params: { agentId: string } }>('/api/v1/agents/:agentId/metrics', async () => ({
-    tasks_completed: 0,
-    tasks_in_progress: 0,
-    avg_response_time_ms: 0,
-    messages_sent: 0,
-    uptime_pct: 100,
-  }));
+  // Agent metrics — derived from messages + conversation_agents on read.
+  app.get<{ Params: { agentId: string } }>('/api/v1/agents/:agentId/metrics', async (request, reply) => {
+    const { agentId } = request.params;
+    const [agent] = await db.select({ id: agents.id }).from(agents).where(eq(agents.id, agentId));
+    if (!agent) {
+      return reply.code(404).send({ error: { code: 'AGENT_NOT_FOUND', message: `Agent ${agentId} not found` } });
+    }
 
-  // Agent health stub
-  app.get<{ Params: { agentId: string } }>('/api/v1/agents/:agentId/health', async () => ({
-    status: 'healthy',
-    last_heartbeat: new Date().toISOString(),
-    memory_usage_mb: 0,
-    cpu_pct: 0,
-  }));
+    const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const agentMessages = and(eq(messages.senderId, agentId), eq(messages.senderType, 'agent'));
+
+    const [totals] = await db
+      .select({
+        messagesSent: sql<number>`count(*)::int`,
+        lastActive: sql<Date | null>`max(${messages.createdAt})`,
+      })
+      .from(messages)
+      .where(agentMessages);
+
+    const [recent] = await db
+      .select({ messagesSent24h: sql<number>`count(*)::int` })
+      .from(messages)
+      .where(and(agentMessages, gte(messages.createdAt, since24h)));
+
+    const [conversationsRow] = await db
+      .select({ conversationsParticipated: sql<number>`count(*)::int` })
+      .from(conversationAgents)
+      .where(eq(conversationAgents.agentId, agentId));
+
+    return {
+      messages_sent: totals?.messagesSent ?? 0,
+      messages_sent_24h: recent?.messagesSent24h ?? 0,
+      conversations_participated: conversationsRow?.conversationsParticipated ?? 0,
+      last_active: totals?.lastActive ? totals.lastActive.toISOString() : null,
+      // memory/CPU don't apply to logical agents — kept for FE compat.
+      memory_usage_mb: 0,
+      cpu_pct: 0,
+    };
+  });
+
+  // Agent health — derived from last activity timestamp on messages.
+  app.get<{ Params: { agentId: string } }>('/api/v1/agents/:agentId/health', async (request, reply) => {
+    const { agentId } = request.params;
+    const [agent] = await db.select({ id: agents.id }).from(agents).where(eq(agents.id, agentId));
+    if (!agent) {
+      return reply.code(404).send({ error: { code: 'AGENT_NOT_FOUND', message: `Agent ${agentId} not found` } });
+    }
+
+    const [row] = await db
+      .select({ lastActive: sql<Date | null>`max(${messages.createdAt})` })
+      .from(messages)
+      .where(and(eq(messages.senderId, agentId), eq(messages.senderType, 'agent')));
+
+    const lastActive = row?.lastActive ?? null;
+    const ageMs = lastActive ? Date.now() - lastActive.getTime() : Infinity;
+    const status = !lastActive ? 'never_active'
+      : ageMs < 5 * 60 * 1000 ? 'healthy'
+      : ageMs < 30 * 60 * 1000 ? 'idle'
+      : 'stale';
+
+    return {
+      status,
+      last_heartbeat: lastActive ? lastActive.toISOString() : null,
+      // memory/CPU don't apply to logical agents — kept for FE compat.
+      memory_usage_mb: 0,
+      cpu_pct: 0,
+    };
+  });
 
   // Agent conversations stub
   app.get<{ Params: { agentId: string } }>('/api/v1/agents/:agentId/conversations', async () => []);
@@ -183,14 +243,61 @@ export function registerAgentRoutes(app: FastifyInstance, db: Database) {
   // Agent logs stub
   app.get<{ Params: { agentId: string } }>('/api/v1/agents/:agentId/logs', async () => []);
 
-  // Agent memories stub
-  app.get<{ Params: { agentId: string } }>('/api/v1/agents/:agentId/memories', async () => []);
-  app.post<{ Params: { agentId: string } }>('/api/v1/agents/:agentId/memories', async (_req, reply) => {
-    reply.status(201).send({ id: 'mem-stub', content: '', created_at: new Date().toISOString() });
-  });
-  app.delete<{ Params: { agentId: string; memoryId: string } }>('/api/v1/agents/:agentId/memories/:memoryId', async (_req, reply) => {
-    reply.status(204).send();
-  });
+  // Agent memories — Drizzle-backed CRUD against the agent_memories table.
+  app.get<{ Params: { agentId: string }; Querystring: { limit?: string; offset?: string } }>(
+    '/api/v1/agents/:agentId/memories',
+    async (request) => {
+      const { agentId } = request.params;
+      const q = request.query;
+      const limit = Math.min(parseInt(q.limit ?? '50', 10), 100);
+      const offset = parseInt(q.offset ?? '0', 10);
+      return db
+        .select()
+        .from(agentMemories)
+        .where(eq(agentMemories.agentId, agentId))
+        .orderBy(desc(agentMemories.createdAt))
+        .limit(limit)
+        .offset(offset);
+    },
+  );
+
+  app.post<{ Params: { agentId: string }; Body: { content: string; kind?: string; tags?: string[] } }>(
+    '/api/v1/agents/:agentId/memories',
+    async (request, reply) => {
+      const parsed = memoryCreateSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.code(400).send({ error: 'Validation failed', details: parsed.error.issues });
+      }
+      const { agentId } = request.params;
+      const [agent] = await db.select({ id: agents.id }).from(agents).where(eq(agents.id, agentId));
+      if (!agent) {
+        return reply.code(404).send({ error: { code: 'AGENT_NOT_FOUND', message: `Agent ${agentId} not found` } });
+      }
+      const [memory] = await db.insert(agentMemories).values({
+        id: ulid(),
+        agentId,
+        content: parsed.data.content,
+        kind: parsed.data.kind ?? 'note',
+        tags: parsed.data.tags ?? [],
+      }).returning();
+      return reply.code(201).send(memory);
+    },
+  );
+
+  app.delete<{ Params: { agentId: string; memoryId: string } }>(
+    '/api/v1/agents/:agentId/memories/:memoryId',
+    async (request, reply) => {
+      const { agentId, memoryId } = request.params;
+      const result = await db
+        .delete(agentMemories)
+        .where(and(eq(agentMemories.id, memoryId), eq(agentMemories.agentId, agentId)))
+        .returning({ id: agentMemories.id });
+      if (result.length === 0) {
+        return reply.code(404).send({ error: { code: 'MEMORY_NOT_FOUND', message: `Memory ${memoryId} not found` } });
+      }
+      reply.status(204).send();
+    },
+  );
 
   // Agent status update
   app.post<{ Params: { agentId: string }; Body: { status: string } }>(

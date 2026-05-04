@@ -29,4 +29,7 @@ export const messages = pgTable('messages', {
   tokenCount: integer('token_count').notNull().default(0),
   actionButtons: jsonb('action_buttons').notNull().default([]),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-});
+}, (table) => ({
+  // Supports the agent metrics + health endpoints which aggregate by sender.
+  senderIdx: index('messages_sender_id_idx').on(table.senderId, table.senderType),
+}));

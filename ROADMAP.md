@@ -270,9 +270,9 @@ Replace fragile init scripts with proper versioned migrations.
 - [ ] **office-ui** — Add widget marketplace UI (browse, install, configure)
 
 ### 6.2 Agent Capabilities
-- [ ] **registry** — Implement agent memory storage (currently returns empty arrays)
-- [ ] **registry** — Implement real agent metrics (currently returns hardcoded zeros)
-- [ ] **registry** — Implement real agent health checks (currently hardcoded)
+- [x] **registry** — Implemented agent memory storage. New `agent_memories` table (id ULID, agent_id FK→agents ON DELETE CASCADE, content text ≤10000, kind varchar default 'note', tags jsonb default [], created_at). Drizzle migration `0001_agent_memories.sql` generated. GET / POST / DELETE handlers with Zod validation, 404 on missing agent or memory, pagination via `limit`/`offset` (max 100). Replaces the 3 stub handlers in `agents.routes.ts`.
+- [x] **registry** — Implemented real agent metrics derived from `messages` and `conversation_agents` source-of-truth. `GET /agents/:id/metrics` returns `messages_sent`, `messages_sent_24h`, `conversations_participated`, `last_active`. CPU/memory fields kept at 0 with a comment — agents are logical actors, not OS processes; surfacing fake numbers was misleading. New `messages_sender_id_idx` (sender_id, sender_type) index supports the aggregate queries. Returns 404 for unknown agentId. `tasks_completed`/`tasks_in_progress` removed — those live in state service; if office-ui needs them it should call state directly.
+- [x] **registry** — Implemented real agent health checks. `GET /agents/:id/health` derives `status` from message activity: `'healthy'` (<5min), `'idle'` (<30min), `'stale'` (>30min), `'never_active'` (no messages ever). `last_heartbeat` is the most recent message timestamp. Same memory/CPU caveat as metrics. Returns 404 for unknown agentId.
 - [ ] **langgraph-adapter** — Add support for multiple AI providers (OpenAI, Gemini, local models)
 - [ ] **langgraph-adapter** — Add conversation branching/forking
 - [x] **orchestrator-contract + adapters** — Fixed `pauseForApproval` ID mismatch. `ApprovalRequest` now carries an optional `id`; both langgraph-adapter and goose-adapter (and the contract's mock-adapter) use it when provided so `resumeRun({approvalId})` can target a specific pending approval. Compliance suite extended with a roundtrip test.
