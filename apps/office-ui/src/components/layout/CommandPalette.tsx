@@ -6,6 +6,7 @@ import { useCommandPaletteStore } from "@/store/useCommandPaletteStore";
 import { useThemeStore } from "@/store/useThemeStore";
 import { useAuthStore } from "@/store/useAuthStore";
 import { useUserPrefsStore } from "@/store/useUserPrefsStore";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 
 interface Command {
   id: string;
@@ -51,6 +52,7 @@ export function CommandPalette() {
   const setDensity = useUserPrefsStore((s) => s.setDensity);
   const [query, setQuery] = useState("");
   const [selectedIdx, setSelectedIdx] = useState(0);
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const commands: Command[] = useMemo(() => [
@@ -64,7 +66,7 @@ export function CommandPalette() {
     { id: 'theme-dark', label: 'Switch to Dark theme', group: 'theme', run: () => setTheme('dark') },
     { id: 'theme-light', label: 'Switch to Light theme', group: 'theme', run: () => setTheme('light') },
     { id: 'theme-system', label: 'Use System theme', group: 'theme', run: () => setTheme('system') },
-    { id: 'session-logout', label: 'Sign out', keywords: 'logout exit', group: 'session', run: () => { logout(); router.push('/login'); } },
+    { id: 'session-logout', label: 'Sign out', keywords: 'logout exit', group: 'session', run: () => setLogoutConfirmOpen(true) },
     {
       id: 'prefs-sounds-toggle',
       label: soundsEnabled ? 'Disable notification sounds' : 'Enable notification sounds',
@@ -131,9 +133,29 @@ export function CommandPalette() {
     }
   };
 
-  if (!open) return null;
+  // The logout confirmation lives outside the open-gate so dismissing
+  // the palette while the dialog is up doesn't lose the confirmation.
+  const logoutConfirm = (
+    <ConfirmDialog
+      open={logoutConfirmOpen}
+      title="Sign out?"
+      description="You'll be returned to the login screen. Any unsaved drafts persist."
+      confirmLabel="Sign out"
+      variant="destructive"
+      onConfirm={() => {
+        setLogoutConfirmOpen(false);
+        logout();
+        router.push('/login');
+      }}
+      onCancel={() => setLogoutConfirmOpen(false)}
+    />
+  );
+
+  if (!open) return logoutConfirm;
 
   return (
+    <>
+    {logoutConfirm}
     <div
       role="dialog"
       aria-modal="true"
@@ -191,5 +213,6 @@ export function CommandPalette() {
         </div>
       </div>
     </div>
+    </>
   );
 }

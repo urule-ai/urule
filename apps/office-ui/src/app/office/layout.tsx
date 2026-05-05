@@ -6,6 +6,7 @@ import { useAuthStore } from "@/store/useAuthStore";
 import { AppSidebar } from "@/components/layout/AppSidebar";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { CommandPalette } from "@/components/layout/CommandPalette";
+import { OfflineBanner } from "@/components/layout/OfflineBanner";
 import { useNotificationSounds } from "@/hooks/useNotificationSounds";
 import { WidgetZone } from "@/widgets";
 import api from "@/lib/api";
@@ -48,6 +49,7 @@ export default function OfficeLayout({
 
   return (
     <div className="flex h-screen bg-background-dark overflow-hidden">
+      <OfflineBanner />
       <AppSidebar />
       <div className="flex-1 flex flex-col overflow-hidden" role="main">
         <AppHeader />

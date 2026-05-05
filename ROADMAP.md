@@ -126,8 +126,8 @@ Replace silent failures and `alert()` calls with proper UI feedback.
 - [x] **office-ui** — React Error Boundaries with dark-themed fallback UI and retry
 - [x] **office-ui** — Error feedback on failed API calls (replaced `.catch(() => {})` patterns)
 - [x] **office-ui** — Replaced all `alert()` calls with toast notifications
-- [ ] **office-ui** — Add network offline detection banner
-- [ ] **office-ui** — Add retry buttons on failed data fetches
+- [x] **office-ui** — Network offline detection banner. New [hooks/useOnlineStatus.ts](apps/office-ui/src/hooks/useOnlineStatus.ts) (`navigator.onLine` + `online`/`offline` event subscription + 5s polling fallback for browsers that miss events; visibility-aware so it stops polling when the tab is hidden) and [components/layout/OfflineBanner.tsx](apps/office-ui/src/components/layout/OfflineBanner.tsx) (sticky top banner with `role="status" aria-live="polite"`; slides in/out via CSS transform). Mounted globally in [office/layout.tsx](apps/office-ui/src/app/office/layout.tsx). Test-id `offline-banner` for Playwright.
+- [ ] **office-ui** — Retry buttons on failed data fetches. Needs an audit of every React Query hook + each list page's error state UI; defer until all the data-fetching surfaces have shipped (some §6.x features still in-flight).
 - [ ] **office-ui** — Handle 401/403 redirects consistently
 
 ### 3.2 Accessibility (WCAG 2.1) ✅
@@ -137,17 +137,17 @@ Replace silent failures and `alert()` calls with proper UI feedback.
 - [x] **office-ui** — `aria-invalid` + `aria-describedby` for form error states (login, register)
 - [x] **office-ui** — `role="tablist/tab/tabpanel"` on agent wizard, `aria-current="step"` on steps
 - [x] **office-ui** — `aria-current="page"` on active sidebar nav links
-- [ ] **office-ui** — Keyboard navigation for sidebar, modals, and dropdowns
-- [ ] **office-ui** — Test with screen reader (VoiceOver/NVDA) and fix issues
+- [x] **office-ui** — Keyboard navigation for modals + dropdowns. New [lib/focusTrap.ts](apps/office-ui/src/lib/focusTrap.ts) helper installs a Tab/Shift+Tab handler that bounces focus inside a container's focusable descendants; modal components opt in via `useEffect`. Two-button modals (e.g. [ConfirmDialog](apps/office-ui/src/components/ui/ConfirmDialog.tsx)) use an inline trap (Tab cycles between cancel↔confirm). [CommandPalette](apps/office-ui/src/components/layout/CommandPalette.tsx) handles ↑↓/Enter/Esc inline (already shipped in §6.5); the trap utility is the reusable primitive for future modals. Sidebar collapse / hamburger were already keyboard-reachable from §3.2's first wave.
+- [ ] **office-ui** — Test with screen reader (VoiceOver/NVDA) and fix issues. Manual QA — defer.
 - [ ] **office-ui** — Ensure minimum 44px touch targets on mobile
 
 ### 3.3 Missing Pages & Flows ✅
 - [x] **office-ui** — Implemented `/forgot-password` page (matching login theme, zod validation)
 - [x] **office-ui** — Fixed dead link `/office/boards` → `/office/projects`
 - [x] **office-ui** — SSO button now shows toast instead of alert
-- [ ] **office-ui** — Implement SSO/OAuth login (Google, GitHub — actual integration)
-- [ ] **office-ui** — Add email verification flow after registration
-- [ ] **office-ui** — Add logout confirmation dialog
+- [ ] **office-ui** — Implement SSO/OAuth login (Google, GitHub — actual integration). Needs Keycloak realm config + provider client IDs/secrets; out of scope for a pure-frontend iteration.
+- [ ] **office-ui** — Email verification flow after registration. Needs Keycloak's "Verify Email" required-action + an SMTP relay; same blocker as SSO.
+- [x] **office-ui** — Logout confirmation dialog. New [components/ui/ConfirmDialog.tsx](apps/office-ui/src/components/ui/ConfirmDialog.tsx) — modal with title + description + cancel/confirm buttons, configurable `variant` (`destructive` paints confirm red), Escape cancels, Tab cycles between buttons (focus trap), backdrop-click cancels, autofocus on confirm so a quick Enter accepts the default. Wired into the Cmd+K palette's "Sign out" command — instead of immediate logout, opens the confirm with destructive styling. Reusable for future destructive actions (delete agent, uninstall package, revoke entitlement).
 
 ### 3.4 Loading States ✅
 - [x] **office-ui** — Reusable Skeleton/SkeletonCard/SkeletonList components
