@@ -5,6 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { useAuthStore } from "@/store/useAuthStore";
 import { AppSidebar } from "@/components/layout/AppSidebar";
 import { AppHeader } from "@/components/layout/AppHeader";
+import { CommandPalette } from "@/components/layout/CommandPalette";
 import { WidgetZone } from "@/widgets";
 import api from "@/lib/api";
 
@@ -54,6 +55,7 @@ export default function OfficeLayout({
           className="h-8 shrink-0 px-4 border-t border-border-dark/30 bg-background-dark"
         />
       </div>
+      <CommandPalette />
     </div>
   );
 }
