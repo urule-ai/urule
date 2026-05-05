@@ -1,7 +1,8 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { ulid } from 'ulid';
 import { and, eq, desc, sql } from 'drizzle-orm';
+import type { UruleUser } from '@urule/auth-middleware';
 import type { Database } from '../db/connection.js';
 import { packages } from '../db/schema/packages.js';
 import { packageReviews } from '../db/schema/reviews.js';
@@ -28,6 +29,12 @@ const listQuerySchema = z.object({
   offset: z.coerce.number().int().nonnegative().optional(),
   reviewerId: z.string().optional(),
 });
+
+// auth-middleware decorates `request.uruleUser` at runtime but does not
+// publish a Fastify module augmentation; mirror governance's inline-cast.
+function getUser(request: FastifyRequest): UruleUser | null {
+  return (request as FastifyRequest & { uruleUser: UruleUser | null }).uruleUser;
+}
 
 export function registerReviewRoutes(app: FastifyInstance, db: Database) {
   /**
@@ -91,7 +98,9 @@ export function registerReviewRoutes(app: FastifyInstance, db: Database) {
    * POST /api/v1/packages/:name/reviews
    *   Submit a review. UNIQUE(package_id, reviewer_id) at the DB level
    *   blocks duplicate submissions — a 409 surfaces the conflict and
-   *   tells the caller to PATCH instead.
+   *   tells the caller to PATCH instead. The reviewerId in the body
+   *   must match the authenticated user (anti-impersonation); 401 if
+   *   unauthenticated, 403 on mismatch.
    */
   app.post<{
     Params: { name: string };
@@ -100,6 +109,15 @@ export function registerReviewRoutes(app: FastifyInstance, db: Database) {
     const parsed = createReviewSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: 'Validation failed', details: parsed.error.issues });
+    }
+    const user = getUser(request);
+    if (!user) {
+      return reply.code(401).send({ error: { code: 'UNAUTHENTICATED', message: 'Authentication required' } });
+    }
+    if (parsed.data.reviewerId !== user.id) {
+      return reply.code(403).send({
+        error: { code: 'REVIEWER_MISMATCH', message: 'reviewerId must match the authenticated user' },
+      });
     }
     const { name } = request.params;
 
@@ -142,10 +160,10 @@ export function registerReviewRoutes(app: FastifyInstance, db: Database) {
 
   /**
    * PATCH /api/v1/packages/:name/reviews/:reviewId
-   *   Edit your own review. Authorisation is the route caller's job —
-   *   no reviewerId check here yet (auth-middleware sets request.uruleUser
-   *   but cross-checking is wired by the consumer service in this floor;
-   *   tracked as a TODO in ROADMAP §6.3).
+   *   Edit your own review. The existing row is loaded first so the
+   *   handler can verify the authenticated user owns it; mismatched
+   *   ownership returns 403 (not 404) to differentiate "the review
+   *   exists but isn't yours" from "no such review".
    */
   app.patch<{
     Params: { name: string; reviewId: string };
@@ -155,12 +173,31 @@ export function registerReviewRoutes(app: FastifyInstance, db: Database) {
     if (!parsed.success) {
       return reply.code(400).send({ error: 'Validation failed', details: parsed.error.issues });
     }
+    const user = getUser(request);
+    if (!user) {
+      return reply.code(401).send({ error: { code: 'UNAUTHENTICATED', message: 'Authentication required' } });
+    }
     const { name, reviewId } = request.params;
 
     const [pkg] = await db.select().from(packages).where(eq(packages.name, name));
     if (!pkg) {
       return reply.code(404).send({
         error: { code: 'PACKAGE_NOT_FOUND', message: `Package "${name}" not found` },
+      });
+    }
+
+    const [existing] = await db
+      .select()
+      .from(packageReviews)
+      .where(and(eq(packageReviews.id, reviewId), eq(packageReviews.packageId, pkg.id)));
+    if (!existing) {
+      return reply.code(404).send({
+        error: { code: 'REVIEW_NOT_FOUND', message: `Review ${reviewId} not found for package "${name}"` },
+      });
+    }
+    if (existing.reviewerId !== user.id) {
+      return reply.code(403).send({
+        error: { code: 'NOT_REVIEW_OWNER', message: 'You can only edit your own reviews' },
       });
     }
 
@@ -185,16 +222,35 @@ export function registerReviewRoutes(app: FastifyInstance, db: Database) {
 
   /**
    * DELETE /api/v1/packages/:name/reviews/:reviewId
-   *   Removes a review. Same authorisation TODO as PATCH.
+   *   Removes a review. Same ownership check as PATCH — 403 if the
+   *   row exists but the caller didn't write it.
    */
   app.delete<{ Params: { name: string; reviewId: string } }>(
     '/api/v1/packages/:name/reviews/:reviewId',
     async (request, reply) => {
+      const user = getUser(request);
+      if (!user) {
+        return reply.code(401).send({ error: { code: 'UNAUTHENTICATED', message: 'Authentication required' } });
+      }
       const { name, reviewId } = request.params;
       const [pkg] = await db.select().from(packages).where(eq(packages.name, name));
       if (!pkg) {
         return reply.code(404).send({
           error: { code: 'PACKAGE_NOT_FOUND', message: `Package "${name}" not found` },
+        });
+      }
+      const [existing] = await db
+        .select()
+        .from(packageReviews)
+        .where(and(eq(packageReviews.id, reviewId), eq(packageReviews.packageId, pkg.id)));
+      if (!existing) {
+        return reply.code(404).send({
+          error: { code: 'REVIEW_NOT_FOUND', message: `Review ${reviewId} not found for package "${name}"` },
+        });
+      }
+      if (existing.reviewerId !== user.id) {
+        return reply.code(403).send({
+          error: { code: 'NOT_REVIEW_OWNER', message: 'You can only delete your own reviews' },
         });
       }
       const result = await db
