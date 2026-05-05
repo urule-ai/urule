@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation";
 import { useAuthStore } from "@/store/useAuthStore";
 import { useSidebarStore } from "@/store/useSidebarStore";
+import { NotificationBell } from "@/components/layout/NotificationCenter";
 
 const PAGE_META: Record<string, { icon: string; title: string }> = {
   "/office": { icon: "dashboard", title: "Dashboard" },
@@ -62,9 +63,7 @@ export function AppHeader() {
           />
         </div>
 
-        <button className="relative p-2 rounded-lg hover:bg-primary/10 transition-colors" aria-label="Notifications">
-          <span className="icon text-text-muted text-[22px]">notifications</span>
-        </button>
+        <NotificationBell />
 
         {user && (
           <div className="size-9 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center text-sm font-bold text-primary cursor-pointer hover:border-primary/60 transition-colors" role="button" aria-label={`User profile: ${user.display_name}`} tabIndex={0}>
