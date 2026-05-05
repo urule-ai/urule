@@ -98,7 +98,7 @@ export function AppSidebar() {
 
           {/* Sidebar widgets */}
           <div className="mt-4 pt-4 border-t border-border-dark/30">
-            <WidgetZone mountPoint="sidebar" workspaceId="default" className="px-1" />
+            <WidgetZone mountPoint="sidebar" workspaceId="default" className="px-1" reorderable />
           </div>
         </nav>
 

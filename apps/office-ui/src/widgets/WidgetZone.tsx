@@ -1,11 +1,13 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import { useWidgetStore } from "@/store/useWidgetStore";
+import { useDashboardLayoutStore } from "@/store/useDashboardLayoutStore";
 import { widgetRegistry } from "./registry";
 import { NativeWidgetRenderer } from "./NativeWidgetRenderer";
 import { WidgetFrame } from "./WidgetFrame";
 import type { WidgetRenderContext } from "./context";
-import type { WidgetMountPoint, WidgetTheme } from "./types";
+import type { WidgetInstance, WidgetMountPoint, WidgetTheme } from "./types";
 import { cn } from "@/lib/utils";
 
 const DEFAULT_THEME: WidgetTheme = {
@@ -27,27 +29,85 @@ interface WidgetZoneProps {
   mountPoint: WidgetMountPoint;
   workspaceId: string;
   className?: string;
+  /**
+   * When true, the zone honours the persisted dashboard-layout store +
+   * surfaces drag handles in customize mode. Default false: read-only
+   * zones (status-bar widgets, modal slots) shouldn't gain edit chrome.
+   */
+  reorderable?: boolean;
 }
 
-/**
+/*
  * Renders all active widget instances at a given mount point.
- * Native widgets render inline; external widgets render in iframes.
+ *
+ * Order resolution (in order of precedence):
+ *   1. Persisted layout from `useDashboardLayoutStore.orders[key]` when
+ *      `reorderable` and an entry exists.
+ *   2. Registry's natural sort (instance.position) — fallback for
+ *      first-time renders and for new instances appended after an
+ *      existing layout was saved.
+ *
+ * In customize mode (`useDashboardLayoutStore.editing`) every reorderable
+ * child gains an HTML5-DnD drag handle and acts as a drop target. The
+ * implementation is inline (no external dep) — for ~10 sidebar/dashboard
+ * tiles this is plenty.
  */
-export function WidgetZone({ mountPoint, workspaceId, className }: WidgetZoneProps) {
+export function WidgetZone({ mountPoint, workspaceId, className, reorderable }: WidgetZoneProps) {
   const activeMainWidgetId = useWidgetStore((s) => s.activeMainWidgetId);
-  const instances = widgetRegistry.getInstancesByMountPoint(workspaceId, mountPoint);
+  const editing = useDashboardLayoutStore((s) => s.editing);
+  const setOrder = useDashboardLayoutStore((s) => s.setOrder);
+  const persistedOrder = useDashboardLayoutStore((s) =>
+    reorderable ? s.orders[`${workspaceId}::${mountPoint}`] : undefined,
+  );
 
-  if (instances.length === 0) return null;
+  const naturalInstances = widgetRegistry.getInstancesByMountPoint(workspaceId, mountPoint);
+
+  const ordered: WidgetInstance[] = useMemo(() => {
+    if (!persistedOrder || persistedOrder.length === 0) return naturalInstances;
+    const byId = new Map(naturalInstances.map((i) => [i.id, i]));
+    const out: WidgetInstance[] = [];
+    const seen = new Set<string>();
+    for (const id of persistedOrder) {
+      const inst = byId.get(id);
+      if (inst) {
+        out.push(inst);
+        seen.add(id);
+      }
+    }
+    for (const inst of naturalInstances) {
+      if (!seen.has(inst.id)) out.push(inst);
+    }
+    return out;
+  }, [persistedOrder, naturalInstances]);
+
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [overIndex, setOverIndex] = useState<number | null>(null);
+
+  if (ordered.length === 0) return null;
 
   const layoutClass = getLayoutClass(mountPoint);
+  const editMode = !!reorderable && editing;
+
+  function handleDrop(targetIndex: number) {
+    if (dragIndex === null || dragIndex === targetIndex) {
+      setDragIndex(null);
+      setOverIndex(null);
+      return;
+    }
+    const next = [...ordered];
+    const [moved] = next.splice(dragIndex, 1);
+    next.splice(targetIndex, 0, moved!);
+    setOrder(workspaceId, mountPoint, next.map((i) => i.id));
+    setDragIndex(null);
+    setOverIndex(null);
+  }
 
   return (
     <div className={cn(layoutClass, className)}>
-      {instances.map((instance) => {
+      {ordered.map((instance, index) => {
         const manifest = widgetRegistry.getManifest(instance.manifestId);
         if (!manifest) return null;
 
-        // In main-panel, only render the active widget (tab behavior)
         if (mountPoint === "main-panel" && activeMainWidgetId && activeMainWidgetId !== instance.id) {
           return null;
         }
@@ -62,8 +122,61 @@ export function WidgetZone({ mountPoint, workspaceId, className }: WidgetZonePro
           permissions: manifest.permissions,
         };
 
+        const isDragging = dragIndex === index;
+        const isOver = overIndex === index && dragIndex !== index;
+
         return (
-          <div key={instance.id} className="widget-container">
+          <div
+            key={instance.id}
+            className={cn(
+              "widget-container",
+              editMode && "relative",
+              editMode && isOver && "outline outline-2 outline-primary/60 rounded-lg",
+              editMode && isDragging && "opacity-40",
+            )}
+            draggable={editMode}
+            onDragStart={editMode ? () => setDragIndex(index) : undefined}
+            onDragOver={
+              editMode
+                ? (e) => {
+                    e.preventDefault();
+                    if (overIndex !== index) setOverIndex(index);
+                  }
+                : undefined
+            }
+            onDragLeave={
+              editMode
+                ? () => {
+                    if (overIndex === index) setOverIndex(null);
+                  }
+                : undefined
+            }
+            onDrop={
+              editMode
+                ? (e) => {
+                    e.preventDefault();
+                    handleDrop(index);
+                  }
+                : undefined
+            }
+            onDragEnd={
+              editMode
+                ? () => {
+                    setDragIndex(null);
+                    setOverIndex(null);
+                  }
+                : undefined
+            }
+          >
+            {editMode && (
+              <span
+                className="absolute -top-1 -left-1 z-10 size-6 rounded-md bg-primary/20 border border-primary/40 text-primary flex items-center justify-center cursor-grab active:cursor-grabbing"
+                aria-label={`Drag ${manifest.name}`}
+                title="Drag to reorder"
+              >
+                <span className="icon text-[14px]">drag_indicator</span>
+              </span>
+            )}
             {manifest.entryType === "native" && manifest.componentPath ? (
               <NativeWidgetRenderer context={context} componentPath={manifest.componentPath} />
             ) : manifest.entryType === "external" && manifest.entryUrl ? (

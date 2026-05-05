@@ -3,7 +3,9 @@
 import { usePathname } from "next/navigation";
 import { useAuthStore } from "@/store/useAuthStore";
 import { useSidebarStore } from "@/store/useSidebarStore";
+import { useDashboardLayoutStore } from "@/store/useDashboardLayoutStore";
 import { NotificationBell } from "@/components/layout/NotificationCenter";
+import { cn } from "@/lib/utils";
 
 const PAGE_META: Record<string, { icon: string; title: string }> = {
   "/office": { icon: "dashboard", title: "Dashboard" },
@@ -31,6 +33,8 @@ export function AppHeader() {
   const pathname = usePathname();
   const { user } = useAuthStore();
   const { toggle } = useSidebarStore();
+  const editing = useDashboardLayoutStore((s) => s.editing);
+  const toggleEditing = useDashboardLayoutStore((s) => s.toggleEditing);
   const { icon, title } = getPageMeta(pathname);
 
   return (
@@ -62,6 +66,22 @@ export function AppHeader() {
             className="w-64 pl-10 pr-4 py-2 bg-primary/5 border border-primary/10 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary/30 transition-all"
           />
         </div>
+
+        <button
+          onClick={toggleEditing}
+          aria-pressed={editing}
+          aria-label={editing ? "Done customizing layout" : "Customize layout"}
+          title={editing ? "Done customizing" : "Customize layout"}
+          className={cn(
+            "h-9 px-3 rounded-lg flex items-center gap-1.5 text-xs font-bold border transition-colors",
+            editing
+              ? "bg-primary text-background-dark border-primary shadow-lg shadow-primary/20"
+              : "border-border-dark text-text-muted hover:text-primary hover:border-primary/40",
+          )}
+        >
+          <span className="icon text-[16px]">{editing ? "check" : "tune"}</span>
+          <span className="hidden sm:inline">{editing ? "Done" : "Customize"}</span>
+        </button>
 
         <NotificationBell />
 
