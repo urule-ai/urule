@@ -79,9 +79,15 @@
     font-variation-settings: "FILL" 1, "wght" 400, "GRAD" 0, "opsz" 24;
   }
 
-  /* Glass card effect */
+  /* Glass card effect.
+     Tailwind's @apply can't synthesize alpha for arbitrary CSS-var
+     colors (`bg-surface-dark/80` only works on themed component
+     colors), so we set the same effect in raw CSS using
+     `color-mix()` — semantic with the theme variable, alpha-aware. */
   .glass-panel {
-    @apply bg-surface-dark/80 backdrop-blur-xl border border-border-dark/50;
+    background-color: color-mix(in srgb, var(--surface-dark) 80%, transparent);
+    border: 1px solid color-mix(in srgb, var(--border-dark) 50%, transparent);
+    @apply backdrop-blur-xl;
   }
 
   /* Page grid dot background */
@@ -90,9 +96,10 @@
     background-size: 40px 40px;
   }
 
-  /* Sidebar active nav item */
+  /* Sidebar active nav item — see glass-panel for the alpha-on-CSS-var note. */
   .sidebar-active {
-    @apply bg-primary/15 border-r-2 border-primary text-primary;
+    background-color: color-mix(in srgb, var(--primary) 15%, transparent);
+    @apply border-r-2 border-primary text-primary;
   }
 
   /* Terminal scrollbar */
@@ -100,7 +107,8 @@
     @apply w-1;
   }
   .terminal-scroll::-webkit-scrollbar-thumb {
-    @apply bg-border-dark/50 rounded;
+    background-color: color-mix(in srgb, var(--border-dark) 50%, transparent);
+    @apply rounded;
   }
 
   /* Neo shadow for elevated cards */
