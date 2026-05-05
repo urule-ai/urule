@@ -8,6 +8,7 @@ import { AppHeader } from "@/components/layout/AppHeader";
 import { CommandPalette } from "@/components/layout/CommandPalette";
 import { OfflineBanner } from "@/components/layout/OfflineBanner";
 import { NotificationCenter } from "@/components/layout/NotificationCenter";
+import { MobileBottomNav } from "@/components/layout/MobileBottomNav";
 import { useNotificationSounds } from "@/hooks/useNotificationSounds";
 import { useNotificationCapture } from "@/hooks/useNotificationCapture";
 import { WidgetZone } from "@/widgets";
@@ -57,15 +58,21 @@ export default function OfficeLayout({
       <AppSidebar />
       <div className="flex-1 flex flex-col overflow-hidden" role="main">
         <AppHeader />
-        <main className="flex-1 overflow-y-auto" aria-label="Page content">{children}</main>
+        <main
+          className="flex-1 overflow-y-auto pb-16 lg:pb-0"
+          aria-label="Page content"
+        >
+          {children}
+        </main>
         <WidgetZone
           mountPoint="status-bar"
           workspaceId="default"
-          className="h-8 shrink-0 px-4 border-t border-border-dark/30 bg-background-dark"
+          className="h-8 shrink-0 px-4 border-t border-border-dark/30 bg-background-dark hidden lg:flex"
         />
       </div>
       <CommandPalette />
       <NotificationCenter />
+      <MobileBottomNav />
     </div>
   );
 }

@@ -171,7 +171,7 @@ Replace silent failures and `alert()` calls with proper UI feedback.
 - [x] **office-ui** — Overlay backdrop on mobile, auto-close on nav link click
 - [x] **office-ui** — Agent wizard: full-screen modal, stacked fields, compact step bar
 - [x] **office-ui** — Chat: fixed input above keyboard, horizontal-scroll action pills
-- [ ] **office-ui** — Add bottom navigation bar for mobile
+- [x] **office-ui** — Add bottom navigation bar for mobile. New [components/layout/MobileBottomNav.tsx](apps/office-ui/src/components/layout/MobileBottomNav.tsx) — fixed-bottom nav with the 5 most-used destinations (Home / Chat / Agents / Approve / More) as 56px tabs, visible only below the `lg:` breakpoint so the desktop sidebar layout is untouched. Mounted in [app/office/layout.tsx](apps/office-ui/src/app/office/layout.tsx) alongside `pb-16` on the main content area so the last row of any page isn't hidden behind the bar; the status-bar `WidgetZone` is hidden below `lg:` (a 32px slice would fight the bottom nav for the same thumb-reachable zone). Honours `env(safe-area-inset-bottom)` so the bar sits above the iOS home-indicator. Active-tab highlight echoes AppSidebar's `isActive` semantics so the same route lights up the same item across both navs, and the active icon switches to `icon-filled` for clearer touch feedback.
 
 ---
 
