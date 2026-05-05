@@ -11,6 +11,7 @@ import { NotificationCenter } from "@/components/layout/NotificationCenter";
 import { MobileBottomNav } from "@/components/layout/MobileBottomNav";
 import { useNotificationSounds } from "@/hooks/useNotificationSounds";
 import { useNotificationCapture } from "@/hooks/useNotificationCapture";
+import { useApprovalEvents } from "@/hooks/useApprovalEvents";
 import { WidgetZone } from "@/widgets";
 import api from "@/lib/api";
 
@@ -27,6 +28,9 @@ export default function OfficeLayout({
   useNotificationSounds();
   // Mirror every toast into the persisted notification center history.
   useNotificationCapture();
+  // Real-time approval-event push (langgraph-adapter WS bridges NATS).
+  // Workspace selector is "default" until multi-workspace UX lands.
+  useApprovalEvents("default");
 
   useEffect(() => {
     if (!isAuthenticated) {
