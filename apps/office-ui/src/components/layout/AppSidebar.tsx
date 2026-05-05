@@ -16,6 +16,7 @@ const navItems = [
   { icon: "work", label: "Projects", href: "/office/projects" },
   { icon: "verified_user", label: "Approvals", href: "/office/approvals" },
   { icon: "extension", label: "Integrations", href: "/office/integrations" },
+  { icon: "storefront", label: "Marketplace", href: "/office/marketplace" },
   { icon: "security", label: "Security", href: "/office/security" },
   { icon: "data_exploration", label: "Logs", href: "/office/logs" },
   { icon: "settings", label: "Settings", href: "/office/settings" },
