@@ -4,6 +4,7 @@ import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { QueryError } from "@/components/ui/QueryError";
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -303,7 +304,13 @@ export default function ActivityLogsPage() {
   // ── Data fetching ───────────────────────────────────────────────────────
   const filters = { actor_type: actorFilter, event_type: eventFilter, search: search || undefined };
 
-  const { data: logs = [], isLoading: logsLoading } = useQuery<ActivityLog[]>({
+  const {
+    data: logs = [],
+    isLoading: logsLoading,
+    isError: logsError,
+    error: logsErr,
+    refetch: refetchLogs,
+  } = useQuery<ActivityLog[]>({
     queryKey: ["logs", filters],
     queryFn: () =>
       api
@@ -446,7 +453,9 @@ export default function ActivityLogsPage() {
         </div>
 
         {/* Timeline */}
-        {logsLoading ? (
+        {logsError ? (
+          <QueryError error={logsErr} onRetry={() => refetchLogs()} label="Couldn't load activity" />
+        ) : logsLoading ? (
           <div className="space-y-4">
             {[...Array(5)].map((_, i) => (
               <div

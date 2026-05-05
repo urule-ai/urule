@@ -6,6 +6,7 @@ import Link from "next/link";
 import api from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { SkeletonCard } from "@/components/ui/Skeleton";
+import { QueryError } from "@/components/ui/QueryError";
 import type { Agent, AgentStatus } from "@/types";
 
 // ── Status config ──────────────────────────────────────────────────────────────
@@ -123,7 +124,7 @@ export default function AgentsPage() {
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<AgentStatus | null>(null);
 
-  const { data: agents = [], isLoading } = useQuery<Agent[]>({
+  const { data: agents = [], isLoading, isError, error, refetch } = useQuery<Agent[]>({
     queryKey: ["agents"],
     queryFn: () => api.get("/agents").then((r) => r.data),
   });
@@ -205,7 +206,9 @@ export default function AgentsPage() {
       </div>
 
       {/* Grid */}
-      {isLoading ? (
+      {isError ? (
+        <QueryError error={error} onRetry={() => refetch()} label="Couldn't load agents" />
+      ) : isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {Array.from({ length: 6 }).map((_, i) => (
             <SkeletonCard key={i} />

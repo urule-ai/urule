@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import api from "@/lib/api";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { QueryError } from "@/components/ui/QueryError";
 import type { OfficeStats } from "@/types";
 
 /*
@@ -23,7 +24,7 @@ interface Tile {
 }
 
 export default function DashboardStatsWidget() {
-  const { data: stats, isLoading } = useQuery<OfficeStats>({
+  const { data: stats, isLoading, isError, error, refetch } = useQuery<OfficeStats>({
     queryKey: ["office-stats"],
     queryFn: () => api.get("/office/stats").then((r) => r.data),
     refetchInterval: 30_000,
@@ -39,7 +40,9 @@ export default function DashboardStatsWidget() {
   return (
     <div className="rounded-lg border border-border-dark/60 bg-surface-dark/60 p-3">
       <h3 className="text-xs font-bold uppercase tracking-wider text-text-muted mb-2">Overview</h3>
-      {isLoading ? (
+      {isError ? (
+        <QueryError compact error={error} onRetry={() => refetch()} label="Stats unavailable" />
+      ) : isLoading ? (
         <div className="grid grid-cols-2 gap-2">
           {[0, 1, 2, 3].map((i) => (
             <Skeleton key={i} className="h-14 w-full" />

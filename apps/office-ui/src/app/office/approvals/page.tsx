@@ -6,6 +6,7 @@ import Link from "next/link";
 import api from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { SkeletonList } from "@/components/ui/Skeleton";
+import { QueryError } from "@/components/ui/QueryError";
 import type { Approval } from "@/types";
 
 // ── Status config ──────────────────────────────────────────────────────────────
@@ -149,7 +150,7 @@ export default function ApprovalsPage() {
     "all"
   );
 
-  const { data: approvals = [], isLoading } = useQuery<Approval[]>({
+  const { data: approvals = [], isLoading, isError, error, refetch } = useQuery<Approval[]>({
     queryKey: ["approvals", statusFilter],
     queryFn: () =>
       api
@@ -190,7 +191,9 @@ export default function ApprovalsPage() {
       </div>
 
       {/* Approval list */}
-      {isLoading ? (
+      {isError ? (
+        <QueryError error={error} onRetry={() => refetch()} label="Couldn't load approvals" />
+      ) : isLoading ? (
         <SkeletonList count={6} />
       ) : approvals.length === 0 ? (
         <div className="glass-panel rounded-xl p-16 text-center">

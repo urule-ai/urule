@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import api from "@/lib/api";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { QueryError } from "@/components/ui/QueryError";
 import { useWidgetConfig } from "../useWidgetConfig";
 import type { Approval } from "@/types";
 
@@ -37,7 +38,7 @@ export default function ApprovalQueueWidget() {
   const { config } = useWidgetConfig<{ limit: number }>({ limit: 5 });
   const limit = Math.min(Math.max(config.limit, 1), 20);
 
-  const { data: approvals = [], isLoading } = useQuery<Approval[]>({
+  const { data: approvals = [], isLoading, isError, error, refetch } = useQuery<Approval[]>({
     queryKey: ["approvals", "pending"],
     queryFn: () =>
       api.get("/approvals", { params: { status_filter: "pending" } }).then((r) => r.data),
@@ -61,7 +62,9 @@ export default function ApprovalQueueWidget() {
         </Link>
       </header>
 
-      {isLoading ? (
+      {isError ? (
+        <QueryError compact error={error} onRetry={() => refetch()} label="Approvals unavailable" />
+      ) : isLoading ? (
         <div className="space-y-1.5">
           <Skeleton className="h-8 w-full" />
           <Skeleton className="h-8 w-full" />

@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
 import api from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { QueryError } from "@/components/ui/QueryError";
 
 // -- Types ------------------------------------------------------------------
 
@@ -304,7 +305,7 @@ export default function IntegrationsPage() {
 
   // -- Data fetching --------------------------------------------------------
 
-  const { data: integrations = [], isLoading } = useQuery<Integration[]>({
+  const { data: integrations = [], isLoading, isError, error, refetch } = useQuery<Integration[]>({
     queryKey: ["integrations", category],
     queryFn: () =>
       api
@@ -469,6 +470,16 @@ export default function IntegrationsPage() {
   function handleAddMcpServer() {
     if (!mcpName.trim() || !mcpCommand.trim()) return;
     addMcpServer.mutate({ name: mcpName.trim(), mcp_command: mcpCommand.trim() });
+  }
+
+  // -- Error state ----------------------------------------------------------
+
+  if (isError) {
+    return (
+      <div className="p-8">
+        <QueryError error={error} onRetry={() => refetch()} label="Couldn't load integrations" />
+      </div>
+    );
   }
 
   // -- Loading state --------------------------------------------------------

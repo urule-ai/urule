@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import api from "@/lib/api";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { QueryError } from "@/components/ui/QueryError";
 import { useWidgetConfig } from "../useWidgetConfig";
 
 /*
@@ -45,7 +46,7 @@ export default function ActivityLogsWidget() {
   const { config } = useWidgetConfig<{ limit: number }>({ limit: 5 });
   const limit = Math.min(Math.max(config.limit, 1), 20);
 
-  const { data: logs = [], isLoading } = useQuery<ActivityLog[]>({
+  const { data: logs = [], isLoading, isError, error, refetch } = useQuery<ActivityLog[]>({
     queryKey: ["logs", "recent"],
     queryFn: () => api.get("/logs").then((r) => r.data),
     refetchInterval: 30_000,
@@ -68,7 +69,9 @@ export default function ActivityLogsWidget() {
         </Link>
       </header>
 
-      {isLoading ? (
+      {isError ? (
+        <QueryError compact error={error} onRetry={() => refetch()} label="Activity unavailable" />
+      ) : isLoading ? (
         <div className="space-y-1.5">
           <Skeleton className="h-7 w-full" />
           <Skeleton className="h-7 w-full" />
