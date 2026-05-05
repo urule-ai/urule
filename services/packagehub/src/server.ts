@@ -10,6 +10,7 @@ import { createDb } from './db/connection.js';
 import { registerPackageRoutes } from './routes/packages.routes.js';
 import { registerVersionRoutes } from './routes/versions.routes.js';
 import { registerEntitlementRoutes } from './routes/entitlements.routes.js';
+import { registerReviewRoutes } from './routes/reviews.routes.js';
 import { errorHandler } from './middleware/error-handler.js';
 import type { Config } from './config.js';
 
@@ -79,6 +80,7 @@ export async function buildServer(config: Config) {
   registerPackageRoutes(app, db);
   registerVersionRoutes(app, db);
   registerEntitlementRoutes(app, db);
+  registerReviewRoutes(app, db);
 
   return app;
 }

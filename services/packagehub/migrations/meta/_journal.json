@@ -22,6 +22,13 @@
       "when": 1777933268160,
       "tag": "0002_signing_and_marketplace",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1777948197432,
+      "tag": "0003_reviews",
+      "breakpoints": true
     }
   ]
 }
