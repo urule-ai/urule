@@ -3,6 +3,7 @@ import type { RoomManager } from '../services/room-manager.js';
 import type { PresenceManager } from '../services/presence-manager.js';
 import type { TaskManager } from '../services/task-manager.js';
 import type { WidgetStateManager } from '../services/widget-state-manager.js';
+import type { TypingManager } from '../services/typing-manager.js';
 import { z } from 'zod';
 
 // -- Zod Schemas ------------------------------------------------------
@@ -61,10 +62,16 @@ export interface StateRouteServices {
   presenceManager: PresenceManager;
   taskManager: TaskManager;
   widgetStateManager: WidgetStateManager;
+  typingManager: TypingManager;
 }
 
+const typingPingSchema = z.object({
+  userId: z.string().min(1),
+  ttlMs: z.number().int().positive().max(60000).optional(),
+});
+
 export function registerStateRoutes(app: FastifyInstance, services: StateRouteServices): void {
-  const { roomManager, presenceManager, taskManager, widgetStateManager } = services;
+  const { roomManager, presenceManager, taskManager, widgetStateManager, typingManager } = services;
 
   // -- Rooms ---------------------------------------------------------
 
@@ -270,6 +277,36 @@ export function registerStateRoutes(app: FastifyInstance, services: StateRouteSe
     const deleted = widgetStateManager.deleteState(instanceId);
     if (!deleted) {
       return reply.status(404).send({ error: 'Widget state not found' });
+    }
+    return reply.status(204).send();
+  });
+
+  // -- Typing indicators ---------------------------------------------
+  // Short-lived "user is typing" flags. Clients ping every ~3s while
+  // the user is actively typing; entries auto-expire after ttlMs
+  // (default 6s). Polling /typing returns currently-active typers
+  // with stale entries pruned as a side effect.
+
+  app.post('/api/v1/rooms/:roomId/typing', async (req, reply) => {
+    const { roomId } = req.params as { roomId: string };
+    const parsed = typingPingSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'Validation failed', details: parsed.error.issues });
+    }
+    const ping = typingManager.ping(parsed.data.userId, roomId, parsed.data.ttlMs);
+    return reply.status(201).send(ping);
+  });
+
+  app.get('/api/v1/rooms/:roomId/typing', async (req, reply) => {
+    const { roomId } = req.params as { roomId: string };
+    return reply.send(typingManager.listInRoom(roomId));
+  });
+
+  app.delete('/api/v1/rooms/:roomId/typing/:userId', async (req, reply) => {
+    const { roomId, userId } = req.params as { roomId: string; userId: string };
+    const cleared = typingManager.clear(userId, roomId);
+    if (!cleared) {
+      return reply.status(404).send({ error: 'No active typing indicator for this user/room' });
     }
     return reply.status(204).send();
   });

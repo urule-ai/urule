@@ -303,11 +303,13 @@ Replace fragile init scripts with proper versioned migrations.
 See [docs/PACKAGES.md](docs/PACKAGES.md) for the publish-and-sign workflow with full bash recipes.
 
 ### 6.4 Collaboration
-- [ ] **state** — Implement real-time collaborative editing (CRDT or OT)
-- [ ] **state** — Add typing indicators for chat
-- [ ] **channel-router** — Add email channel adapter
-- [ ] **channel-router** — Add Discord channel adapter
-- [ ] **channel-router** — Add Microsoft Teams channel adapter
+- [x] **state** — Typing indicators for chat. New `TypingManager` ([services/state/src/services/typing-manager.ts](services/state/src/services/typing-manager.ts)) — short-lived (default 6s, matches Slack) "user is typing" flags scoped to `(userId, roomId)`. Subsequent pings refresh the expiry instead of duplicating; `listInRoom()` prunes expired entries as a side effect of read so the in-memory map doesn't grow unbounded. Three new routes: `POST /api/v1/rooms/:roomId/typing` (ping), `GET /api/v1/rooms/:roomId/typing` (poll), `DELETE /api/v1/rooms/:roomId/typing/:userId` (manual stop on submit). Pings scope per-room — same user can be typing in two rooms simultaneously. 6 new tests cover refresh, multi-user concurrent, multi-room scoping, expiry pruning.
+- [x] **channel-router** — Email channel adapter ([adapters/email.adapter.ts](../channel-router/src/adapters/email.adapter.ts)). Normalizes inbound payloads from common transactional-mail provider webhooks (SendGrid/Mailgun/Postmark/SES `parse` endpoints): `from` field's "Display Name <addr>" gets split into `senderId` (lowercased address) and `senderName` (display name; falls back to local-part when no name). Body precedence: prefer `text`, fall back to a tag-stripped HTML approximation. Attachments mapped to canonical shape with `contentType`. Preserves `subject` / `messageId` / `inReplyTo` in `metadata` for thread correlation. Outbound `sendMessage` returns a Message-ID-shaped string (`<ulid@urule.local>`); actual SMTP relay integration is a follow-up.
+- [x] **channel-router** — Discord channel adapter ([adapters/discord.adapter.ts](../channel-router/src/adapters/discord.adapter.ts)). Normalizes a Discord MESSAGE_CREATE gateway/webhook payload: `channel_id` → `channelId`, `author.global_name ?? author.username` → `senderName`, `content` → `text`. Attachments mapped via `content_type`. Metadata preserves `discordMessageId`, `guildId`, `replyTo` (from `message_reference.message_id`), and an `isBot` flag from `author.bot`. Both adapters registered in [server.ts](../channel-router/src/server.ts); `ChannelType` union extended to include `'discord'` (`'email'` was already there). 12 new tests across the two adapters cover RFC 2822 parsing, attachment mapping, metadata preservation, bot detection, reply-to extraction.
+- [ ] **state** — Real-time collaborative editing (CRDT or OT). Substantial architectural work — Yjs-style document graph + room-scoped sync + persistence story. Defer until there's a UI surface that needs it (current widgets are read-mostly).
+- [ ] **channel-router** — Microsoft Teams channel adapter. Similar shape to Slack/Discord but Teams' Activity payload is its own thing (BotFramework). Defer until there's actual Teams demand.
+
+12 new tests in [channel-router/tests/email-discord-adapters.test.ts](../channel-router/tests/email-discord-adapters.test.ts) and 6 in [services/state/tests/typing.test.ts](services/state/tests/typing.test.ts).
 
 ### 6.5 Office UI Features
 - [ ] **office-ui** — Add data export/download for lists (CSV, JSON)
