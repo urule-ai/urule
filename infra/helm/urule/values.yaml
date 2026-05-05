@@ -1,0 +1,176 @@
+# Default values for the urule umbrella chart.
+#
+# Each entry under `services` produces a Deployment, a Service, and (when
+# `migrate.enabled`) a one-shot pre-install/pre-upgrade migration Job. The
+# generic templates loop over this map — adding a new service is a values
+# change, not a template change.
+#
+# Stateful infrastructure (postgres, nats, keycloak, openfga) is NOT
+# bundled. Bring your own (cluster-managed RDS / Cloud SQL / Bitnami
+# subchart) and point at it via `global.databaseUrl`, `global.natsUrl`,
+# etc. The README documents two reference setups.
+
+global:
+  imageRegistry: ghcr.io/urule-ai
+  imageTag: latest
+  imagePullPolicy: IfNotPresent
+  imagePullSecrets: []
+  # Connection strings shared across services. Per-service overrides
+  # (services.<name>.env) take precedence.
+  databaseUrlBase: postgres://urule:urule@postgres:5432
+  natsUrl: nats://nats:4222
+  keycloakUrl: http://keycloak:8080
+  openfgaUrl: http://openfga:8080
+  corsOrigins: ""
+  # Common pod-level settings applied to every service unless overridden.
+  podLabels: {}
+  podAnnotations: {}
+  serviceAccount:
+    create: true
+    name: ""
+
+# Per-service definitions. Each key becomes the Deployment / Service name
+# under the release prefix. Set `enabled: false` to skip a service for a
+# given install (e.g. only deploy office-ui in a frontend-only cluster).
+services:
+  registry:
+    enabled: true
+    image: registry
+    port: 3000
+    replicas: 1
+    databaseName: registry
+    migrate:
+      enabled: true
+      target: migrator
+    env:
+      ADAPTER_URL: http://langgraph-adapter:3000
+    resources:
+      requests: { cpu: 100m, memory: 128Mi }
+      limits:   { cpu: 1000m, memory: 512Mi }
+
+  packagehub:
+    enabled: true
+    image: packagehub
+    port: 3000
+    replicas: 1
+    databaseName: packagehub
+    migrate: { enabled: true, target: migrator }
+    resources:
+      requests: { cpu: 100m, memory: 128Mi }
+      limits:   { cpu: 1000m, memory: 512Mi }
+
+  packages:
+    enabled: true
+    image: packages
+    port: 3000
+    replicas: 1
+    databaseName: packages
+    migrate: { enabled: true, target: migrator }
+    env:
+      PACKAGEHUB_URL: http://packagehub:3000
+    resources:
+      requests: { cpu: 100m, memory: 128Mi }
+      limits:   { cpu: 1000m, memory: 512Mi }
+
+  governance:
+    enabled: true
+    image: governance
+    port: 3000
+    replicas: 1
+    env:
+      OPA_URL: http://opa:8181
+    resources:
+      requests: { cpu: 100m, memory: 128Mi }
+      limits:   { cpu: 500m, memory: 256Mi }
+
+  state:
+    enabled: true
+    image: state
+    port: 3000
+    replicas: 1
+    resources:
+      requests: { cpu: 100m, memory: 128Mi }
+      limits:   { cpu: 500m, memory: 256Mi }
+
+  approvals:
+    enabled: true
+    image: approvals
+    port: 3000
+    replicas: 1
+    resources:
+      requests: { cpu: 100m, memory: 128Mi }
+      limits:   { cpu: 500m, memory: 256Mi }
+
+  channel-router:
+    enabled: true
+    image: channel-router
+    port: 3000
+    replicas: 1
+    databaseName: channel_router
+    migrate: { enabled: true, target: migrator }
+    resources:
+      requests: { cpu: 100m, memory: 128Mi }
+      limits:   { cpu: 500m, memory: 256Mi }
+
+  mcp-gateway:
+    enabled: true
+    image: mcp-gateway
+    port: 3000
+    replicas: 1
+    databaseName: mcp_gateway
+    migrate: { enabled: true, target: migrator }
+    resources:
+      requests: { cpu: 100m, memory: 128Mi }
+      limits:   { cpu: 500m, memory: 256Mi }
+
+  runtime-broker:
+    enabled: true
+    image: runtime-broker
+    port: 3000
+    replicas: 1
+    databaseName: runtime_broker
+    migrate: { enabled: true, target: migrator }
+    resources:
+      requests: { cpu: 100m, memory: 128Mi }
+      limits:   { cpu: 500m, memory: 256Mi }
+
+  langgraph-adapter:
+    enabled: true
+    image: langgraph-adapter
+    port: 3000
+    replicas: 1
+    env:
+      REGISTRY_URL: http://registry:3000
+      APPROVALS_URL: http://approvals:3000
+      STATE_URL: http://state:3000
+      LANGGRAPH_SERVER_URL: http://langgraph-server:8123
+    resources:
+      requests: { cpu: 200m, memory: 256Mi }
+      limits:   { cpu: 1000m, memory: 1Gi }
+
+  office-ui:
+    enabled: true
+    image: office-ui
+    port: 3000
+    replicas: 1
+    env:
+      NEXT_PUBLIC_REGISTRY_URL: http://registry:3000
+      NEXT_PUBLIC_PACKAGEHUB_URL: http://packagehub:3000
+      NEXT_PUBLIC_PACKAGES_URL: http://packages:3000
+      NEXT_PUBLIC_ADAPTER_URL: http://langgraph-adapter:3000
+      NEXT_PUBLIC_APPROVALS_URL: http://approvals:3000
+      NEXT_PUBLIC_GOVERNANCE_URL: http://governance:3000
+      NEXT_PUBLIC_STATE_URL: http://state:3000
+    resources:
+      requests: { cpu: 100m, memory: 256Mi }
+      limits:   { cpu: 500m, memory: 512Mi }
+
+# Optional ingress for office-ui (the only public-facing service).
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  host: urule.example.com
+  tls:
+    enabled: false
+    secretName: urule-tls

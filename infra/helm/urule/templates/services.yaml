@@ -1,0 +1,27 @@
+{{/*
+ClusterIP Services — one per enabled entry in .Values.services. The
+loop emits a YAML stream so a single template file produces N Service
+manifests at template-render time.
+*/}}
+{{- range $name, $svc := .Values.services }}
+{{- if $svc.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "urule.labels" $ | nindent 4 }}
+    {{- include "urule.serviceLabels" (dict "name" $name) | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/instance: {{ $.Release.Name }}
+    app.kubernetes.io/name: {{ $name }}
+  ports:
+    - name: http
+      port: {{ $svc.port | default 3000 }}
+      targetPort: http
+      protocol: TCP
+{{- end }}
+{{- end }}

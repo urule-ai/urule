@@ -1,0 +1,15 @@
+# Patterns to ignore when packaging Helm charts.
+# https://helm.sh/docs/topics/charts/#the-helmignore-file
+.DS_Store
+.git/
+.gitignore
+.idea/
+.vscode/
+*.swp
+*.bak
+*.tmp
+*.orig
+*~
+.project
+.idea/
+node_modules/

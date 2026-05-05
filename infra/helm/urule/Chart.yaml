@@ -1,0 +1,24 @@
+apiVersion: v2
+name: urule
+description: |
+  Urule — open-source coordination layer for AI agents. Deploys the
+  first-party microservices (registry, packagehub, packages, governance,
+  state, channel-router, mcp-gateway, runtime-broker, approvals,
+  langgraph-adapter, office-ui) as a single umbrella chart driven by
+  per-service overrides in values.yaml. Stateful dependencies (PostgreSQL,
+  NATS, Keycloak, OpenFGA) are expected to exist in-cluster — see README
+  for the supported install patterns.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - ai
+  - agents
+  - orchestration
+  - urule
+home: https://github.com/urule-ai/urule
+sources:
+  - https://github.com/urule-ai/urule
+maintainers:
+  - name: urule-ai
+    url: https://github.com/urule-ai

@@ -1,0 +1,56 @@
+{{/*
+One-shot migration Jobs — emitted as Helm pre-install/pre-upgrade
+hooks so the schema is up before the Deployment rolls. Mirror the
+*-migrate compose pattern: same Dockerfile, `target: migrator`
+build stage executed via the chart's image-tag convention
+(`<registry>/<service>-migrator:<tag>`).
+
+Hook-delete-policy `hook-succeeded` keeps a failed migration's
+logs visible (`kubectl logs job/<name>`); a successful run cleans
+itself up so re-installs don't accumulate Job objects.
+
+Skipped when the service entry doesn't declare `migrate.enabled`.
+*/}}
+{{- range $name, $svc := .Values.services }}
+{{- if and $svc.enabled $svc.migrate $svc.migrate.enabled }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ $name }}-migrate
+  labels:
+    {{- include "urule.labels" $ | nindent 4 }}
+    {{- include "urule.serviceLabels" (dict "name" $name) | nindent 4 }}
+    app.kubernetes.io/role: migration
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "0"
+    "helm.sh/hook-delete-policy": hook-succeeded,before-hook-creation
+spec:
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 300
+  template:
+    metadata:
+      labels:
+        {{- include "urule.labels" $ | nindent 8 }}
+        {{- include "urule.serviceLabels" (dict "name" $name) | nindent 8 }}
+        app.kubernetes.io/role: migration
+    spec:
+      restartPolicy: OnFailure
+      serviceAccountName: {{ include "urule.serviceAccountName" $ }}
+      {{- with $.Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: migrator
+          image: {{ include "urule.image" (dict "image" (printf "%s-migrator" $svc.image) "ctx" $) }}
+          imagePullPolicy: {{ $.Values.global.imagePullPolicy | default "IfNotPresent" }}
+          env:
+            {{- $dburl := include "urule.databaseUrl" (dict "databaseName" $svc.databaseName "ctx" $) }}
+            {{- if $dburl }}
+            - name: DATABASE_URL
+              value: {{ $dburl | quote }}
+            {{- end }}
+{{- end }}
+{{- end }}

@@ -1,0 +1,24 @@
+Urule {{ .Chart.AppVersion }} installed as release {{ .Release.Name }} in namespace {{ .Release.Namespace }}.
+
+Services deployed:
+{{- range $name, $svc := .Values.services }}
+{{- if $svc.enabled }}
+  - {{ $name }} ({{ $svc.replicas | default 1 }} replica{{ if ne ($svc.replicas | default 1 | int) 1 }}s{{ end }}, port {{ $svc.port | default 3000 }})
+{{- end }}
+{{- end }}
+
+Pre-flight checks:
+  kubectl --namespace {{ .Release.Namespace }} get pods -l app.kubernetes.io/instance={{ .Release.Name }}
+  kubectl --namespace {{ .Release.Namespace }} logs -l app.kubernetes.io/role=migration
+
+Connect office-ui locally:
+  kubectl --namespace {{ .Release.Namespace }} port-forward svc/office-ui 3000:3000
+  open http://localhost:3000
+
+{{- if .Values.ingress.enabled }}
+Public URL: http{{ if .Values.ingress.tls.enabled }}s{{ end }}://{{ .Values.ingress.host }}/
+{{- end }}
+
+External dependencies (postgres, nats, keycloak, openfga) are NOT
+managed by this chart. See the README for supported install patterns
+and the env-var contract.
