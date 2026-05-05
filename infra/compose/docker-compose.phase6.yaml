@@ -23,31 +23,17 @@ x-default-logging: &default-logging
     max-file: '3'
 
 services:
-  # Postgres only needs database creation; per-service schemas are applied by
-  # the *-migrate one-shot services below using drizzle-kit, and seed data is
-  # loaded by the *-seed one-shot services that run after each migrator.
-  postgres:
-    restart: unless-stopped
-    logging: *default-logging
-    deploy:
-      resources:
-        limits:
-          memory: 1G
-          cpus: '1.0'
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-      - ./init-db.sql:/docker-entrypoint-initdb.d/01-init-db.sql
+  # Postgres + NATS are inherited verbatim from docker-compose.infra.yaml
+  # via the `include:` directive above. We don't redefine them here —
+  # older docker-compose versions (the one CI runs) treat re-declared
+  # included services as conflicts; newer versions merge them silently.
+  # The infra file is the single source of truth.
+  #
+  # Per-service schemas are applied by the *-migrate one-shot services
+  # below using drizzle-kit; seed data is loaded by the *-seed one-shot
+  # services that run after each migrator.
 
   # ── Core Services ──────────────────────────────────────────────────────────
-
-  nats:
-    restart: unless-stopped
-    logging: *default-logging
-    deploy:
-      resources:
-        limits:
-          memory: 256M
-          cpus: '1.0'
 
   registry-migrate:
     build:
