@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCommandPaletteStore } from "@/store/useCommandPaletteStore";
 import { useThemeStore } from "@/store/useThemeStore";
 import { useAuthStore } from "@/store/useAuthStore";
+import { useUserPrefsStore } from "@/store/useUserPrefsStore";
 
 interface Command {
   id: string;
@@ -44,6 +45,10 @@ export function CommandPalette() {
   const { open, setOpen, toggle } = useCommandPaletteStore();
   const { theme, setTheme } = useThemeStore();
   const { logout } = useAuthStore();
+  const soundsEnabled = useUserPrefsStore((s) => s.notificationSoundsEnabled);
+  const setSoundsEnabled = useUserPrefsStore((s) => s.setNotificationSoundsEnabled);
+  const density = useUserPrefsStore((s) => s.density);
+  const setDensity = useUserPrefsStore((s) => s.setDensity);
   const [query, setQuery] = useState("");
   const [selectedIdx, setSelectedIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -60,7 +65,21 @@ export function CommandPalette() {
     { id: 'theme-light', label: 'Switch to Light theme', group: 'theme', run: () => setTheme('light') },
     { id: 'theme-system', label: 'Use System theme', group: 'theme', run: () => setTheme('system') },
     { id: 'session-logout', label: 'Sign out', keywords: 'logout exit', group: 'session', run: () => { logout(); router.push('/login'); } },
-  ], [router, setTheme, logout]);
+    {
+      id: 'prefs-sounds-toggle',
+      label: soundsEnabled ? 'Disable notification sounds' : 'Enable notification sounds',
+      keywords: 'audio mute beep chime',
+      group: 'action',
+      run: () => setSoundsEnabled(!soundsEnabled),
+    },
+    {
+      id: 'prefs-density-toggle',
+      label: density === 'compact' ? 'Switch to comfortable density' : 'Switch to compact density',
+      keywords: 'spacing layout',
+      group: 'action',
+      run: () => setDensity(density === 'compact' ? 'comfortable' : 'compact'),
+    },
+  ], [router, setTheme, logout, soundsEnabled, setSoundsEnabled, density, setDensity]);
 
   const filtered = useMemo(() => {
     if (!query) return commands;

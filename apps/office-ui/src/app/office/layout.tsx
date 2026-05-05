@@ -6,6 +6,7 @@ import { useAuthStore } from "@/store/useAuthStore";
 import { AppSidebar } from "@/components/layout/AppSidebar";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { CommandPalette } from "@/components/layout/CommandPalette";
+import { useNotificationSounds } from "@/hooks/useNotificationSounds";
 import { WidgetZone } from "@/widgets";
 import api from "@/lib/api";
 
@@ -18,6 +19,8 @@ export default function OfficeLayout({
   const router = useRouter();
   const pathname = usePathname();
   const [setupChecked, setSetupChecked] = useState(false);
+  // Subscribe to toasts and play a tone when one fires — gated by user prefs.
+  useNotificationSounds();
 
   useEffect(() => {
     if (!isAuthenticated) {
