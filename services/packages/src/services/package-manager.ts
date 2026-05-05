@@ -2,6 +2,7 @@ import { ulid } from 'ulid';
 import { fetchWithCorrelation } from '@urule/correlation-id';
 import type { PackageInstallRequest, InstalledPackage, PackageManifest } from '../types.js';
 import type { DependencyResolver } from './dependency-resolver.js';
+import type { InstallationRecord, InstallationRepo } from './installation-repo.js';
 import type { ManifestLoader } from './manifest-loader.js';
 
 /**
@@ -16,21 +17,26 @@ export class EntitlementRequiredError extends Error {
   }
 }
 
-export class PackageManager {
-  private installations = new Map<string, InstalledPackage>();
-  // Per (workspaceId|packageName) → version history stack. Each rollback
-  // pops the top entry. Stack of length <2 → 404 from the route handler.
-  private versionHistory = new Map<string, string[]>();
+function recordToInstalled(r: InstallationRecord): InstalledPackage {
+  return {
+    id: r.id,
+    workspaceId: r.workspaceId,
+    packageName: r.packageName,
+    version: r.version,
+    type: r.type,
+    status: r.status as InstalledPackage['status'],
+    installedAt: r.installedAt instanceof Date ? r.installedAt.toISOString() : String(r.installedAt),
+    config: r.config,
+  };
+}
 
+export class PackageManager {
   constructor(
     private resolver: DependencyResolver,
     private loader: ManifestLoader,
+    private repo: InstallationRepo,
     private packagehubUrl: string = process.env['PACKAGEHUB_URL'] ?? 'http://packagehub:3000',
   ) {}
-
-  private historyKey(workspaceId: string, packageName: string): string {
-    return `${workspaceId}::${packageName}`;
-  }
 
   /** Throw EntitlementRequiredError if the package isn't free and the consumer has no entitlement. */
   private async checkEntitlement(workspaceId: string, packageName: string): Promise<void> {
@@ -64,29 +70,29 @@ export class PackageManager {
     await this.checkEntitlement(request.workspaceId, request.packageName);
 
     const id = ulid();
-    const installation: InstalledPackage = {
+    const now = new Date();
+    const record: InstallationRecord = {
       id,
       workspaceId: request.workspaceId,
       packageName: request.packageName,
       version: '',
       type: 'unknown',
       status: 'pending',
-      installedAt: new Date().toISOString(),
       config: request.config ?? {},
+      installedAt: now,
+      updatedAt: now,
     };
-
-    this.installations.set(id, installation);
+    await this.repo.insert(record);
 
     try {
-      installation.status = 'installing';
+      await this.repo.update(id, { status: 'installing' });
 
       const manifest = await this.loadManifest(request);
-      const installed = this.listSync(request.workspaceId);
-
+      const installed = await this.list(request.workspaceId);
       const resolved = await this.resolver.resolve(manifest, installed);
 
       if (resolved.conflicts.length > 0) {
-        installation.status = 'failed';
+        await this.repo.update(id, { status: 'failed' });
         throw new Error(
           `Dependency conflicts: ${resolved.conflicts
             .map((c) => `${c.name} requires ${c.required} but ${c.installed} is installed`)
@@ -94,48 +100,50 @@ export class PackageManager {
         );
       }
 
-      installation.version = request.version ?? manifest.version;
-      installation.type = manifest.type;
-      installation.status = 'installed';
+      const finalVersion = request.version ?? manifest.version;
+      const updated = await this.repo.update(id, {
+        version: finalVersion,
+        type: manifest.type,
+        status: 'installed',
+      });
 
-      // Initialize history with the freshly-installed version.
-      this.versionHistory.set(
-        this.historyKey(request.workspaceId, request.packageName),
-        [installation.version],
-      );
+      // Seed history with the freshly-installed version.
+      await this.repo.appendVersion(id, finalVersion);
 
-      return { ...installation };
+      return recordToInstalled(updated!);
     } catch (err) {
-      installation.status = 'failed';
+      // Mark failed if we haven't already.
+      await this.repo.update(id, { status: 'failed' });
       throw err;
     }
   }
 
   async upgrade(installationId: string, targetVersion?: string): Promise<InstalledPackage> {
-    const installation = this.installations.get(installationId);
-    if (!installation) {
+    const existing = await this.repo.getById(installationId);
+    if (!existing) {
       throw new Error(`Installation ${installationId} not found`);
     }
 
-    const previousVersion = installation.version;
-    installation.status = 'installing';
+    const previousVersion = existing.version;
+    await this.repo.update(installationId, { status: 'installing' });
 
     try {
       const manifest = await this.loadManifest({
-        workspaceId: installation.workspaceId,
-        packageName: installation.packageName,
+        workspaceId: existing.workspaceId,
+        packageName: existing.packageName,
         version: targetVersion,
       });
 
-      const otherInstalled = this.listSync(installation.workspaceId).filter(
+      const otherInstalled = (await this.list(existing.workspaceId)).filter(
         (pkg) => pkg.id !== installationId,
       );
-
       const resolved = await this.resolver.resolve(manifest, otherInstalled);
 
       if (resolved.conflicts.length > 0) {
-        installation.status = 'installed';
-        installation.version = previousVersion;
+        await this.repo.update(installationId, {
+          status: 'installed',
+          version: previousVersion,
+        });
         throw new Error(
           `Upgrade conflicts: ${resolved.conflicts
             .map((c) => `${c.name} requires ${c.required} but ${c.installed} is installed`)
@@ -143,20 +151,23 @@ export class PackageManager {
         );
       }
 
-      installation.version = targetVersion ?? manifest.version;
-      installation.type = manifest.type;
-      installation.status = 'installed';
+      const finalVersion = targetVersion ?? manifest.version;
+      const updated = await this.repo.update(installationId, {
+        version: finalVersion,
+        type: manifest.type,
+        status: 'installed',
+      });
 
-      const key = this.historyKey(installation.workspaceId, installation.packageName);
-      const history = this.versionHistory.get(key) ?? [previousVersion];
-      history.push(installation.version);
-      this.versionHistory.set(key, history);
-
-      return { ...installation };
+      await this.repo.appendVersion(installationId, finalVersion);
+      return recordToInstalled(updated!);
     } catch (err) {
-      if (installation.status === 'installing') {
-        installation.status = 'installed';
-        installation.version = previousVersion;
+      // Revert status if the upgrade attempt failed before we bumped to 'installed'.
+      const post = await this.repo.getById(installationId);
+      if (post && post.status === 'installing') {
+        await this.repo.update(installationId, {
+          status: 'installed',
+          version: previousVersion,
+        });
       }
       throw err;
     }
@@ -164,49 +175,50 @@ export class PackageManager {
 
   /**
    * Roll back to the immediately-previous installed version. Throws an
-   * Error with code 'NO_HISTORY' when the stack has no prior entry; the
-   * route handler translates that to HTTP 404.
+   * Error with code 'NO_HISTORY' when fewer than two history rows exist;
+   * the route handler translates that to HTTP 404.
    */
   async rollback(installationId: string): Promise<InstalledPackage> {
-    const installation = this.installations.get(installationId);
-    if (!installation) {
+    const existing = await this.repo.getById(installationId);
+    if (!existing) {
       throw new Error(`Installation ${installationId} not found`);
     }
-    const key = this.historyKey(installation.workspaceId, installation.packageName);
-    const history = this.versionHistory.get(key) ?? [installation.version];
+
+    const history = await this.repo.getHistory(installationId);
     if (history.length < 2) {
-      const err = new Error(`No prior version to roll back to for ${installation.packageName}`);
+      const err = new Error(`No prior version to roll back to for ${existing.packageName}`);
       (err as Error & { code: string }).code = 'NO_HISTORY';
       throw err;
     }
-    history.pop();
-    const previous = history[history.length - 1]!;
-    this.versionHistory.set(key, history);
-    installation.version = previous;
-    installation.status = 'installed';
-    return { ...installation };
+
+    // Top of stack is the current version; pop it and revert to the next.
+    const [top, previous] = history;
+    await this.repo.deleteHistoryRow(top!.id);
+    const updated = await this.repo.update(installationId, {
+      version: previous!.version,
+      status: 'installed',
+    });
+    return recordToInstalled(updated!);
   }
 
   async remove(installationId: string): Promise<void> {
-    const installation = this.installations.get(installationId);
-    if (!installation) {
+    const existed = await this.repo.delete(installationId);
+    if (!existed) {
       throw new Error(`Installation ${installationId} not found`);
     }
-
-    installation.status = 'removing';
-    this.installations.delete(installationId);
   }
 
   async list(workspaceId: string): Promise<InstalledPackage[]> {
-    return this.listSync(workspaceId);
+    const rows = await this.repo.listByWorkspace(workspaceId);
+    return rows.map(recordToInstalled);
   }
 
   async getStatus(installationId: string): Promise<InstalledPackage> {
-    const installation = this.installations.get(installationId);
-    if (!installation) {
+    const row = await this.repo.getById(installationId);
+    if (!row) {
       throw new Error(`Installation ${installationId} not found`);
     }
-    return { ...installation };
+    return recordToInstalled(row);
   }
 
   /**
@@ -225,7 +237,7 @@ export class PackageManager {
     installedVersion: string;
     latestVersion: string;
   }>> {
-    const installed = this.listSync(workspaceId).filter((p) => p.status === 'installed');
+    const installed = (await this.list(workspaceId)).filter((p) => p.status === 'installed');
     const updates: Array<{ installationId: string; packageName: string; installedVersion: string; latestVersion: string }> = [];
     for (const inst of installed) {
       try {
@@ -234,8 +246,6 @@ export class PackageManager {
         if (!res.ok) continue;
         const versions = await res.json() as Array<{ version: string; yanked?: boolean; publishedAt?: string }>;
         if (!Array.isArray(versions) || versions.length === 0) continue;
-        // packagehub already returns versions ordered newest-first by
-        // publishedAt; pick the first non-yanked.
         const latest = versions.find((v) => !v.yanked);
         if (!latest) continue;
         if (compareVersions(latest.version, inst.version) > 0) {
@@ -254,19 +264,23 @@ export class PackageManager {
     return updates;
   }
 
-  private listSync(workspaceId: string): InstalledPackage[] {
-    return Array.from(this.installations.values()).filter(
-      (pkg) => pkg.workspaceId === workspaceId,
-    );
-  }
-
   /**
    * Test seam: lets tests pre-populate an installation without
    * exercising the install path (entitlement check, manifest load).
    * Not exported via the route layer.
    */
-  injectInstallationForTest(installation: InstalledPackage): void {
-    this.installations.set(installation.id, installation);
+  async injectInstallationForTest(installation: InstalledPackage): Promise<void> {
+    await this.repo.insert({
+      id: installation.id,
+      workspaceId: installation.workspaceId,
+      packageName: installation.packageName,
+      version: installation.version,
+      type: installation.type,
+      status: installation.status,
+      config: installation.config,
+      installedAt: new Date(installation.installedAt),
+      updatedAt: new Date(installation.installedAt),
+    });
   }
 
   private async loadManifest(request: PackageInstallRequest): Promise<PackageManifest> {

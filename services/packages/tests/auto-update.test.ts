@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { PackageManager, compareVersions } from '../src/services/package-manager.js';
 import { DependencyResolver } from '../src/services/dependency-resolver.js';
 import type { ManifestLoader } from '../src/services/manifest-loader.js';
+import { InMemoryInstallationRepo } from '../src/services/installation-repo.js';
 
 const noopLoader = {} as ManifestLoader;
 
@@ -58,7 +59,7 @@ describe('PackageManager.checkUpdates', () => {
   it('returns empty when there are no installations', async () => {
     const restore = stubFetch({});
     try {
-      const mgr = new PackageManager(new DependencyResolver(), noopLoader);
+      const mgr = new PackageManager(new DependencyResolver(), noopLoader, new InMemoryInstallationRepo(), 'http://packagehub.test');
       expect(await mgr.checkUpdates('ws-1')).toEqual([]);
     } finally {
       restore();
@@ -70,8 +71,8 @@ describe('PackageManager.checkUpdates', () => {
       'pkg-a': [{ version: '1.0.0', publishedAt: '2026-01-01T00:00:00Z' }],
     });
     try {
-      const mgr = new PackageManager(new DependencyResolver(), noopLoader);
-      mgr.injectInstallationForTest({
+      const mgr = new PackageManager(new DependencyResolver(), noopLoader, new InMemoryInstallationRepo(), 'http://packagehub.test');
+      await mgr.injectInstallationForTest({
         id: 'i1', workspaceId: 'ws-1', packageName: 'pkg-a',
         version: '1.0.0', type: 'personality', status: 'installed',
         installedAt: new Date().toISOString(), config: {},
@@ -90,8 +91,8 @@ describe('PackageManager.checkUpdates', () => {
       ],
     });
     try {
-      const mgr = new PackageManager(new DependencyResolver(), noopLoader);
-      mgr.injectInstallationForTest({
+      const mgr = new PackageManager(new DependencyResolver(), noopLoader, new InMemoryInstallationRepo(), 'http://packagehub.test');
+      await mgr.injectInstallationForTest({
         id: 'i1', workspaceId: 'ws-1', packageName: 'pkg-a',
         version: '1.0.0', type: 'personality', status: 'installed',
         installedAt: new Date().toISOString(), config: {},
@@ -114,8 +115,8 @@ describe('PackageManager.checkUpdates', () => {
       ],
     });
     try {
-      const mgr = new PackageManager(new DependencyResolver(), noopLoader);
-      mgr.injectInstallationForTest({
+      const mgr = new PackageManager(new DependencyResolver(), noopLoader, new InMemoryInstallationRepo(), 'http://packagehub.test');
+      await mgr.injectInstallationForTest({
         id: 'i1', workspaceId: 'ws-1', packageName: 'pkg-a',
         version: '1.0.0', type: 'personality', status: 'installed',
         installedAt: new Date().toISOString(), config: {},
@@ -132,8 +133,8 @@ describe('PackageManager.checkUpdates', () => {
       'pkg-a': [{ version: '1.0.0', publishedAt: '2026-01-01T00:00:00Z' }],
     });
     try {
-      const mgr = new PackageManager(new DependencyResolver(), noopLoader);
-      mgr.injectInstallationForTest({
+      const mgr = new PackageManager(new DependencyResolver(), noopLoader, new InMemoryInstallationRepo(), 'http://packagehub.test');
+      await mgr.injectInstallationForTest({
         id: 'i1', workspaceId: 'ws-1', packageName: 'pkg-a',
         version: '2.0.0', type: 'personality', status: 'installed',
         installedAt: new Date().toISOString(), config: {},
@@ -148,8 +149,8 @@ describe('PackageManager.checkUpdates', () => {
     const real = globalThis.fetch;
     globalThis.fetch = async () => { throw new Error('ECONNREFUSED'); };
     try {
-      const mgr = new PackageManager(new DependencyResolver(), noopLoader);
-      mgr.injectInstallationForTest({
+      const mgr = new PackageManager(new DependencyResolver(), noopLoader, new InMemoryInstallationRepo(), 'http://packagehub.test');
+      await mgr.injectInstallationForTest({
         id: 'i1', workspaceId: 'ws-1', packageName: 'pkg-a',
         version: '1.0.0', type: 'personality', status: 'installed',
         installedAt: new Date().toISOString(), config: {},
@@ -165,8 +166,8 @@ describe('PackageManager.checkUpdates', () => {
       'pkg-a': [{ version: '2.0.0', publishedAt: '2026-05-01T00:00:00Z' }],
     });
     try {
-      const mgr = new PackageManager(new DependencyResolver(), noopLoader);
-      mgr.injectInstallationForTest({
+      const mgr = new PackageManager(new DependencyResolver(), noopLoader, new InMemoryInstallationRepo(), 'http://packagehub.test');
+      await mgr.injectInstallationForTest({
         id: 'i1', workspaceId: 'ws-1', packageName: 'pkg-a',
         version: '1.0.0', type: 'personality', status: 'failed',
         installedAt: new Date().toISOString(), config: {},

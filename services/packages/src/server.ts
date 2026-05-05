@@ -9,7 +9,9 @@ import { EventBus } from '@urule/events';
 import { metricsPlugin } from '@urule/observability';
 import { connect } from 'nats';
 import type { Config } from './config.js';
+import { createDb } from './db/connection.js';
 import { DependencyResolver } from './services/dependency-resolver.js';
+import { DrizzleInstallationRepo } from './services/installation-repo.js';
 import { ManifestLoader } from './services/manifest-loader.js';
 import { PackageManager } from './services/package-manager.js';
 import { registerInstallationRoutes } from './routes/installations.routes.js';
@@ -72,9 +74,11 @@ export async function buildServer(config: Config) {
   app.get('/healthz', async () => ({ status: 'ok', service: config.serviceName }));
 
   // Services
+  const db = createDb(config.databaseUrl);
+  const repo = new DrizzleInstallationRepo(db);
   const resolver = new DependencyResolver();
   const loader = new ManifestLoader(config.workDir, config.packagehubUrl);
-  const manager = new PackageManager(resolver, loader);
+  const manager = new PackageManager(resolver, loader, repo, config.packagehubUrl);
 
   // Optional NATS connection — if unreachable, the service still boots
   // and /updates simply skips the publish step. Routes degrade

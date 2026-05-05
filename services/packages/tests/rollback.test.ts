@@ -3,6 +3,7 @@ import { PackageManager, EntitlementRequiredError } from '../src/services/packag
 import { DependencyResolver } from '../src/services/dependency-resolver.js';
 import type { ManifestLoader } from '../src/services/manifest-loader.js';
 import type { PackageManifest } from '../src/types.js';
+import { InMemoryInstallationRepo } from '../src/services/installation-repo.js';
 
 function makeLoader(manifestByVersion: Record<string, PackageManifest>): ManifestLoader {
   return {
@@ -18,7 +19,7 @@ function makeLoader(manifestByVersion: Record<string, PackageManifest>): Manifes
 }
 
 function makeManager(loader: ManifestLoader, packagehubUrl = 'http://packagehub.test') {
-  return new PackageManager(new DependencyResolver(), loader, packagehubUrl);
+  return new PackageManager(new DependencyResolver(), loader, new InMemoryInstallationRepo(), packagehubUrl);
 }
 
 // Stub fetch to always return `allowed: true, reason: 'free'` so the
@@ -101,6 +102,30 @@ describe('PackageManager — rollback', () => {
       await expect(mgr.rollback(inst.id)).rejects.toMatchObject({
         message: expect.stringContaining('No prior version'),
       });
+    } finally {
+      restore();
+    }
+  });
+
+  it('rollback survives a fresh PackageManager (durability across "restart")', async () => {
+    const restore = stubAllowFetch();
+    try {
+      // Both managers share the same repo — simulating two service
+      // instances pointing at the same persisted database.
+      const repo = new InMemoryInstallationRepo();
+      const loader = makeLoader({
+        '1.0.0': { name: 'pkg', version: '1.0.0', type: 'personality', description: '' },
+        '2.0.0': { name: 'pkg', version: '2.0.0', type: 'personality', description: '' },
+      });
+      const mgrA = new PackageManager(new DependencyResolver(), loader, repo, 'http://packagehub.test');
+      const inst = await mgrA.install({ workspaceId: 'ws-1', packageName: 'pkg', version: '1.0.0' });
+      await mgrA.upgrade(inst.id, '2.0.0');
+
+      // Simulate a service restart: a brand-new PackageManager pointing
+      // at the same backing store sees the same history.
+      const mgrB = new PackageManager(new DependencyResolver(), loader, repo, 'http://packagehub.test');
+      const rolled = await mgrB.rollback(inst.id);
+      expect(rolled.version).toBe('1.0.0');
     } finally {
       restore();
     }

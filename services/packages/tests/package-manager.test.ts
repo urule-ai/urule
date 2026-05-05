@@ -3,6 +3,20 @@ import { PackageManager } from '../src/services/package-manager.js';
 import { DependencyResolver } from '../src/services/dependency-resolver.js';
 import { ManifestLoader } from '../src/services/manifest-loader.js';
 import type { PackageManifest } from '../src/types.js';
+import { InMemoryInstallationRepo } from '../src/services/installation-repo.js';
+
+// Stub fetch so the entitlement gate inside install() always returns
+// allowed: true — keeps these unit tests focused on lifecycle behaviour
+// rather than entitlement plumbing (which has its own tests).
+const realFetch = globalThis.fetch;
+beforeEach(() => {
+  globalThis.fetch = (async () =>
+    new Response(JSON.stringify({ allowed: true, reason: 'free' }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    })) as typeof fetch;
+  return () => { globalThis.fetch = realFetch; };
+});
 
 const mockManifest: PackageManifest = {
   name: 'test-agent',
@@ -26,7 +40,7 @@ describe('PackageManager', () => {
   beforeEach(() => {
     resolver = new DependencyResolver();
     loader = new ManifestLoader('/tmp/test-work', 'http://localhost:3002');
-    manager = new PackageManager(resolver, loader);
+    manager = new PackageManager(resolver, loader, new InMemoryInstallationRepo(), 'http://packagehub.test');
 
     // Mock the loader methods
     vi.spyOn(loader, 'loadFromPackagehub').mockResolvedValue(mockManifest);

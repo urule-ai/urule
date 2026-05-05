@@ -4,6 +4,7 @@ export interface Config {
   natsUrl: string;
   registryUrl: string;
   packagehubUrl: string;
+  databaseUrl: string;
   workDir: string;
   serviceName: string;
 }
@@ -15,6 +16,7 @@ export function loadConfig(): Config {
     natsUrl: process.env['NATS_URL'] ?? 'localhost:4222',
     registryUrl: process.env['REGISTRY_URL'] ?? 'http://localhost:3001',
     packagehubUrl: process.env['PACKAGEHUB_URL'] ?? 'http://localhost:3002',
+    databaseUrl: process.env['DATABASE_URL'] ?? 'postgres://urule:urule@localhost:5500/packages',
     workDir: process.env['WORK_DIR'] ?? '/tmp/urule-packages',
     serviceName: 'urule-packages',
   };

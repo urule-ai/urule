@@ -11,7 +11,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint src/",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate"
   },
   "license": "MIT",
   "dependencies": {
@@ -23,8 +25,10 @@
     "@urule/correlation-id": "*",
     "@urule/events": "*",
     "@urule/observability": "*",
-    "nats": "^2.28.0",
+    "drizzle-orm": "^0.45.2",
     "fastify": "^5.0.0",
+    "nats": "^2.28.0",
+    "postgres": "^3.4.0",
     "semver": "^7.6.0",
     "simple-git": "^3.27.0",
     "ulid": "^2.3.0",
@@ -33,6 +37,7 @@
   "devDependencies": {
     "@types/node": "^22.0.0",
     "@types/semver": "^7.5.0",
+    "drizzle-kit": "^0.31.10",
     "tsx": "^4.19.0",
     "typescript": "^5.5.0",
     "vitest": "^2.0.0"
