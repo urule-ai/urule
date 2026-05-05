@@ -126,3 +126,29 @@
     background-image: radial-gradient(circle, rgba(13, 168, 224, 0.06) 1px, transparent 1px);
   }
 }
+
+/*
+ * Touch-target floor on coarse pointers (mobile / tablet).
+ *
+ * WCAG 2.5.5 + Apple HIG / Material both recommend ≥44×44px hit areas. The
+ * site has a lot of inline icon-only buttons (sized via Tailwind h-8/h-10)
+ * that are fine with a mouse but cramped on a phone. Rather than auditing
+ * every component, this layer enforces a 44×44 minimum on `button` and `a`
+ * elements only when the user agent reports a coarse pointer — so desktop
+ * spacing is untouched and the tiny scrollbar/overflow chrome (w-1.5) is
+ * unaffected.
+ *
+ * Opt-out: any element with `data-touch-exempt` (e.g., chips inside a
+ * tightly-packed toolbar that already wraps in a larger touch surface)
+ * keeps its native size. `display: contents` / `display: inline` buttons
+ * (those mostly used for inline links inside paragraphs) are also exempt
+ * via the `:not([data-inline])` filter.
+ */
+@media (pointer: coarse) {
+  button:not([data-touch-exempt]):not([data-inline]),
+  a[role="button"]:not([data-touch-exempt]):not([data-inline]),
+  [role="button"]:not([data-touch-exempt]):not([data-inline]) {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
