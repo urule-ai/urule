@@ -17,7 +17,7 @@ on:
 jobs:
   playwright:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
 
     steps:
       - uses: actions/checkout@v4
@@ -34,14 +34,28 @@ jobs:
         working-directory: apps/office-ui
         run: npx playwright install --with-deps chromium
 
-      - name: Start dev server
+      # Production build avoids the per-route JIT compile that `next dev`
+      # pays on first hit (a cold /login compile takes ~13s under CI's
+      # I/O budget; the previous setup blew the 30s wait-on window and
+      # then the 30s test timeout on subsequent first-hit routes).
+      # `next build` runs ESLint with stricter defaults than the
+      # standalone `lint` job (incl. no-undef for browser globals);
+      # E2E doesn't care about that — `--no-lint` skips it. The dedicated
+      # lint-and-typecheck job in ci.yml still gates code quality.
+      - name: Build office-ui
         working-directory: apps/office-ui
-        run: npm run dev &
+        run: npx next build --no-lint
+        env:
+          NEXT_TELEMETRY_DISABLED: '1'
+
+      - name: Start production server
+        working-directory: apps/office-ui
+        run: npm run start &
         env:
           PORT: 3000
 
       - name: Wait for server
-        run: npx wait-on http://localhost:3000 --timeout 30000
+        run: npx wait-on http://localhost:3000 --timeout 60000
         working-directory: apps/office-ui
 
       - name: Run Playwright tests

@@ -119,7 +119,6 @@ export function useWidgetConfig<T extends Record<string, unknown>>(
         flush();
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return { config, ready, update, reset };
