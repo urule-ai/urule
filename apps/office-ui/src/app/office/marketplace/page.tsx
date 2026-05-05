@@ -158,17 +158,7 @@ export default function MarketplacePage() {
   });
 
   return (
-    <div className="p-8 space-y-6">
-      <header className="flex items-center justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-3xl font-black">Marketplace</h1>
-          <p className="text-sm text-text-muted mt-1">
-            Browse personalities, skills, and connectors. Free packages install instantly;
-            paid packages link to the publisher's checkout.
-          </p>
-        </div>
-      </header>
-
+    <div className="space-y-6">
       {/* Filter bar */}
       <div className="glass-panel rounded-xl p-4 flex items-center gap-3 flex-wrap">
         <div className="relative flex-1 min-w-[240px]">
@@ -248,12 +238,27 @@ export default function MarketplacePage() {
           ))}
         </div>
       ) : filtered.length === 0 ? (
-        <div className="glass-panel rounded-xl p-16 text-center">
+        <div className="glass-panel rounded-xl p-16 text-center space-y-3">
           <span className="icon text-5xl text-text-muted">storefront</span>
-          <p className="mt-4 font-bold text-lg">No packages found</p>
-          <p className="text-text-muted text-sm mt-1">
-            Try clearing filters or searching for something else.
+          <p className="font-bold text-lg">No packages found</p>
+          <p className="font-mono text-[11px] text-text-muted/80 max-w-md mx-auto leading-relaxed">
+            SYS_QUERY_RETURN: NULL. No marketplace entities match the current active filter
+            criteria.
           </p>
+          <button
+            type="button"
+            onClick={() => {
+              setSearch("");
+              setType("");
+              setVerifiedOnly(false);
+              setLicenseFilter("all");
+              setSort("relevance");
+            }}
+            className="inline-flex items-center gap-2 mt-2 px-4 py-2 rounded-lg border border-border-dark text-xs font-bold text-primary hover:bg-primary/10 transition-colors"
+          >
+            <span className="icon text-[16px]">filter_alt_off</span>
+            Clear filters
+          </button>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">

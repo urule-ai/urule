@@ -16,27 +16,41 @@
 import axios from "axios";
 import { SERVICE_URLS } from "./api";
 
-const marketplace = axios.create({
-  baseURL: `${SERVICE_URLS["packagehub"]}/api/v1`,
-  headers: { "Content-Type": "application/json" },
-});
-
-marketplace.interceptors.request.use((config) => {
+function withAuth<T extends import("axios").AxiosRequestConfig>(config: T): T {
   if (typeof window !== "undefined") {
     try {
       const raw = localStorage.getItem("urule-auth");
       if (raw) {
         const parsed = JSON.parse(raw);
         const token = parsed?.state?.access_token;
-        if (token) config.headers.Authorization = `Bearer ${token}`;
+        if (token) {
+          config.headers = { ...(config.headers ?? {}), Authorization: `Bearer ${token}` };
+        }
       }
     } catch {
-      // missing/corrupt auth — proceed unauthenticated; endpoints are
-      // public for browse, install gates entitlement separately
+      // missing/corrupt auth — fall through unauthenticated.
     }
   }
   return config;
+}
+
+const marketplace = axios.create({
+  baseURL: `${SERVICE_URLS["packagehub"]}/api/v1`,
+  headers: { "Content-Type": "application/json" },
 });
+
+marketplace.interceptors.request.use((config) => withAuth(config));
+
+// Same shape, different base — `packages` is the install service, with
+// its own routes (`/packages/install`, `/workspaces/:wsId/packages`) that
+// the default `api` client routes through (the install action) but
+// /workspaces/:wsId/* would otherwise hit the registry. Going direct.
+const installedClient = axios.create({
+  baseURL: `${SERVICE_URLS["packages"]}/api/v1`,
+  headers: { "Content-Type": "application/json" },
+});
+
+installedClient.interceptors.request.use((config) => withAuth(config));
 
 export interface MarketplacePackage {
   id: string;
@@ -118,4 +132,50 @@ export function formatPrice(cents: number | null | undefined): string {
     currency: "USD",
     minimumFractionDigits: cents % 100 === 0 ? 0 : 2,
   }).format(cents / 100);
+}
+
+/* -------- Installed package management (packages service) ------- */
+
+export interface InstalledPackage {
+  id: string;
+  workspaceId: string;
+  packageName: string;
+  version: string;
+  type: string;
+  status: "pending" | "installing" | "installed" | "failed" | "removing";
+  installedAt: string;
+  config: Record<string, unknown>;
+}
+
+export interface UpdateAvailable {
+  installationId: string;
+  packageName: string;
+  installedVersion: string;
+  latestVersion: string;
+}
+
+export async function listInstalled(workspaceId: string): Promise<InstalledPackage[]> {
+  const { data } = await installedClient.get<{ packages: InstalledPackage[] }>(
+    `/workspaces/${encodeURIComponent(workspaceId)}/packages`,
+  );
+  return data.packages ?? [];
+}
+
+export async function listAvailableUpdates(workspaceId: string): Promise<UpdateAvailable[]> {
+  const { data } = await installedClient.get<{ updates: UpdateAvailable[] }>(
+    `/workspaces/${encodeURIComponent(workspaceId)}/updates`,
+  );
+  return data.updates ?? [];
+}
+
+export async function uninstallPackage(installId: string): Promise<void> {
+  await installedClient.delete(`/packages/${encodeURIComponent(installId)}`);
+}
+
+export async function upgradePackage(installId: string, version?: string): Promise<InstalledPackage> {
+  const { data } = await installedClient.post<InstalledPackage>(
+    `/packages/${encodeURIComponent(installId)}/upgrade`,
+    version ? { version } : {},
+  );
+  return data;
 }
