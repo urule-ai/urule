@@ -209,10 +209,64 @@ export class PackageManager {
     return { ...installation };
   }
 
+  /**
+   * For each installation in `workspaceId`, ask packagehub for the
+   * latest non-yanked version of that package. If newer than what's
+   * installed, return an entry. Pure read — no install state mutated.
+   *
+   * Version comparison uses lexicographic ordering as a floor; semver
+   * ordering is tracked alongside true semver-range matching as a
+   * single follow-up in ROADMAP §6.3 (the `versionRange` field on
+   * dependency-tree.ts has the same forward-compat note).
+   */
+  async checkUpdates(workspaceId: string): Promise<Array<{
+    installationId: string;
+    packageName: string;
+    installedVersion: string;
+    latestVersion: string;
+  }>> {
+    const installed = this.listSync(workspaceId).filter((p) => p.status === 'installed');
+    const updates: Array<{ installationId: string; packageName: string; installedVersion: string; latestVersion: string }> = [];
+    for (const inst of installed) {
+      try {
+        const url = `${this.packagehubUrl}/api/v1/packages/${encodeURIComponent(inst.packageName)}/versions`;
+        const res = await fetchWithCorrelation(url);
+        if (!res.ok) continue;
+        const versions = await res.json() as Array<{ version: string; yanked?: boolean; publishedAt?: string }>;
+        if (!Array.isArray(versions) || versions.length === 0) continue;
+        // packagehub already returns versions ordered newest-first by
+        // publishedAt; pick the first non-yanked.
+        const latest = versions.find((v) => !v.yanked);
+        if (!latest) continue;
+        if (compareVersions(latest.version, inst.version) > 0) {
+          updates.push({
+            installationId: inst.id,
+            packageName: inst.packageName,
+            installedVersion: inst.version,
+            latestVersion: latest.version,
+          });
+        }
+      } catch {
+        // Transient packagehub outage — skip this package's check
+        // rather than failing the whole sweep.
+      }
+    }
+    return updates;
+  }
+
   private listSync(workspaceId: string): InstalledPackage[] {
     return Array.from(this.installations.values()).filter(
       (pkg) => pkg.workspaceId === workspaceId,
     );
+  }
+
+  /**
+   * Test seam: lets tests pre-populate an installation without
+   * exercising the install path (entitlement check, manifest load).
+   * Not exported via the route layer.
+   */
+  injectInstallationForTest(installation: InstalledPackage): void {
+    this.installations.set(installation.id, installation);
   }
 
   private async loadManifest(request: PackageInstallRequest): Promise<PackageManifest> {
@@ -226,4 +280,40 @@ export class PackageManager {
 
     return this.loader.loadFromPackagehub(request.packageName, request.version);
   }
+}
+
+/**
+ * Compare two version strings. Returns >0 if `a > b`, <0 if `a < b`,
+ * 0 if equal. Floor implementation: split on dots, compare numeric
+ * parts numerically, fall back to string compare for pre-release
+ * suffixes ("1.0.0-rc.1" < "1.0.0"). Good enough for the
+ * "is the latest published version newer than the installed one?"
+ * question. Doesn't replicate the full semver spec — see ROADMAP
+ * §6.3 follow-up for proper semver-range handling.
+ */
+export function compareVersions(a: string, b: string): number {
+  const splitVer = (v: string): { core: number[]; pre: string } => {
+    const [core, pre = ''] = v.split('-', 2);
+    return {
+      core: (core ?? '').split('.').map((p) => {
+        const n = Number.parseInt(p, 10);
+        return Number.isNaN(n) ? 0 : n;
+      }),
+      pre,
+    };
+  };
+  const A = splitVer(a);
+  const B = splitVer(b);
+  const len = Math.max(A.core.length, B.core.length);
+  for (let i = 0; i < len; i++) {
+    const ai = A.core[i] ?? 0;
+    const bi = B.core[i] ?? 0;
+    if (ai !== bi) return ai - bi;
+  }
+  // Pre-release compare: any pre-release < no pre-release; otherwise
+  // lexicographic.
+  if (A.pre && !B.pre) return -1;
+  if (!A.pre && B.pre) return 1;
+  if (A.pre && B.pre) return A.pre < B.pre ? -1 : A.pre > B.pre ? 1 : 0;
+  return 0;
 }

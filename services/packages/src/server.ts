@@ -5,7 +5,9 @@ import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 import { authMiddleware } from '@urule/auth-middleware';
 import { correlationIdPlugin } from '@urule/correlation-id';
+import { EventBus } from '@urule/events';
 import { metricsPlugin } from '@urule/observability';
+import { connect } from 'nats';
 import type { Config } from './config.js';
 import { DependencyResolver } from './services/dependency-resolver.js';
 import { ManifestLoader } from './services/manifest-loader.js';
@@ -74,8 +76,19 @@ export async function buildServer(config: Config) {
   const loader = new ManifestLoader(config.workDir, config.packagehubUrl);
   const manager = new PackageManager(resolver, loader);
 
+  // Optional NATS connection — if unreachable, the service still boots
+  // and /updates simply skips the publish step. Routes degrade
+  // gracefully rather than failing fast on NATS outage.
+  let eventBus: EventBus | undefined;
+  try {
+    const conn = await connect({ servers: config.natsUrl });
+    eventBus = new EventBus(conn, { source: 'packages' });
+  } catch (err) {
+    app.log.warn({ err, natsUrl: config.natsUrl }, 'NATS unavailable; UPDATE_AVAILABLE events will not be published');
+  }
+
   // Routes
-  registerInstallationRoutes(app, manager);
+  registerInstallationRoutes(app, manager, { eventBus });
   registerPackageRoutes(app, manager);
 
   return app;

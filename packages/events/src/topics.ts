@@ -58,6 +58,14 @@ export const PACKAGE_TOPICS = {
   UPGRADE_COMPLETED: 'urule.packages.upgrade.completed',
   UPGRADE_FAILED: 'urule.packages.upgrade.failed',
   UNINSTALL_COMPLETED: 'urule.packages.uninstall.completed',
+  /**
+   * Emitted (one event per outdated installation) when a workspace's
+   * /updates endpoint is polled and the packages svc finds a newer
+   * non-yanked version published in packagehub. office-ui consumes via
+   * the §3.5 notification center; the event payload carries enough to
+   * deep-link the user to the upgrade flow.
+   */
+  UPDATE_AVAILABLE: 'urule.packages.update.available',
 } as const;
 
 // ─── Approval Events ──────────────────────────────────────────────
