@@ -11,6 +11,7 @@ import { registerPackageRoutes } from './routes/packages.routes.js';
 import { registerVersionRoutes } from './routes/versions.routes.js';
 import { registerEntitlementRoutes } from './routes/entitlements.routes.js';
 import { registerReviewRoutes } from './routes/reviews.routes.js';
+import { registerDependencyTreeRoutes } from './routes/dependency-tree.routes.js';
 import { errorHandler } from './middleware/error-handler.js';
 import type { Config } from './config.js';
 
@@ -81,6 +82,7 @@ export async function buildServer(config: Config) {
   registerVersionRoutes(app, db);
   registerEntitlementRoutes(app, db);
   registerReviewRoutes(app, db);
+  registerDependencyTreeRoutes(app, db);
 
   return app;
 }
