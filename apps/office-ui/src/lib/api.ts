@@ -9,6 +9,7 @@
  * under the "urule-auth" key).
  */
 import axios from "axios";
+import { toast } from "@/store/useToastStore";
 
 /**
  * Service URL configuration.
@@ -111,12 +112,33 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Auto-refresh on 401
+/**
+ * Avoid redirecting to /login from the login page itself — the unauthenticated
+ * pages (login/register/forgot-password) live under the (auth) route group
+ * and may issue requests that 401 by design (e.g., probing whether a session
+ * is still valid). A naive redirect there causes a same-page reload loop.
+ */
+function isOnAuthPage(): boolean {
+  if (typeof window === "undefined") return false;
+  const path = window.location.pathname;
+  return path === "/login" || path === "/register" || path === "/forgot-password";
+}
+
+function redirectToLogin(): void {
+  if (typeof window === "undefined" || isOnAuthPage()) return;
+  window.location.href = "/login";
+}
+
+// Auto-refresh on 401, surface 403 as a toast (the user is authenticated but
+// lacks permission — redirecting to login is wrong; staying put + toast is
+// the consistent UX).
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    const status = error.response?.status;
+
+    if (status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
       const refreshToken = getPersistedAuthValue("refresh_token");
       if (refreshToken) {
@@ -131,7 +153,6 @@ api.interceptors.response.use(
             }),
             { headers: { "Content-Type": "application/x-www-form-urlencoded" } }
           );
-          // Update the persisted store with new tokens
           const raw = localStorage.getItem("urule-auth");
           if (raw) {
             const parsed = JSON.parse(raw);
@@ -145,12 +166,22 @@ api.interceptors.response.use(
           return api(originalRequest);
         } catch {
           localStorage.removeItem("urule-auth");
-          window.location.href = "/login";
+          redirectToLogin();
         }
       } else {
-        window.location.href = "/login";
+        redirectToLogin();
       }
     }
+
+    if (status === 403) {
+      const serverMessage =
+        (error.response?.data as { error?: { message?: string } } | undefined)?.error?.message;
+      toast.error(
+        "Permission denied",
+        serverMessage ?? "You don't have access to this resource.",
+      );
+    }
+
     return Promise.reject(error);
   }
 );
