@@ -12,6 +12,7 @@ import { registerVersionRoutes } from './routes/versions.routes.js';
 import { registerEntitlementRoutes } from './routes/entitlements.routes.js';
 import { registerReviewRoutes } from './routes/reviews.routes.js';
 import { registerDependencyTreeRoutes } from './routes/dependency-tree.routes.js';
+import { registerWebhookRoutes } from './routes/webhooks.routes.js';
 import { errorHandler } from './middleware/error-handler.js';
 import type { Config } from './config.js';
 
@@ -35,6 +36,24 @@ export async function buildServer(config: Config) {
   // Correlation ID — must be the first plugin so all other middleware logs carry it
   await app.register(correlationIdPlugin);
 
+  // Capture the raw JSON body so the Stripe webhook handler can verify
+  // its HMAC signature against the exact bytes Stripe signed. Every
+  // other route still receives a parsed object on `request.body`.
+  app.addContentTypeParser(
+    'application/json',
+    { parseAs: 'string' },
+    (req, body, done) => {
+      (req as unknown as { rawBody: string }).rawBody = body as string;
+      try {
+        done(null, body ? JSON.parse(body as string) : {});
+      } catch (err) {
+        const e = err instanceof Error ? err : new Error(String(err));
+        (e as Error & { statusCode?: number }).statusCode = 400;
+        done(e, undefined);
+      }
+    },
+  );
+
   // Prometheus /metrics endpoint
   await app.register(metricsPlugin, { serviceName: 'packagehub' });
 
@@ -48,8 +67,17 @@ export async function buildServer(config: Config) {
     timeWindow: '1 minute',
   });
 
-  // Auth middleware
-  await app.register(authMiddleware, { publicRoutes: ['/healthz', '/metrics', '/api/v1/packages', '/docs'] });
+  // Auth middleware. The Stripe webhook is public (Stripe doesn't speak
+  // JWT); the route handler enforces HMAC signature verification instead.
+  await app.register(authMiddleware, {
+    publicRoutes: [
+      '/healthz',
+      '/metrics',
+      '/api/v1/packages',
+      '/api/v1/webhooks/stripe',
+      '/docs',
+    ],
+  });
 
   // OpenAPI documentation
   await app.register(swagger, {
@@ -83,6 +111,7 @@ export async function buildServer(config: Config) {
   registerEntitlementRoutes(app, db);
   registerReviewRoutes(app, db);
   registerDependencyTreeRoutes(app, db);
+  registerWebhookRoutes(app, db);
 
   return app;
 }
