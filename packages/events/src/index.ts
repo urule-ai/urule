@@ -53,7 +53,7 @@ export type {
 export type { AuditEvent } from './events/audit.events.js';
 
 // ─── Audit Logger ──────────────────────────────────────────────────
-export { AuditLogger } from './audit/audit-logger.js';
+export { AuditLogger, type AuditActor } from './audit/audit-logger.js';
 
 // ─── Idempotency ────────────────────────────────────────────────────
 export { generateIdempotencyKey, deterministicKey } from './idempotency/key-generator.js';

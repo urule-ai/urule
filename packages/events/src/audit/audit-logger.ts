@@ -2,7 +2,12 @@ import { createEvent } from '../envelope.js';
 import { AUDIT_TOPICS } from '../topics.js';
 import type { AuditEvent } from '../events/audit.events.js';
 
-interface AuditActor {
+/**
+ * The actor whose action is being audited — set by the route handler
+ * from `request.uruleUser` (or a service-account literal). Exported so
+ * consumers can type their own helper wrappers around `AuditLogger`.
+ */
+export interface AuditActor {
   id: string;
   username: string;
 }
