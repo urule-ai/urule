@@ -11,17 +11,22 @@
     "apps/*"
   ],
   "scripts": {
-    "build:all": "npm run build --workspaces --if-present",
-    "test:all": "npm run test --workspaces --if-present",
-    "lint:all": "npm run lint --workspaces --if-present",
-    "typecheck:all": "npm run typecheck --workspaces --if-present",
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "build:all": "turbo run build",
+    "test:all": "turbo run test",
+    "lint:all": "turbo run lint",
+    "typecheck:all": "turbo run typecheck",
     "docs:api": "typedoc --options typedoc.json",
     "docs:api:watch": "typedoc --options typedoc.json --watch",
-    "clean": "npm run clean --workspaces --if-present && rm -rf node_modules"
+    "clean": "rm -rf node_modules .turbo && npm run clean --workspaces --if-present"
   },
   "engines": {
     "node": ">=20.0.0"
   },
+  "packageManager": "npm@10.9.7",
   "keywords": [
     "ai-agents",
     "ai-platform",
@@ -53,6 +58,7 @@
   "devDependencies": {
     "drizzle-kit": "^0.31.10",
     "drizzle-orm": "^0.45.2",
+    "turbo": "^2.3.0",
     "typedoc": "^0.27.0"
   }
 }
