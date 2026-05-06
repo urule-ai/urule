@@ -7,10 +7,22 @@ export const conversations = pgTable('conversations', {
   workspaceId: varchar('workspace_id', { length: 26 }).notNull().references(() => workspaces.id),
   title: varchar('title', { length: 255 }).notNull(),
   type: varchar('type', { length: 50 }).notNull().default('direct'), // direct, group, meeting, channel
+  // Conversation forking: when this conversation was branched off
+  // another, `parentConversationId` points at the source and
+  // `branchedFromMessageId` is the message in the parent where the
+  // fork starts. The branching route copies every message from the
+  // parent up to and including that message into the new conversation
+  // so subsequent edits don't drift from the parent's history.
+  // No FK references: dropping a parent should NOT cascade to
+  // branches (we want the child to become a top-level orphan
+  // conversation, not be deleted). The columns simply hold ULIDs.
+  parentConversationId: varchar('parent_conversation_id', { length: 26 }),
+  branchedFromMessageId: varchar('branched_from_message_id', { length: 26 }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => ({
   workspaceIdIdx: index('conversations_workspace_id_idx').on(table.workspaceId),
+  parentIdx: index('conversations_parent_idx').on(table.parentConversationId),
 }));
 
 export const conversationAgents = pgTable('conversation_agents', {

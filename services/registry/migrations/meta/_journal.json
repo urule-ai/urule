@@ -15,6 +15,13 @@
       "when": 1777862998488,
       "tag": "0001_agent_memories",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1778037477584,
+      "tag": "0002_conversation_branching",
+      "breakpoints": true
     }
   ]
 }
