@@ -257,7 +257,7 @@ Replace fragile init scripts with proper versioned migrations.
 - [x] **All services** — Swagger UI at `/docs` (public, no auth required)
 - [x] **All services** — Service-specific titles, descriptions, and tags
 - [ ] **All services** — Add route-level JSDoc/schema annotations for richer docs
-- [ ] **Libraries** — Add TypeDoc for auto-generated type documentation
+- [x] **Libraries** — TypeDoc auto-generated API documentation. Root [typedoc.json](typedoc.json) drives an `entryPointStrategy: 'packages'` build over the six published libraries (`auth-middleware`, `authz`, `correlation-id`, `events`, `observability`, `spec`); per-package [typedoc.json](packages/auth-middleware/typedoc.json) shims point each at `src/index.ts` so the generator reads source rather than compiled `dist/`. New `npm run docs:api` produces a single static site at `docs/api/` covering every public type/function/class with cross-package linking; `docs:api:watch` rebuilds incrementally during doc-writing. Output is gitignored — every CI run reproduces it deterministically. New [docs/API.md](docs/API.md) is the human-facing entry point: how to generate, how to add a new package, hosting notes, troubleshooting. The 0-error / 3-warning baseline catches genuine leaks (e.g., `AuditActor` referenced from `AuditLogger.accessDenied.actor` but not exported from `@urule/events`'s public surface — follow-up `export type` add).
 
 ### 5.6 Developer Setup ✅
 - [x] **urule** — `scripts/dev-setup.sh` with prerequisite checks and guided setup

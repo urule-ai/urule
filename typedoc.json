@@ -1,0 +1,32 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "name": "Urule API",
+  "entryPointStrategy": "packages",
+  "entryPoints": [
+    "packages/auth-middleware",
+    "packages/authz",
+    "packages/correlation-id",
+    "packages/events",
+    "packages/observability",
+    "packages/spec"
+  ],
+  "out": "docs/api",
+  "readme": "none",
+  "includeVersion": true,
+  "githubPages": false,
+  "navigationLinks": {
+    "GitHub": "https://github.com/urule-ai/urule",
+    "ROADMAP": "https://github.com/urule-ai/urule/blob/main/ROADMAP.md"
+  },
+  "excludePrivate": true,
+  "excludeProtected": true,
+  "excludeInternal": true,
+  "skipErrorChecking": true,
+  "validation": {
+    "notExported": false,
+    "invalidLink": false,
+    "rewrittenLink": false,
+    "notDocumented": false,
+    "unusedMergeModuleWith": false
+  }
+}
