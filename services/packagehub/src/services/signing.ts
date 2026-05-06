@@ -1,6 +1,16 @@
 import { createHash, createPublicKey, verify } from 'node:crypto';
 
 /**
+ * Active pubkey record — the subset of the `package_pubkeys` row a
+ * verifier needs. Defined here so callers don't have to import drizzle
+ * types just to call verifyAgainstActiveKeys.
+ */
+export interface ActivePubkey {
+  pubkey: string;
+  pubkeyKind: string;
+}
+
+/**
  * Compute a deterministic SHA-256 digest over the canonical form of a
  * version's signed material. Both publisher and verifier use this same
  * function, so any layout change breaks all in-flight signatures — keep
@@ -44,4 +54,46 @@ export function verifyEd25519(pubkeyB64: string, signatureB64: string, digest: B
   } catch {
     return false;
   }
+}
+
+/**
+ * Verify a signature against any of a package's active pubkeys.
+ * Returns the matching pubkey (b64) on success, or null on failure.
+ *
+ * Multiple active keys exist whenever a publisher has rotated mid-life
+ * but kept the prior key around (e.g., a hardware-token primary and a
+ * CI-pipeline secondary). Verification short-circuits on first match,
+ * so the order of `keys` doesn't change correctness.
+ */
+export function verifyAgainstActiveKeys(
+  keys: readonly ActivePubkey[],
+  signatureB64: string,
+  digest: Buffer,
+): string | null {
+  for (const key of keys) {
+    if (key.pubkeyKind !== 'ed25519') continue; // only ed25519 today
+    if (verifyEd25519(key.pubkey, signatureB64, digest)) return key.pubkey;
+  }
+  return null;
+}
+
+/**
+ * Compute the digest a publisher must sign to prove possession of an
+ * existing private key when rotating to a new one. The proof-of-
+ * possession payload binds the operation (`add`/`revoke`), the package
+ * name, and the target pubkey — so a signature captured for one
+ * rotation can't be replayed onto a different package or operation.
+ */
+export function rotationDigest(
+  operation: 'add' | 'revoke',
+  packageName: string,
+  targetPubkeyB64: string,
+): Buffer {
+  return createHash('sha256')
+    .update(operation)
+    .update('\n')
+    .update(packageName)
+    .update('\n')
+    .update(targetPubkeyB64)
+    .digest();
 }

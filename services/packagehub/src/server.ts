@@ -13,6 +13,7 @@ import { registerEntitlementRoutes } from './routes/entitlements.routes.js';
 import { registerReviewRoutes } from './routes/reviews.routes.js';
 import { registerDependencyTreeRoutes } from './routes/dependency-tree.routes.js';
 import { registerWebhookRoutes } from './routes/webhooks.routes.js';
+import { registerPubkeysRoutes } from './routes/pubkeys.routes.js';
 import { errorHandler } from './middleware/error-handler.js';
 import type { Config } from './config.js';
 
@@ -112,6 +113,7 @@ export async function buildServer(config: Config) {
   registerReviewRoutes(app, db);
   registerDependencyTreeRoutes(app, db);
   registerWebhookRoutes(app, db);
+  registerPubkeysRoutes(app, db);
 
   return app;
 }

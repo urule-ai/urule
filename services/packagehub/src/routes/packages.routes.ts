@@ -5,6 +5,7 @@ import { eq, desc } from 'drizzle-orm';
 import type { Database } from '../db/connection.js';
 import { packages } from '../db/schema/packages.js';
 import { packageVersions } from '../db/schema/versions.js';
+import { packagePubkeys } from '../db/schema/package-pubkeys.js';
 import { SearchService } from '../services/search.js';
 
 const publishPackageSchema = z.object({
@@ -139,6 +140,21 @@ export function registerPackageRoutes(app: FastifyInstance, db: Database) {
       createdAt: now,
       updatedAt: now,
     }).returning();
+
+    // Mirror the initial publisher_pubkey into the rotation table so
+    // the verifier (which walks package_pubkeys) treats the original
+    // key as active. Subsequent rotations append more rows; revoking
+    // the first key works once a successor is registered.
+    if (pkg && publisherPubkey) {
+      await db.insert(packagePubkeys).values({
+        id: ulid(),
+        packageId: pkg.id,
+        pubkey: publisherPubkey,
+        pubkeyKind: pubkeyKind ?? 'ed25519',
+        status: 'active',
+        addedAt: now,
+      });
+    }
 
     reply.status(201).send(pkg);
   });

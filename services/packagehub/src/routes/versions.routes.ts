@@ -5,7 +5,8 @@ import { eq, and, desc } from 'drizzle-orm';
 import type { Database } from '../db/connection.js';
 import { packages } from '../db/schema/packages.js';
 import { packageVersions } from '../db/schema/versions.js';
-import { canonicalDigest, verifyEd25519 } from '../services/signing.js';
+import { canonicalDigest, verifyAgainstActiveKeys, type ActivePubkey } from '../services/signing.js';
+import { packagePubkeys } from '../db/schema/package-pubkeys.js';
 
 const publishVersionSchema = z.object({
   version: z.string().regex(/^\d+\.\d+\.\d+/),
@@ -63,9 +64,11 @@ export function registerVersionRoutes(app: FastifyInstance, db: Database) {
       return;
     }
 
-    // Signing: if the parent package was published with a publisher_pubkey,
-    // every subsequent version MUST be signed and verifiable. Anonymous
-    // packages (no pubkey) skip this check for back-compat.
+    // Signing: if the parent package has any registered pubkey (the
+    // canonical publisher_pubkey OR any active row in package_pubkeys),
+    // every subsequent version MUST be signed and verifiable against
+    // one of the active keys. Anonymous packages (no pubkey at all)
+    // skip this check for back-compat.
     if (pkg.publisherPubkey) {
       if (!signature) {
         return reply.code(400).send({
@@ -75,13 +78,26 @@ export function registerVersionRoutes(app: FastifyInstance, db: Database) {
           },
         });
       }
+      // Walk every active rotation row. The migration backfilled a row
+      // for every legacy publisher_pubkey, so this works for older
+      // packages too. We still keep the publisher_pubkey-only fallback
+      // below for the edge case of a pristine install without the
+      // backfill having run yet.
+      const activeKeys = await db
+        .select({ pubkey: packagePubkeys.pubkey, pubkeyKind: packagePubkeys.pubkeyKind })
+        .from(packagePubkeys)
+        .where(and(eq(packagePubkeys.packageId, pkg.id), eq(packagePubkeys.status, 'active')));
+      const keys: ActivePubkey[] =
+        activeKeys.length > 0
+          ? activeKeys
+          : [{ pubkey: pkg.publisherPubkey, pubkeyKind: pkg.pubkeyKind ?? 'ed25519' }];
       const digest = canonicalDigest(manifest, readme ?? '', version);
-      const ok = verifyEd25519(pkg.publisherPubkey, signature, digest);
-      if (!ok) {
+      const matched = verifyAgainstActiveKeys(keys, signature, digest);
+      if (!matched) {
         return reply.code(401).send({
           error: {
             code: 'SIGNATURE_INVALID',
-            message: 'Signature does not verify against the package publisher key',
+            message: 'Signature does not verify against any active publisher key',
           },
         });
       }
@@ -185,11 +201,23 @@ export function registerVersionRoutes(app: FastifyInstance, db: Database) {
       }
 
       const digest = canonicalDigest(ver.manifest, ver.readme ?? '', ver.version);
-      const ok = verifyEd25519(pkg.publisherPubkey, ver.signature, digest);
+      // Walk active rotation keys; surface the specific key that matched
+      // so the consumer can see which generation of the publisher's
+      // identity signed this version.
+      const activeKeys = await db
+        .select({ pubkey: packagePubkeys.pubkey, pubkeyKind: packagePubkeys.pubkeyKind })
+        .from(packagePubkeys)
+        .where(and(eq(packagePubkeys.packageId, pkg.id), eq(packagePubkeys.status, 'active')));
+      const keys: ActivePubkey[] =
+        activeKeys.length > 0
+          ? activeKeys
+          : [{ pubkey: pkg.publisherPubkey, pubkeyKind: pkg.pubkeyKind ?? 'ed25519' }];
+      const matched = verifyAgainstActiveKeys(keys, ver.signature, digest);
+      const ok = matched !== null;
       return {
         verified: ok,
         kind: pkg.pubkeyKind ?? 'ed25519',
-        publisher: pkg.publisherPubkey,
+        publisher: matched ?? pkg.publisherPubkey,
         ...(ok ? {} : { reason: 'signature_invalid' }),
       };
     },
