@@ -1,0 +1,37 @@
+{
+  "name": "@urule/llm-providers",
+  "version": "0.1.0",
+  "description": "Provider-agnostic LLM streaming abstraction — anthropic + openai initially, swappable per-agent. Built for orchestrator adapters (langgraph, goose, crewai, autogen, adk) so each one delegates the LLM call to a shared interface instead of re-implementing per provider.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/index.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/urule-ai/urule.git",
+    "directory": "packages/llm-providers"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.32.0",
+    "openai": "^4.77.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.5.0",
+    "vitest": "^2.0.0"
+  }
+}
