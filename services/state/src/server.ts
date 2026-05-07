@@ -49,16 +49,29 @@ export async function buildServer() {
   // Auth middleware
   await app.register(authMiddleware, { publicRoutes: ['/healthz', '/metrics', '/docs'] });
 
-  // OpenAPI documentation
+  // OpenAPI documentation. Tag descriptions surface in swagger-ui as
+  // section headers; per-route tags / summaries / descriptions live in
+  // each route's `schema:` field.
   await app.register(swagger, {
     openapi: {
       info: {
         title: 'Urule State API',
-        description: 'Room presence, task ownership, and widget state',
+        description:
+          'Ephemeral collaboration state: rooms (collaboration spaces), ' +
+          'presence (who is in a room), tasks (work items + ownership ' +
+          'transfer), widget configuration, and typing indicators. ' +
+          'Currently in-memory; designed to migrate to NATS KV without ' +
+          'API changes.',
         version: '0.1.0',
       },
       servers: [{ url: 'http://localhost:3007' }],
-      tags: [{ name: 'rooms' }, { name: 'presence' }, { name: 'tasks' }, { name: 'widgets' }],
+      tags: [
+        { name: 'rooms', description: 'Collaboration rooms (groups of people + agents working on something).' },
+        { name: 'presence', description: 'Who is currently in a room and their status.' },
+        { name: 'tasks', description: 'Lightweight task records + ownership transfer between users / agents.' },
+        { name: 'widgets', description: 'Per-widget-instance configuration persistence.' },
+        { name: 'typing', description: 'Short-lived "user is typing" indicators with TTL auto-expiry.' },
+      ],
     },
   });
 

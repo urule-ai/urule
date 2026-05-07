@@ -53,16 +53,24 @@ export async function buildServer(config: Config) {
   // Auth middleware
   await app.register(authMiddleware, { publicRoutes: ['/healthz', '/metrics', '/docs'] });
 
-  // OpenAPI documentation
+  // OpenAPI documentation. Tag descriptions surface in swagger-ui as
+  // section headers; per-route tags / summaries / descriptions live in
+  // each route's `schema:` field.
   await app.register(swagger, {
     openapi: {
       info: {
         title: 'Urule Packages API',
-        description: 'Package install/upgrade/remove lifecycle',
+        description:
+          'Package install / upgrade / rollback / remove lifecycle for ' +
+          'a workspace. Consults packagehub for metadata and entitlement; ' +
+          'persists installation history so rollback survives restarts.',
         version: '0.1.0',
       },
       servers: [{ url: 'http://localhost:3008' }],
-      tags: [{ name: 'packages' }, { name: 'installations' }],
+      tags: [
+        { name: 'packages', description: 'Install / upgrade / rollback / remove a package in a workspace.' },
+        { name: 'installations', description: 'List installations + check for available updates.' },
+      ],
     },
   });
 

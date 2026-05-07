@@ -51,16 +51,26 @@ export async function buildServer(config: Config) {
   // Auth middleware
   await app.register(authMiddleware, { publicRoutes: ["/healthz", "/metrics", "/docs"] });
 
-  // OpenAPI documentation
+  // OpenAPI documentation. Tag descriptions surface in swagger-ui as
+  // section headers; per-route tags / summaries / descriptions live in
+  // each route's `schema:` field.
   await app.register(swagger, {
     openapi: {
       info: {
         title: 'Urule Governance API',
-        description: 'OPA policy + OpenFGA authorization gateway',
+        description:
+          'OPA policy evaluation + OpenFGA relationship-based access ' +
+          'control. Combines both signals into a single decide() that ' +
+          'every callsite uses for "may this actor perform this action?" ' +
+          'questions; emits an audit event on every decision.',
         version: '0.1.0',
       },
       servers: [{ url: 'http://localhost:3004' }],
-      tags: [{ name: 'governance' }, { name: 'policy' }, { name: 'authz' }],
+      tags: [
+        { name: 'governance', description: 'Combined policy + authz decision (the primary callsite).' },
+        { name: 'policy', description: 'Direct OPA policy evaluation — useful for previewing rules.' },
+        { name: 'authz', description: 'Direct OpenFGA relationship checks (single + batch).' },
+      ],
     },
   });
 
