@@ -65,7 +65,13 @@ function toUiProvider(row: Record<string, unknown>, mask = true) {
 
 export function registerProviderRoutes(app: FastifyInstance, db: Database) {
   // List providers (optionally filtered by workspaceId query param)
-  app.get<{ Querystring: { workspaceId?: string } }>('/api/v1/providers', async (request) => {
+  app.get<{ Querystring: { workspaceId?: string } }>('/api/v1/providers', {
+    schema: {
+      tags: ['providers'],
+      summary: 'List LLM providers',
+      description: 'Returns providers with masked API keys (last 4 chars only). Optional `?workspaceId=` filter scopes to a single workspace; without the filter, returns every provider in the system.',
+    },
+  }, async (request) => {
     const { workspaceId } = request.query;
     const rows = workspaceId
       ? await db.select().from(providers).where(eq(providers.workspaceId, workspaceId))
@@ -76,7 +82,13 @@ export function registerProviderRoutes(app: FastifyInstance, db: Database) {
   // Create provider (accepts both snake_case and camelCase fields)
   app.post<{
     Body: Record<string, unknown>;
-  }>('/api/v1/providers', async (request, reply) => {
+  }>('/api/v1/providers', {
+    schema: {
+      tags: ['providers'],
+      summary: 'Register an LLM provider key',
+      description: 'Body fields: `workspaceId`, `name`, `provider` (`anthropic | openai | gemini | …`), `modelName`, `apiKey`, optional `baseUrl` (for self-hosted), optional `isDefault`. Marking a provider as default unsets the previous default for the same workspace. Body accepts both snake_case and camelCase keys for back-compat.',
+    },
+  }, async (request, reply) => {
     const parsed = createProviderSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: 'Validation failed', details: parsed.error.issues });
@@ -135,7 +147,13 @@ export function registerProviderRoutes(app: FastifyInstance, db: Database) {
   });
 
   // Get single provider (masked key)
-  app.get<{ Params: { providerId: string } }>('/api/v1/providers/:providerId', async (request, reply) => {
+  app.get<{ Params: { providerId: string } }>('/api/v1/providers/:providerId', {
+    schema: {
+      tags: ['providers'],
+      summary: 'Get provider by id (masked)',
+      description: 'Returns the provider row with the API key masked to its last 4 chars. For the unmasked key (used by adapter services to actually call the LLM), see `GET /:providerId/key`.',
+    },
+  }, async (request, reply) => {
     const { providerId } = request.params;
     const [row] = await db.select().from(providers).where(eq(providers.id, providerId));
     if (!row) {
@@ -146,7 +164,13 @@ export function registerProviderRoutes(app: FastifyInstance, db: Database) {
   });
 
   // Get provider's real API key (internal use by adapter service)
-  app.get<{ Params: { providerId: string } }>('/api/v1/providers/:providerId/key', async (request, reply) => {
+  app.get<{ Params: { providerId: string } }>('/api/v1/providers/:providerId/key', {
+    schema: {
+      tags: ['providers'],
+      summary: 'Get unmasked API key (internal)',
+      description: 'Returns `{ apiKey, provider, modelName }` with the real API key. Internal-use endpoint called by langgraph-adapter (and future orchestrator adapters) when picking an LlmProvider impl. Never expose this from the office-ui — UI consumes the masked endpoint instead.',
+    },
+  }, async (request, reply) => {
     const { providerId } = request.params;
     const [row] = await db.select().from(providers).where(eq(providers.id, providerId));
     if (!row) {
@@ -159,6 +183,13 @@ export function registerProviderRoutes(app: FastifyInstance, db: Database) {
   // Update provider
   app.patch<{ Params: { providerId: string }; Body: Record<string, unknown> }>(
     '/api/v1/providers/:providerId',
+    {
+      schema: {
+        tags: ['providers'],
+        summary: 'Update provider',
+        description: 'Partial update of any provider field. Setting `isDefault: true` unsets the previous default for the same workspace. To rotate the API key, send the new value in `apiKey` — historical key is dropped.',
+      },
+    },
     async (request, reply) => {
       const parsed = updateProviderSchema.safeParse(request.body);
       if (!parsed.success) {
@@ -200,7 +231,13 @@ export function registerProviderRoutes(app: FastifyInstance, db: Database) {
   );
 
   // Delete provider
-  app.delete<{ Params: { providerId: string } }>('/api/v1/providers/:providerId', async (request, reply) => {
+  app.delete<{ Params: { providerId: string } }>('/api/v1/providers/:providerId', {
+    schema: {
+      tags: ['providers'],
+      summary: 'Delete a provider',
+      description: 'Hard-removes the provider record. Agents configured with this `provider_id` will fall back to the workspace default on their next chat. 204 on success, 404 PROVIDER_NOT_FOUND when the id is unknown.',
+    },
+  }, async (request, reply) => {
     const { providerId } = request.params;
     const [row] = await db.delete(providers).where(eq(providers.id, providerId)).returning();
     if (!row) {

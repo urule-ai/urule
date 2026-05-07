@@ -58,16 +58,34 @@ export async function buildServer(config: Config) {
     publicRoutes: ['/healthz', '/metrics', '/api/v1/infrastructure', '/auth/login', '/docs'],
   });
 
-  // OpenAPI documentation
+  // OpenAPI documentation. Tag descriptions surface in swagger-ui as
+  // section headers; per-route tags / summaries / descriptions live in
+  // each route's `schema:` field.
   await app.register(swagger, {
     openapi: {
       info: {
         title: 'Urule Registry API',
-        description: 'Source of truth for orgs, workspaces, agents, runtimes, providers, and conversations',
+        description:
+          "Source of truth for the durable entities every other service " +
+          "reads from: orgs, workspaces, agents, runtimes, providers, " +
+          "conversations + messages, integrations, and the activity log. " +
+          "Cross-service mutations publish NATS events for consumers " +
+          "(approvals, packages, langgraph-adapter, etc.) to react to.",
         version: '0.1.0',
       },
       servers: [{ url: 'http://localhost:3001' }],
-      tags: [{ name: 'orgs' }, { name: 'workspaces' }, { name: 'agents' }, { name: 'runtimes' }, { name: 'providers' }, { name: 'conversations' }, { name: 'auth' }],
+      tags: [
+        { name: 'auth', description: 'Username/password login + token refresh against the configured Keycloak realm.' },
+        { name: 'orgs', description: 'Top-level tenant boundary. Every workspace lives inside an org.' },
+        { name: 'workspaces', description: 'A team\'s working space — the unit most data is scoped to.' },
+        { name: 'agents', description: 'AI agent identities + their per-agent memory store + metrics.' },
+        { name: 'runtimes', description: 'Sandbox runtime registrations (Docker, Firecracker, etc.).' },
+        { name: 'providers', description: 'LLM provider records — Anthropic / OpenAI / etc. + their API keys.' },
+        { name: 'conversations', description: 'Chat conversations + message history; supports forking via /branch.' },
+        { name: 'integrations', description: 'Third-party integration records (Slack, Notion, custom MCP servers).' },
+        { name: 'logs', description: 'Activity log + notification stream for the office-ui audit feed.' },
+        { name: 'stats', description: 'Aggregate counters that drive dashboard tiles.' },
+      ],
     },
   });
 

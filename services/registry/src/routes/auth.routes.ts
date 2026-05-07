@@ -29,7 +29,14 @@ export function registerAuthRoutes(app: FastifyInstance) {
    */
   app.post<{
     Body: { email: string; password: string };
-  }>('/auth/login', async (request, reply) => {
+  }>('/auth/login', {
+    schema: {
+      tags: ['auth'],
+      summary: 'Username/password login (proxies to Keycloak)',
+      description:
+        "Exchanges username+password for Keycloak OIDC tokens. Returns `{ access_token, refresh_token, expires_in }`. 400 on missing/invalid input; 401 on bad credentials; 502 when Keycloak is unreachable. Used by the office-ui login form and the demo flow.",
+    },
+  }, async (request, reply) => {
     const parsed = loginSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: 'Validation failed', details: parsed.error.issues });
@@ -88,7 +95,14 @@ export function registerAuthRoutes(app: FastifyInstance) {
    * Returns the current user identity from the JWT token.
    * Requires a valid Bearer token.
    */
-  app.get('/auth/me', async (request) => {
+  app.get('/auth/me', {
+    schema: {
+      tags: ['auth'],
+      summary: 'Get the authenticated user',
+      description:
+        "Returns the current user identity from the JWT auth-middleware decoration (`request.uruleUser`). Useful for the office-ui's profile menu and any client wanting to confirm the token is still valid without re-issuing.",
+    },
+  }, async (request) => {
     const user = (request as unknown as { uruleUser: UruleUser }).uruleUser;
     return {
       id: user.id,
