@@ -54,7 +54,14 @@ interface StripeEvent {
 export function registerWebhookRoutes(app: FastifyInstance, db: Database): void {
   const secret = process.env['STRIPE_WEBHOOK_SECRET'];
 
-  app.post('/api/v1/webhooks/stripe', async (request, reply) => {
+  app.post('/api/v1/webhooks/stripe', {
+    schema: {
+      tags: ['webhooks'],
+      summary: 'Stripe checkout webhook',
+      description:
+        'Inbound Stripe webhook receiver. Verifies the `Stripe-Signature` HMAC against `STRIPE_WEBHOOK_SECRET`, then on `checkout.session.completed` mints an entitlement using the session id as `externalRef`. Idempotent — retried deliveries return the existing row. Subscriptions propagate `subscription.current_period_end` into `expires_at`. Returns 200 on missing metadata / unknown package / unsupported event types so Stripe doesn\'t retry forever; 400 on signature mismatch; 503 if `STRIPE_WEBHOOK_SECRET` is unset.',
+    },
+  }, async (request, reply) => {
     if (!secret) {
       app.log.warn('STRIPE_WEBHOOK_SECRET not configured; rejecting webhook');
       return reply.code(503).send({

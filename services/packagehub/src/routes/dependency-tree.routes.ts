@@ -24,6 +24,14 @@ export function registerDependencyTreeRoutes(app: FastifyInstance, db: Database)
     Querystring: { maxDepth?: string };
   }>(
     '/api/v1/packages/:name/versions/:version/dependency-tree',
+    {
+      schema: {
+        tags: ['dependencies'],
+        summary: 'Resolve a version\'s dependency tree',
+        description:
+          'Walks `manifest.dependencies` recursively and returns a tree of `{ name, versionRange, resolvedVersion, dependencies, unresolved? }` nodes. Latest non-yanked version is picked at each step. Cycles, missing packages, no-published-versions, and depth-cap hits are surfaced via `unresolved: "cycle" | "missing" | "no_version" | "max_depth"` rather than failing the whole walk. `?maxDepth` defaults to 8, range 1-16.',
+      },
+    },
     async (request, reply) => {
       const parsed = querySchema.safeParse(request.query);
       if (!parsed.success) {

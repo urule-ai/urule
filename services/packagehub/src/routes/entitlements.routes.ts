@@ -33,7 +33,14 @@ export function registerEntitlementRoutes(app: FastifyInstance, db: Database) {
    */
   app.get<{
     Querystring: { packageName: string; workspaceId?: string; userId?: string };
-  }>('/api/v1/entitlements', async (request, reply) => {
+  }>('/api/v1/entitlements', {
+    schema: {
+      tags: ['entitlements'],
+      summary: 'Check entitlement (install gate)',
+      description:
+        'Authoritative gate consulted by the packages service before install. Returns `{ allowed: true, reason: "free" | "entitled" | "grant" }` for free packages and rows that pass; `{ allowed: false, reason: "requires_purchase", paymentLink }` otherwise. The packages service forwards `paymentLink` in its 402 ENTITLEMENT_REQUIRED error body so the UI can surface the checkout CTA without a second round-trip.',
+    },
+  }, async (request, reply) => {
     const parsed = checkQuerySchema.safeParse(request.query);
     if (!parsed.success) {
       return reply.code(400).send({ error: 'Validation failed', details: parsed.error.issues });
@@ -96,7 +103,14 @@ export function registerEntitlementRoutes(app: FastifyInstance, db: Database) {
    */
   app.post<{
     Body: z.infer<typeof grantSchema>;
-  }>('/api/v1/entitlements', async (request, reply) => {
+  }>('/api/v1/entitlements', {
+    schema: {
+      tags: ['entitlements'],
+      summary: 'Mint an entitlement row',
+      description:
+        'Creates an entitlement record (`kind: purchase | subscription | grant`). The Stripe webhook receiver calls this on `checkout.session.completed`; admin tools call it for manual grants. Idempotent on the (packageId, externalRef) tuple — a retried call with the same external reference returns the existing row.',
+    },
+  }, async (request, reply) => {
     const parsed = grantSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: 'Validation failed', details: parsed.error.issues });
@@ -141,6 +155,14 @@ export function registerEntitlementRoutes(app: FastifyInstance, db: Database) {
    */
   app.delete<{ Params: { id: string } }>(
     '/api/v1/entitlements/:id',
+    {
+      schema: {
+        tags: ['entitlements'],
+        summary: 'Revoke an entitlement',
+        description:
+          'Hard-deletes the entitlement row. Used by the refund flow: a Stripe `charge.refunded` webhook (or admin tool) hits this endpoint with the entitlement id captured at mint time. 404 ENTITLEMENT_NOT_FOUND if already revoked.',
+      },
+    },
     async (request, reply) => {
       const { id } = request.params;
       const result = await db

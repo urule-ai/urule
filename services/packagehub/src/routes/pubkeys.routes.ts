@@ -47,6 +47,14 @@ export function registerPubkeysRoutes(app: FastifyInstance, db: Database): void 
   // List all rotation rows (active + revoked) for transparency.
   app.get<{ Params: { name: string } }>(
     '/api/v1/packages/:name/pubkeys',
+    {
+      schema: {
+        tags: ['pubkeys'],
+        summary: 'List publisher pubkeys + rotation history',
+        description:
+          'Returns every pubkey ever registered for the package — both `active` and `revoked`. Useful for transparency / audit; consumers verifying a signature should use `/verify` instead since it walks active keys server-side.',
+      },
+    },
     async (request, reply) => {
       const { name } = request.params;
       const [pkg] = await db.select().from(packages).where(eq(packages.name, name));
@@ -66,6 +74,14 @@ export function registerPubkeysRoutes(app: FastifyInstance, db: Database): void 
   // Register a new key (rotation). Must be signed by an existing active key.
   app.post<{ Params: { name: string }; Body: z.infer<typeof addPubkeySchema> }>(
     '/api/v1/packages/:name/pubkeys',
+    {
+      schema: {
+        tags: ['pubkeys'],
+        summary: 'Add a new pubkey (rotation)',
+        description:
+          'Registers a new active pubkey on the package. Body must include the new `pubkey` (base64 Ed25519) and a `proof` — base64 Ed25519 signature over `rotationDigest("add", packageName, newPubkey)`, computed with any currently-active private key. Idempotent: re-registering the same pubkey returns the existing row. 401 PROOF_INVALID on signature mismatch; 400 PACKAGE_UNSIGNED if the package has no active keys (anonymous packages must re-publish to register a key).',
+      },
+    },
     async (request, reply) => {
       const { name } = request.params;
       const parsed = addPubkeySchema.safeParse(request.body);
@@ -145,7 +161,14 @@ export function registerPubkeysRoutes(app: FastifyInstance, db: Database): void 
   app.patch<{
     Params: { name: string; id: string };
     Body: z.infer<typeof revokePubkeySchema>;
-  }>('/api/v1/packages/:name/pubkeys/:id', async (request, reply) => {
+  }>('/api/v1/packages/:name/pubkeys/:id', {
+    schema: {
+      tags: ['pubkeys'],
+      summary: 'Revoke a pubkey',
+      description:
+        'Marks a pubkey as `revoked`. Body must include a `proof` — base64 Ed25519 signature over `rotationDigest("revoke", packageName, targetPubkey)` from any currently-active key (including the target, so a key can revoke itself when a successor exists). 409 LAST_ACTIVE_KEY when the target is the only active row — register a successor first. 409 ALREADY_REVOKED when the target is already revoked.',
+    },
+  }, async (request, reply) => {
     const { name, id } = request.params;
     const parsed = revokePubkeySchema.safeParse(request.body);
     if (!parsed.success) {

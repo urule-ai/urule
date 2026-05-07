@@ -74,7 +74,14 @@ export function registerPackageRoutes(app: FastifyInstance, db: Database) {
       limit?: string;
       offset?: string;
     };
-  }>('/api/v1/packages', async (request, reply) => {
+  }>('/api/v1/packages', {
+    schema: {
+      tags: ['packages'],
+      summary: 'Search / list packages',
+      description:
+        'Returns packages matching the query parameters with the latest non-yanked version manifest attached. Supports `?q=` text search, `?type=` exact match, `?verified=true` filter, and `?sort=popular|recent`. Public route — no auth required.',
+    },
+  }, async (request, reply) => {
     const parsed = searchQuerySchema.safeParse(request.query);
     if (!parsed.success) {
       return reply.code(400).send({ error: 'Validation failed', details: parsed.error.issues });
@@ -107,7 +114,14 @@ export function registerPackageRoutes(app: FastifyInstance, db: Database) {
       license?: string;
       tags?: string[];
     };
-  }>('/api/v1/packages', async (request, reply) => {
+  }>('/api/v1/packages', {
+    schema: {
+      tags: ['packages'],
+      summary: 'Register a new package',
+      description:
+        'Creates a package record. Optional `publisherPubkey` (base64 Ed25519) opts the package into mandatory signed-version publishes. License tier defaults to `free`; `paid` / `subscription` tiers must include `priceCents` + a `paymentLink` for the marketplace flow.',
+    },
+  }, async (request, reply) => {
     const parsed = publishPackageSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: 'Validation failed', details: parsed.error.issues });
@@ -160,7 +174,14 @@ export function registerPackageRoutes(app: FastifyInstance, db: Database) {
   });
 
   // Get package by name
-  app.get<{ Params: { name: string } }>('/api/v1/packages/:name', async (request, reply) => {
+  app.get<{ Params: { name: string } }>('/api/v1/packages/:name', {
+    schema: {
+      tags: ['packages'],
+      summary: 'Get package by name',
+      description:
+        'Returns the package row including signing metadata (`publisherPubkey`, `pubkeyKind`) and marketplace fields (`licenseTier`, `priceCents`, `paymentLink`). 404 when the name is unknown.',
+    },
+  }, async (request, reply) => {
     const { name } = request.params;
     const [pkg] = await db.select().from(packages).where(eq(packages.name, name));
 

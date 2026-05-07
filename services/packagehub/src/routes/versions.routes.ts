@@ -20,6 +20,14 @@ export function registerVersionRoutes(app: FastifyInstance, db: Database) {
   // List versions for a package
   app.get<{ Params: { name: string } }>(
     '/api/v1/packages/:name/versions',
+    {
+      schema: {
+        tags: ['versions'],
+        summary: 'List published versions',
+        description:
+          'Returns versions newest-first by `publishedAt`. Includes yanked versions; consumers should filter on `yanked: false` when picking the install target. 404 when the package name is unknown.',
+      },
+    },
     async (request, reply) => {
       const { name } = request.params;
 
@@ -48,7 +56,14 @@ export function registerVersionRoutes(app: FastifyInstance, db: Database) {
       readme?: string;
       checksum?: string;
     };
-  }>('/api/v1/packages/:name/versions', async (request, reply) => {
+  }>('/api/v1/packages/:name/versions', {
+    schema: {
+      tags: ['versions'],
+      summary: 'Publish a new version',
+      description:
+        'Creates a new version row. If the parent package was registered with a `publisherPubkey`, the request body MUST include a base64 Ed25519 `signature` over `sha256(canonicalJson(manifest) || readme || version)` — verified against any active key in `package_pubkeys`. 400 SIGNATURE_REQUIRED on missing sig, 401 SIGNATURE_INVALID on mismatch.',
+    },
+  }, async (request, reply) => {
     const parsed = publishVersionSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: 'Validation failed', details: parsed.error.issues });
@@ -132,6 +147,14 @@ export function registerVersionRoutes(app: FastifyInstance, db: Database) {
   // Get a specific version
   app.get<{ Params: { name: string; version: string } }>(
     '/api/v1/packages/:name/versions/:version',
+    {
+      schema: {
+        tags: ['versions'],
+        summary: 'Get a specific version',
+        description:
+          'Returns the version row including `manifest`, `readme`, `checksum`, `signature`, `signatureKind`, and `yanked` flag. 404 when either the package or the version is unknown.',
+      },
+    },
     async (request, reply) => {
       const { name, version } = request.params;
 
@@ -171,6 +194,14 @@ export function registerVersionRoutes(app: FastifyInstance, db: Database) {
   // about to install: they fetch the version, verify, then install.
   app.get<{ Params: { name: string; version: string } }>(
     '/api/v1/packages/:name/versions/:version/verify',
+    {
+      schema: {
+        tags: ['versions'],
+        summary: 'Verify a version signature',
+        description:
+          "Returns `{ verified, kind, publisher, reason? }`. `verified: true` means the version's signature matched any currently-active key on the package; `publisher` is the matching key's base64 representation. `verified: false` with `reason: 'unsigned'` is the back-compat path for legacy unsigned packages.",
+      },
+    },
     async (request, reply) => {
       const { name, version } = request.params;
 

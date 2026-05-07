@@ -80,16 +80,29 @@ export async function buildServer(config: Config) {
     ],
   });
 
-  // OpenAPI documentation
+  // OpenAPI documentation. Tag descriptions surface in swagger-ui as
+  // section headers; per-route tags / summaries / descriptions live in
+  // each route's `schema:` field.
   await app.register(swagger, {
     openapi: {
       info: {
         title: 'Urule PackageHub API',
-        description: 'Package discovery, search, and version management',
+        description:
+          'Package discovery, version publishing, marketplace entitlements, ' +
+          'cryptographic signing + key rotation, ratings, and dependency ' +
+          'resolution. See the per-tag sections below for endpoint details.',
         version: '0.1.0',
       },
       servers: [{ url: 'http://localhost:3009' }],
-      tags: [{ name: 'packages' }, { name: 'versions' }],
+      tags: [
+        { name: 'packages', description: 'Browse, publish, and look up packages.' },
+        { name: 'versions', description: 'Publish + verify cryptographically signed versions.' },
+        { name: 'pubkeys', description: 'Publisher pubkey rotation + revocation (proof-of-possession).' },
+        { name: 'entitlements', description: 'Marketplace entitlement check + grant for paid / subscription packages.' },
+        { name: 'reviews', description: 'Per-package ratings + reviews.' },
+        { name: 'dependencies', description: 'Read-only dependency-tree resolution for a published version.' },
+        { name: 'webhooks', description: 'Inbound payment-provider webhooks (Stripe).' },
+      ],
     },
   });
 

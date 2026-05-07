@@ -45,7 +45,14 @@ export function registerReviewRoutes(app: FastifyInstance, db: Database) {
   app.get<{
     Params: { name: string };
     Querystring: { limit?: string; offset?: string; reviewerId?: string };
-  }>('/api/v1/packages/:name/reviews', async (request, reply) => {
+  }>('/api/v1/packages/:name/reviews', {
+    schema: {
+      tags: ['reviews'],
+      summary: 'List reviews + aggregate rating',
+      description:
+        'Returns newest-first paginated reviews + a `summary: { averageRating, reviewCount }` aggregate. Optional `?reviewerId=` filter for the "my reviews" view. `?limit` capped at 100.',
+    },
+  }, async (request, reply) => {
     const parsed = listQuerySchema.safeParse(request.query);
     if (!parsed.success) {
       return reply.code(400).send({ error: 'Validation failed', details: parsed.error.issues });
@@ -105,7 +112,14 @@ export function registerReviewRoutes(app: FastifyInstance, db: Database) {
   app.post<{
     Params: { name: string };
     Body: z.infer<typeof createReviewSchema>;
-  }>('/api/v1/packages/:name/reviews', async (request, reply) => {
+  }>('/api/v1/packages/:name/reviews', {
+    schema: {
+      tags: ['reviews'],
+      summary: 'Submit a review',
+      description:
+        'Creates a review row. The body\'s `reviewerId` must match the authenticated user (anti-impersonation): 401 UNAUTHENTICATED, 403 REVIEWER_MISMATCH. UNIQUE(package_id, reviewer_id) at the DB blocks duplicates — 409 REVIEW_EXISTS tells the caller to PATCH the existing row instead. Title 1-200 chars; body up to 10K; rating 1-5.',
+    },
+  }, async (request, reply) => {
     const parsed = createReviewSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: 'Validation failed', details: parsed.error.issues });
@@ -168,7 +182,14 @@ export function registerReviewRoutes(app: FastifyInstance, db: Database) {
   app.patch<{
     Params: { name: string; reviewId: string };
     Body: z.infer<typeof updateReviewSchema>;
-  }>('/api/v1/packages/:name/reviews/:reviewId', async (request, reply) => {
+  }>('/api/v1/packages/:name/reviews/:reviewId', {
+    schema: {
+      tags: ['reviews'],
+      summary: 'Edit your own review',
+      description:
+        'Partial update of a review you authored. The handler loads the existing row first and 403 NOT_REVIEW_OWNER if the authenticated user differs from `row.reviewerId`. Distinguishes 403 from 404 so callers know whether the review exists at all.',
+    },
+  }, async (request, reply) => {
     const parsed = updateReviewSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: 'Validation failed', details: parsed.error.issues });
@@ -227,6 +248,14 @@ export function registerReviewRoutes(app: FastifyInstance, db: Database) {
    */
   app.delete<{ Params: { name: string; reviewId: string } }>(
     '/api/v1/packages/:name/reviews/:reviewId',
+    {
+      schema: {
+        tags: ['reviews'],
+        summary: 'Delete your own review',
+        description:
+          'Same ownership semantics as PATCH — 403 NOT_REVIEW_OWNER if the row exists but the authenticated user did not write it. 204 on successful delete.',
+      },
+    },
     async (request, reply) => {
       const user = getUser(request);
       if (!user) {
