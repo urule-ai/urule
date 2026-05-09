@@ -50,6 +50,20 @@ jobs:
         env:
           NEXT_TELEMETRY_DISABLED: '1'
 
+      - name: Inspect standalone output layout
+        working-directory: apps/office-ui
+        run: |
+          echo "--- top of .next/standalone ---"
+          ls -la .next/standalone || true
+          echo "--- find server.js ---"
+          find .next/standalone -maxdepth 5 -name 'server.js' || true
+          echo "--- find .next dirs ---"
+          find .next/standalone -maxdepth 5 -type d -name '.next' || true
+          echo "--- find node_modules dirs ---"
+          find .next/standalone -maxdepth 3 -type d -name 'node_modules' || true
+          echo "--- find apps subtree ---"
+          find .next/standalone -maxdepth 3 -type d -name 'apps' -o -name 'office-ui' || true
+
       # `output: "standalone"` is required for the production Docker image, but
       # `next start` is a no-op under that mode. Launch the standalone server
       # directly. The bundle excludes `.next/static` and `public/`, so they
@@ -57,11 +71,15 @@ jobs:
       - name: Start production server
         working-directory: apps/office-ui
         run: |
-          cp -r .next/static .next/standalone/.next/static
-          # public/ is empty in this repo (git doesn't track empty dirs, so it
-          # is absent in CI checkouts); skip cleanly if it doesn't exist.
-          if [ -d public ]; then cp -r public .next/standalone/public; fi
-          node .next/standalone/server.js &
+          set -x
+          # Create parent dirs proactively in case the standalone layout omits them
+          SERVER_JS=$(find .next/standalone -maxdepth 5 -name 'server.js' | head -1)
+          SERVER_DIR=$(dirname "$SERVER_JS")
+          echo "server.js found at: $SERVER_JS (dir: $SERVER_DIR)"
+          mkdir -p "$SERVER_DIR/.next"
+          cp -r .next/static "$SERVER_DIR/.next/static"
+          if [ -d public ]; then cp -r public "$SERVER_DIR/public"; fi
+          node "$SERVER_JS" &
         env:
           PORT: 3000
           HOSTNAME: 0.0.0.0
