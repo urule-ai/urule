@@ -1,7 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
 import Fastify from 'fastify';
+import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
 import { authMiddleware } from '@urule/auth-middleware';
 import { registerConversationRoutes } from '../../src/routes/conversations.routes.js';
+import { errorHandler } from '../../src/middleware/error-handler.js';
 
 /* ------------------------------------------------------------------ *
  * Mock Drizzle db. The branch route does these reads/writes:
@@ -80,7 +82,10 @@ function makeMockDb(behavior: Behavior = {}) {
 
 async function buildApp(behavior: Behavior = {}) {
   const app = Fastify({ logger: false });
+  app.setValidatorCompiler(validatorCompiler);
+  app.setSerializerCompiler(serializerCompiler);
   await app.register(authMiddleware, { skipAuth: true });
+  app.setErrorHandler(errorHandler);
   registerConversationRoutes(app, makeMockDb(behavior) as never);
   return app;
 }
@@ -256,7 +261,10 @@ describe('GET /api/v1/conversations/:id/branches', () => {
     // does 2 selects (idx 0 + idx 1). Re-wire for this test using the
     // simpler shape: parent at idx 0, children at idx 1.
     const app2 = Fastify({ logger: false });
+    app2.setValidatorCompiler(validatorCompiler);
+    app2.setSerializerCompiler(serializerCompiler);
     await app2.register(authMiddleware, { skipAuth: true });
+    app2.setErrorHandler(errorHandler);
     let i = 0;
     const db = {
       select: vi.fn(() => ({

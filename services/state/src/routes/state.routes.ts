@@ -48,11 +48,49 @@ const assignTaskSchema = z.object({
 
 const putWidgetStateSchema = z.object({
   workspaceId: z.string(),
-  state: z.object({}).passthrough(),
+  state: z.object({}).loose(),
 });
 
 const patchWidgetStateSchema = z.object({
-  patch: z.object({}).passthrough(),
+  patch: z.object({}).loose(),
+});
+
+const typingPingSchema = z.object({
+  userId: z.string().min(1),
+  ttlMs: z.number().int().positive().max(60000).optional(),
+});
+
+// -- Param / Query schemas (reused across routes) ---------------------
+
+const roomIdParams = z.object({ roomId: z.string() });
+const roomUserIdParams = z.object({ roomId: z.string(), userId: z.string() });
+const taskIdParams = z.object({ taskId: z.string() });
+const instanceIdParams = z.object({ instanceId: z.string() });
+
+const listRoomsQuery = z.object({ workspaceId: z.string() });
+const listTasksQuery = z.object({
+  workspaceId: z.string().optional(),
+  assigneeId: z.string().optional(),
+  status: z.string().optional(),
+  roomId: z.string().optional(),
+});
+
+const updateRoomBody = z.object({
+  name: z.string().min(1).optional(),
+  type: z.enum(['office', 'meeting', 'private', 'public']).optional(),
+  description: z.string().optional(),
+  capacity: z.number().positive().optional(),
+});
+
+const updateTaskBody = z.object({
+  title: z.string().min(1).optional(),
+  description: z.string().optional(),
+  status: z.enum(['todo', 'in_progress', 'review', 'done', 'cancelled']).optional(),
+  priority: z.enum(['low', 'medium', 'high', 'urgent']).optional(),
+  assigneeId: z.string().optional(),
+  labels: z.array(z.string()).optional(),
+  dueDate: z.string().optional(),
+  roomId: z.string().optional(),
 });
 
 // -- Routes -----------------------------------------------------------
@@ -65,54 +103,44 @@ export interface StateRouteServices {
   typingManager: TypingManager;
 }
 
-const typingPingSchema = z.object({
-  userId: z.string().min(1),
-  ttlMs: z.number().int().positive().max(60000).optional(),
-});
-
 export function registerStateRoutes(app: FastifyInstance, services: StateRouteServices): void {
   const { roomManager, presenceManager, taskManager, widgetStateManager, typingManager } = services;
 
   // -- Rooms ---------------------------------------------------------
 
-  app.post('/api/v1/rooms', {
+  app.post<{ Body: z.infer<typeof createRoomSchema> }>('/api/v1/rooms', {
     schema: {
       tags: ['rooms'],
       summary: 'Create a room',
       description: 'Creates a collaboration room scoped to a workspace. The room is the unit presence + typing-indicator endpoints attach to.',
+      body: createRoomSchema,
     },
   }, async (req, reply) => {
-    const parsed = createRoomSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return reply.code(400).send({ error: 'Validation failed', details: parsed.error.issues });
-    }
-    const room = roomManager.createRoom(parsed.data);
+    const room = roomManager.createRoom(req.body);
     return reply.status(201).send(room);
   });
 
-  app.get('/api/v1/rooms', {
+  app.get<{ Querystring: z.infer<typeof listRoomsQuery> }>('/api/v1/rooms', {
     schema: {
       tags: ['rooms'],
       summary: 'List rooms in a workspace',
       description: 'Returns every room belonging to the given workspace. 400 when `?workspaceId=` is missing.',
+      querystring: listRoomsQuery,
     },
   }, async (req, reply) => {
-    const { workspaceId } = req.query as { workspaceId?: string };
-    if (!workspaceId) {
-      return reply.status(400).send({ error: 'Missing required query: workspaceId' });
-    }
-    const rooms = roomManager.listRooms(workspaceId);
+    const rooms = roomManager.listRooms(req.query.workspaceId);
     return reply.send(rooms);
   });
 
-  app.get('/api/v1/rooms/:roomId', {
+  app.get<{ Params: { roomId: string } }>('/api/v1/rooms/:roomId', {
     schema: {
       tags: ['rooms'],
       summary: 'Get a room by id',
       description: '404 when the id is unknown.',
+      params: roomIdParams,
     },
   }, async (req, reply) => {
-    const { roomId } = req.params as { roomId: string };
+    const { roomId } = req.params;
     const room = roomManager.getRoom(roomId);
     if (!room) {
       return reply.status(404).send({ error: 'Room not found' });
@@ -120,30 +148,36 @@ export function registerStateRoutes(app: FastifyInstance, services: StateRouteSe
     return reply.send(room);
   });
 
-  app.patch('/api/v1/rooms/:roomId', {
-    schema: {
-      tags: ['rooms'],
-      summary: 'Update a room',
-      description: 'Partial update of a room\'s metadata. 404 when the id is unknown.',
+  app.patch<{ Params: { roomId: string }; Body: z.infer<typeof updateRoomBody> }>(
+    '/api/v1/rooms/:roomId',
+    {
+      schema: {
+        tags: ['rooms'],
+        summary: 'Update a room',
+        description: 'Partial update of a room\'s metadata. 404 when the id is unknown.',
+        params: roomIdParams,
+        body: updateRoomBody,
+      },
     },
-  }, async (req, reply) => {
-    const { roomId } = req.params as { roomId: string };
-    const updates = req.body as Record<string, unknown>;
-    const room = roomManager.updateRoom(roomId, updates);
-    if (!room) {
-      return reply.status(404).send({ error: 'Room not found' });
-    }
-    return reply.send(room);
-  });
+    async (req, reply) => {
+      const { roomId } = req.params;
+      const room = roomManager.updateRoom(roomId, req.body as Record<string, unknown>);
+      if (!room) {
+        return reply.status(404).send({ error: 'Room not found' });
+      }
+      return reply.send(room);
+    },
+  );
 
-  app.delete('/api/v1/rooms/:roomId', {
+  app.delete<{ Params: { roomId: string } }>('/api/v1/rooms/:roomId', {
     schema: {
       tags: ['rooms'],
       summary: 'Delete a room',
       description: 'Hard-deletes the room. Cascades any in-memory presence + typing-indicator entries for the same room. 204 on success, 404 if the id is unknown.',
+      params: roomIdParams,
     },
   }, async (req, reply) => {
-    const { roomId } = req.params as { roomId: string };
+    const { roomId } = req.params;
     const deleted = roomManager.deleteRoom(roomId);
     if (!deleted) {
       return reply.status(404).send({ error: 'Room not found' });
@@ -153,60 +187,69 @@ export function registerStateRoutes(app: FastifyInstance, services: StateRouteSe
 
   // -- Presence ------------------------------------------------------
 
-  app.post('/api/v1/rooms/:roomId/presence', {
-    schema: {
-      tags: ['presence'],
-      summary: 'Join a room',
-      description: 'Adds a presence row for the user in this room. Body `{ userId, status, workspaceId }`. Idempotent — re-joining the same user updates their existing row instead of duplicating.',
+  app.post<{ Params: { roomId: string }; Body: z.infer<typeof joinPresenceSchema> }>(
+    '/api/v1/rooms/:roomId/presence',
+    {
+      schema: {
+        tags: ['presence'],
+        summary: 'Join a room',
+        description: 'Adds a presence row for the user in this room. Body `{ userId, status, workspaceId }`. Idempotent — re-joining the same user updates their existing row instead of duplicating.',
+        params: roomIdParams,
+        body: joinPresenceSchema,
+      },
     },
-  }, async (req, reply) => {
-    const { roomId } = req.params as { roomId: string };
-    const parsed = joinPresenceSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return reply.code(400).send({ error: 'Validation failed', details: parsed.error.issues });
-    }
-    const { userId, status, workspaceId } = parsed.data;
-    const presence = presenceManager.join(userId, roomId, workspaceId, status);
-    return reply.status(201).send(presence);
-  });
+    async (req, reply) => {
+      const { roomId } = req.params;
+      const { userId, status, workspaceId } = req.body;
+      const presence = presenceManager.join(userId, roomId, workspaceId, status);
+      return reply.status(201).send(presence);
+    },
+  );
 
-  app.get('/api/v1/rooms/:roomId/presence', {
+  app.get<{ Params: { roomId: string } }>('/api/v1/rooms/:roomId/presence', {
     schema: {
       tags: ['presence'],
       summary: 'List who is currently in a room',
       description: 'Returns the array of presence rows for the room — each entry includes userId, status (`active | idle | away`), and joinedAt. Empty list (200) when the room has no presence; not 404.',
+      params: roomIdParams,
     },
   }, async (req, reply) => {
-    const { roomId } = req.params as { roomId: string };
+    const { roomId } = req.params;
     const presences = presenceManager.getPresence(roomId);
     return reply.send(presences);
   });
 
-  app.delete('/api/v1/rooms/:roomId/presence/:userId', {
-    schema: {
-      tags: ['presence'],
-      summary: 'Leave a room',
-      description: 'Removes the user\'s presence from the room. 204 always — leaving a room you were never in is a no-op (intentional, makes the close-tab handler idempotent).',
+  app.delete<{ Params: { roomId: string; userId: string } }>(
+    '/api/v1/rooms/:roomId/presence/:userId',
+    {
+      schema: {
+        tags: ['presence'],
+        summary: 'Leave a room',
+        description: 'Removes the user\'s presence from the room. 204 always — leaving a room you were never in is a no-op (intentional, makes the close-tab handler idempotent).',
+        params: roomUserIdParams,
+      },
     },
-  }, async (req, reply) => {
-    const { roomId, userId } = req.params as { roomId: string; userId: string };
-    presenceManager.leave(userId, roomId);
-    return reply.status(204).send();
-  });
+    async (req, reply) => {
+      const { roomId, userId } = req.params;
+      presenceManager.leave(userId, roomId);
+      return reply.status(204).send();
+    },
+  );
 
-  app.patch('/api/v1/rooms/:roomId/presence/:userId', {
+  app.patch<{
+    Params: { roomId: string; userId: string };
+    Body: z.infer<typeof updatePresenceSchema>;
+  }>('/api/v1/rooms/:roomId/presence/:userId', {
     schema: {
       tags: ['presence'],
       summary: 'Update presence status',
       description: 'Switches the user\'s status in this room (e.g., `active` → `away`). 404 when the user has no presence in the room — pre-flight a POST first.',
+      params: roomUserIdParams,
+      body: updatePresenceSchema,
     },
   }, async (req, reply) => {
-    const { roomId, userId } = req.params as { roomId: string; userId: string };
-    const parsed = updatePresenceSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return reply.code(400).send({ error: 'Validation failed', details: parsed.error.issues });
-    }
-    const { status } = parsed.data;
+    const { roomId, userId } = req.params;
+    const { status } = req.body;
     const presence = presenceManager.updateStatus(userId, roomId, status);
     if (!presence) {
       return reply.status(404).send({ error: 'Presence not found' });
@@ -216,48 +259,42 @@ export function registerStateRoutes(app: FastifyInstance, services: StateRouteSe
 
   // -- Tasks ---------------------------------------------------------
 
-  app.post('/api/v1/tasks', {
+  app.post<{ Body: z.infer<typeof createTaskSchema> }>('/api/v1/tasks', {
     schema: {
       tags: ['tasks'],
       summary: 'Create a task',
       description: 'Creates a lightweight task record (workspace-scoped, optional room + assignee). Used by langgraph-adapter\'s `create_task` tool when an agent declares work it\'s starting on.',
+      body: createTaskSchema,
     },
   }, async (req, reply) => {
-    const parsed = createTaskSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return reply.code(400).send({ error: 'Validation failed', details: parsed.error.issues });
-    }
-    const task = taskManager.createTask(parsed.data);
+    const task = taskManager.createTask(req.body);
     return reply.status(201).send(task);
   });
 
-  app.get('/api/v1/tasks', {
+  app.get<{ Querystring: z.infer<typeof listTasksQuery> }>('/api/v1/tasks', {
     schema: {
       tags: ['tasks'],
       summary: 'List tasks (filterable)',
       description: 'Returns tasks; optional query filters `?workspaceId=`, `?assigneeId=`, `?status=`, `?roomId=`. With no query, returns every task globally — typically only useful for admin tools.',
+      querystring: listTasksQuery,
     },
   }, async (req, reply) => {
-    const query = req.query as {
-      workspaceId?: string;
-      assigneeId?: string;
-      status?: string;
-      roomId?: string;
-    };
+    const query = req.query;
     const tasks = taskManager.listTasks(
       Object.keys(query).length > 0 ? query as Parameters<typeof taskManager.listTasks>[0] : undefined,
     );
     return reply.send(tasks);
   });
 
-  app.get('/api/v1/tasks/:taskId', {
+  app.get<{ Params: { taskId: string } }>('/api/v1/tasks/:taskId', {
     schema: {
       tags: ['tasks'],
       summary: 'Get a task by id',
       description: '404 when the id is unknown.',
+      params: taskIdParams,
     },
   }, async (req, reply) => {
-    const { taskId } = req.params as { taskId: string };
+    const { taskId } = req.params;
     const task = taskManager.getTask(taskId);
     if (!task) {
       return reply.status(404).send({ error: 'Task not found' });
@@ -265,30 +302,36 @@ export function registerStateRoutes(app: FastifyInstance, services: StateRouteSe
     return reply.send(task);
   });
 
-  app.patch('/api/v1/tasks/:taskId', {
-    schema: {
-      tags: ['tasks'],
-      summary: 'Update a task',
-      description: 'Partial update — title, description, status, priority, etc. For ownership transfer use `/assign` instead. 404 when the id is unknown.',
+  app.patch<{ Params: { taskId: string }; Body: z.infer<typeof updateTaskBody> }>(
+    '/api/v1/tasks/:taskId',
+    {
+      schema: {
+        tags: ['tasks'],
+        summary: 'Update a task',
+        description: 'Partial update — title, description, status, priority, etc. For ownership transfer use `/assign` instead. 404 when the id is unknown.',
+        params: taskIdParams,
+        body: updateTaskBody,
+      },
     },
-  }, async (req, reply) => {
-    const { taskId } = req.params as { taskId: string };
-    const updates = req.body as Record<string, unknown>;
-    const task = taskManager.updateTask(taskId, updates);
-    if (!task) {
-      return reply.status(404).send({ error: 'Task not found' });
-    }
-    return reply.send(task);
-  });
+    async (req, reply) => {
+      const { taskId } = req.params;
+      const task = taskManager.updateTask(taskId, req.body as Record<string, unknown>);
+      if (!task) {
+        return reply.status(404).send({ error: 'Task not found' });
+      }
+      return reply.send(task);
+    },
+  );
 
-  app.delete('/api/v1/tasks/:taskId', {
+  app.delete<{ Params: { taskId: string } }>('/api/v1/tasks/:taskId', {
     schema: {
       tags: ['tasks'],
       summary: 'Delete a task',
       description: 'Hard-removes the task. Ownership history is dropped along with it. 204 on success, 404 if the id is unknown.',
+      params: taskIdParams,
     },
   }, async (req, reply) => {
-    const { taskId } = req.params as { taskId: string };
+    const { taskId } = req.params;
     const deleted = taskManager.deleteTask(taskId);
     if (!deleted) {
       return reply.status(404).send({ error: 'Task not found' });
@@ -296,34 +339,37 @@ export function registerStateRoutes(app: FastifyInstance, services: StateRouteSe
     return reply.status(204).send();
   });
 
-  app.post('/api/v1/tasks/:taskId/assign', {
-    schema: {
-      tags: ['tasks'],
-      summary: 'Transfer task ownership',
-      description: 'Assigns the task to a new owner (user or agent id). Records the previous owner + reason in the ownership-history log so `/owners` can show "alice → bob (hired specialist)" trails. 404 when the task id is unknown.',
+  app.post<{ Params: { taskId: string }; Body: z.infer<typeof assignTaskSchema> }>(
+    '/api/v1/tasks/:taskId/assign',
+    {
+      schema: {
+        tags: ['tasks'],
+        summary: 'Transfer task ownership',
+        description: 'Assigns the task to a new owner (user or agent id). Records the previous owner + reason in the ownership-history log so `/owners` can show "alice → bob (hired specialist)" trails. 404 when the task id is unknown.',
+        params: taskIdParams,
+        body: assignTaskSchema,
+      },
     },
-  }, async (req, reply) => {
-    const { taskId } = req.params as { taskId: string };
-    const parsed = assignTaskSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return reply.code(400).send({ error: 'Validation failed', details: parsed.error.issues });
-    }
-    const { assigneeId, reason } = parsed.data;
-    const transfer = taskManager.assignTask(taskId, assigneeId, reason);
-    if (!transfer) {
-      return reply.status(404).send({ error: 'Task not found' });
-    }
-    return reply.send(transfer);
-  });
+    async (req, reply) => {
+      const { taskId } = req.params;
+      const { assigneeId, reason } = req.body;
+      const transfer = taskManager.assignTask(taskId, assigneeId, reason);
+      if (!transfer) {
+        return reply.status(404).send({ error: 'Task not found' });
+      }
+      return reply.send(transfer);
+    },
+  );
 
-  app.get('/api/v1/tasks/:taskId/owners', {
+  app.get<{ Params: { taskId: string } }>('/api/v1/tasks/:taskId/owners', {
     schema: {
       tags: ['tasks'],
       summary: 'Read task ownership history',
       description: 'Returns the chronological log of `/assign` operations on this task — each entry has previousOwnerId, newOwnerId, reason, transferredAt. Useful for "who has worked on this" trails. 404 when the task id is unknown.',
+      params: taskIdParams,
     },
   }, async (req, reply) => {
-    const { taskId } = req.params as { taskId: string };
+    const { taskId } = req.params;
     const task = taskManager.getTask(taskId);
     if (!task) {
       return reply.status(404).send({ error: 'Task not found' });
@@ -334,14 +380,15 @@ export function registerStateRoutes(app: FastifyInstance, services: StateRouteSe
 
   // -- Widget State --------------------------------------------------
 
-  app.get('/api/v1/widget-state/:instanceId', {
+  app.get<{ Params: { instanceId: string } }>('/api/v1/widget-state/:instanceId', {
     schema: {
       tags: ['widgets'],
       summary: 'Read persisted widget configuration',
       description: 'Returns the persisted state object for a widget instance — what office-ui\'s `useWidgetConfig` hook hydrates from on mount. 404 when no state has been written for this instance yet (the hook treats 404 as "use defaults").',
+      params: instanceIdParams,
     },
   }, async (req, reply) => {
-    const { instanceId } = req.params as { instanceId: string };
+    const { instanceId } = req.params;
     const state = widgetStateManager.getState(instanceId);
     if (!state) {
       return reply.status(404).send({ error: 'Widget state not found' });
@@ -349,51 +396,56 @@ export function registerStateRoutes(app: FastifyInstance, services: StateRouteSe
     return reply.send(state);
   });
 
-  app.put('/api/v1/widget-state/:instanceId', {
-    schema: {
-      tags: ['widgets'],
-      summary: 'Replace widget configuration (creates if absent)',
-      description: 'Full overwrite of the widget instance state. Body `{ workspaceId, state }`. The first save from `useWidgetConfig` lands here (the hook upgrades a missing-row 404 from PATCH to PUT to lazily create the row).',
+  app.put<{ Params: { instanceId: string }; Body: z.infer<typeof putWidgetStateSchema> }>(
+    '/api/v1/widget-state/:instanceId',
+    {
+      schema: {
+        tags: ['widgets'],
+        summary: 'Replace widget configuration (creates if absent)',
+        description: 'Full overwrite of the widget instance state. Body `{ workspaceId, state }`. The first save from `useWidgetConfig` lands here (the hook upgrades a missing-row 404 from PATCH to PUT to lazily create the row).',
+        params: instanceIdParams,
+        body: putWidgetStateSchema,
+      },
     },
-  }, async (req, reply) => {
-    const { instanceId } = req.params as { instanceId: string };
-    const parsed = putWidgetStateSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return reply.code(400).send({ error: 'Validation failed', details: parsed.error.issues });
-    }
-    const { workspaceId, state } = parsed.data;
-    const widgetState = widgetStateManager.setState(instanceId, workspaceId, state);
-    return reply.send(widgetState);
-  });
-
-  app.patch('/api/v1/widget-state/:instanceId', {
-    schema: {
-      tags: ['widgets'],
-      summary: 'Partial-update widget configuration',
-      description: 'Body `{ patch }` — keys are merged into the existing state, values replace. The hot path for `useWidgetConfig`: settings-panel changes coalesce via the hook\'s 400ms debounce into one PATCH per pause. 404 when no state exists for the instance — the hook auto-falls-back to PUT.',
+    async (req, reply) => {
+      const { instanceId } = req.params;
+      const { workspaceId, state } = req.body;
+      const widgetState = widgetStateManager.setState(instanceId, workspaceId, state);
+      return reply.send(widgetState);
     },
-  }, async (req, reply) => {
-    const { instanceId } = req.params as { instanceId: string };
-    const parsed = patchWidgetStateSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return reply.code(400).send({ error: 'Validation failed', details: parsed.error.issues });
-    }
-    const { patch } = parsed.data;
-    const widgetState = widgetStateManager.patchState(instanceId, patch);
-    if (!widgetState) {
-      return reply.status(404).send({ error: 'Widget state not found' });
-    }
-    return reply.send(widgetState);
-  });
+  );
 
-  app.delete('/api/v1/widget-state/:instanceId', {
+  app.patch<{ Params: { instanceId: string }; Body: z.infer<typeof patchWidgetStateSchema> }>(
+    '/api/v1/widget-state/:instanceId',
+    {
+      schema: {
+        tags: ['widgets'],
+        summary: 'Partial-update widget configuration',
+        description: 'Body `{ patch }` — keys are merged into the existing state, values replace. The hot path for `useWidgetConfig`: settings-panel changes coalesce via the hook\'s 400ms debounce into one PATCH per pause. 404 when no state exists for the instance — the hook auto-falls-back to PUT.',
+        params: instanceIdParams,
+        body: patchWidgetStateSchema,
+      },
+    },
+    async (req, reply) => {
+      const { instanceId } = req.params;
+      const { patch } = req.body;
+      const widgetState = widgetStateManager.patchState(instanceId, patch);
+      if (!widgetState) {
+        return reply.status(404).send({ error: 'Widget state not found' });
+      }
+      return reply.send(widgetState);
+    },
+  );
+
+  app.delete<{ Params: { instanceId: string } }>('/api/v1/widget-state/:instanceId', {
     schema: {
       tags: ['widgets'],
       summary: 'Reset widget configuration',
       description: 'Hard-removes the persisted state. The widget falls back to its manifest defaults on the next load. 204 on success, 404 if no state exists.',
+      params: instanceIdParams,
     },
   }, async (req, reply) => {
-    const { instanceId } = req.params as { instanceId: string };
+    const { instanceId } = req.params;
     const deleted = widgetStateManager.deleteState(instanceId);
     if (!deleted) {
       return reply.status(404).send({ error: 'Widget state not found' });
@@ -407,45 +459,53 @@ export function registerStateRoutes(app: FastifyInstance, services: StateRouteSe
   // (default 6s). Polling /typing returns currently-active typers
   // with stale entries pruned as a side effect.
 
-  app.post('/api/v1/rooms/:roomId/typing', {
-    schema: {
-      tags: ['typing'],
-      summary: 'Ping "user is typing" (TTL-bounded)',
-      description: 'Records or refreshes a typing indicator for `userId` in this room. Body `{ userId, ttlMs? }` — default TTL 6s; clients ping every ~3s while the user is actively typing. Indicators auto-expire on read; no explicit cleanup needed.',
+  app.post<{ Params: { roomId: string }; Body: z.infer<typeof typingPingSchema> }>(
+    '/api/v1/rooms/:roomId/typing',
+    {
+      schema: {
+        tags: ['typing'],
+        summary: 'Ping "user is typing" (TTL-bounded)',
+        description: 'Records or refreshes a typing indicator for `userId` in this room. Body `{ userId, ttlMs? }` — default TTL 6s; clients ping every ~3s while the user is actively typing. Indicators auto-expire on read; no explicit cleanup needed.',
+        params: roomIdParams,
+        body: typingPingSchema,
+      },
     },
-  }, async (req, reply) => {
-    const { roomId } = req.params as { roomId: string };
-    const parsed = typingPingSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return reply.code(400).send({ error: 'Validation failed', details: parsed.error.issues });
-    }
-    const ping = typingManager.ping(parsed.data.userId, roomId, parsed.data.ttlMs);
-    return reply.status(201).send(ping);
-  });
+    async (req, reply) => {
+      const { roomId } = req.params;
+      const ping = typingManager.ping(req.body.userId, roomId, req.body.ttlMs);
+      return reply.status(201).send(ping);
+    },
+  );
 
-  app.get('/api/v1/rooms/:roomId/typing', {
+  app.get<{ Params: { roomId: string } }>('/api/v1/rooms/:roomId/typing', {
     schema: {
       tags: ['typing'],
       summary: 'List currently-typing users in a room',
       description: 'Returns active typing indicators (stale entries pruned as a side effect of the read). Empty array when no one is typing — no 404. Polled by the chat UI every ~2s.',
+      params: roomIdParams,
     },
   }, async (req, reply) => {
-    const { roomId } = req.params as { roomId: string };
+    const { roomId } = req.params;
     return reply.send(typingManager.listInRoom(roomId));
   });
 
-  app.delete('/api/v1/rooms/:roomId/typing/:userId', {
-    schema: {
-      tags: ['typing'],
-      summary: 'Clear a user\'s typing indicator',
-      description: 'Eagerly clears the indicator instead of waiting for TTL expiry. Used when the user submits the message — the server-side state catches up to "they\'re done" without consumers having to wait the full 6s.',
+  app.delete<{ Params: { roomId: string; userId: string } }>(
+    '/api/v1/rooms/:roomId/typing/:userId',
+    {
+      schema: {
+        tags: ['typing'],
+        summary: 'Clear a user\'s typing indicator',
+        description: 'Eagerly clears the indicator instead of waiting for TTL expiry. Used when the user submits the message — the server-side state catches up to "they\'re done" without consumers having to wait the full 6s.',
+        params: roomUserIdParams,
+      },
     },
-  }, async (req, reply) => {
-    const { roomId, userId } = req.params as { roomId: string; userId: string };
-    const cleared = typingManager.clear(userId, roomId);
-    if (!cleared) {
-      return reply.status(404).send({ error: 'No active typing indicator for this user/room' });
-    }
-    return reply.status(204).send();
-  });
+    async (req, reply) => {
+      const { roomId, userId } = req.params;
+      const cleared = typingManager.clear(userId, roomId);
+      if (!cleared) {
+        return reply.status(404).send({ error: 'No active typing indicator for this user/room' });
+      }
+      return reply.status(204).send();
+    },
+  );
 }

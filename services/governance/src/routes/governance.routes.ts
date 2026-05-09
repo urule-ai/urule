@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
+import { z } from "zod";
 import type { UruleUser } from "@urule/auth-middleware";
 import type { GovernanceService } from "../services/governance.js";
 import type { PolicyEngine } from "../services/policy-engine.js";
@@ -26,11 +27,36 @@ function getUser(request: FastifyRequest): UruleUser | null {
   return (request as FastifyRequest & { uruleUser: UruleUser | null }).uruleUser;
 }
 
+const subjectOrResourceSchema = z.object({
+  type: z.string(),
+  id: z.string(),
+  attributes: z.record(z.string(), z.unknown()).optional(),
+});
+
+const policyInputSchema = z.object({
+  action: z.string(),
+  resource: subjectOrResourceSchema,
+  subject: subjectOrResourceSchema,
+  context: z.record(z.string(), z.unknown()).optional(),
+});
+
+// `decide` and direct policy `evaluate` accept the same shape today; aliased
+// so future drift (e.g., decide-only fields) lands as a separate schema.
+const governanceRequestSchema = policyInputSchema;
+
+const authzCheckInputSchema = z.object({
+  user: z.string(),
+  relation: z.string(),
+  object: z.string(),
+});
+
+const authzBatchCheckInputSchema = z.array(authzCheckInputSchema);
+
 export async function governanceRoutes(
   app: FastifyInstance,
   deps: Dependencies,
 ): Promise<void> {
-  app.post<{ Body: GovernanceRequest }>(
+  app.post(
     "/api/v1/governance/decide",
     {
       schema: {
@@ -38,12 +64,13 @@ export async function governanceRoutes(
         summary: 'Combined policy + authz decision',
         description:
           'Returns `{ allowed, reason, policy, authz }` after consulting both OPA and OpenFGA. Either failure path is sufficient to deny — both must allow for the overall decision to allow. Every call emits a `governance-decision` audit event with the full input + decision.',
+        body: governanceRequestSchema,
       },
     },
     async (request, reply) => {
-      const decision = await deps.governance.decide(request.body);
+      const body = request.body as GovernanceRequest;
+      const decision = await deps.governance.decide(body);
 
-      const body = request.body;
       const user = getUser(request);
       const workspaceId = typeof body.context?.["workspaceId"] === "string"
         ? (body.context["workspaceId"] as string)
@@ -61,7 +88,7 @@ export async function governanceRoutes(
     },
   );
 
-  app.post<{ Body: PolicyInput }>(
+  app.post(
     "/api/v1/governance/policy/evaluate",
     {
       schema: {
@@ -69,12 +96,13 @@ export async function governanceRoutes(
         summary: 'Evaluate an OPA policy directly',
         description:
           'Bypass `decide()` and call OPA alone — useful for previewing how a new policy bundle would treat a given input without involving OpenFGA. Emits a `policy` audit event with the input + result. Most callers should use `/decide` instead, which handles both halves.',
+        body: policyInputSchema,
       },
     },
     async (request, reply) => {
-      const result = await deps.policy.evaluate(request.body);
+      const body = request.body as PolicyInput;
+      const result = await deps.policy.evaluate(body);
 
-      const body = request.body;
       const user = getUser(request);
       audit.configChanged(
         { id: user?.id ?? "system", username: user?.username ?? "system" },
@@ -89,7 +117,7 @@ export async function governanceRoutes(
     },
   );
 
-  app.post<{ Body: AuthzCheckInput }>(
+  app.post(
     "/api/v1/governance/authz/check",
     {
       schema: {
@@ -97,12 +125,13 @@ export async function governanceRoutes(
         summary: 'OpenFGA relationship check',
         description:
           'Asks OpenFGA whether `user` has `relation` on `object` (e.g., `user:alice`, `viewer`, `workspace:42`). Returns `{ allowed }`. Denials emit an `accessDenied` audit event so security teams can spot repeated probes; allows are not audited (would be too noisy).',
+        body: authzCheckInputSchema,
       },
     },
     async (request, reply) => {
-      const result = await deps.authz.check(request.body);
+      const body = request.body as AuthzCheckInput;
+      const result = await deps.authz.check(body);
 
-      const body = request.body;
       if (!result.allowed) {
         const [resourceType = "resource", resourceId = "unknown"] = body.object.split(":");
         audit.accessDenied(
@@ -119,7 +148,7 @@ export async function governanceRoutes(
     },
   );
 
-  app.post<{ Body: AuthzCheckInput[] }>(
+  app.post(
     "/api/v1/governance/authz/batch-check",
     {
       schema: {
@@ -127,10 +156,12 @@ export async function governanceRoutes(
         summary: 'Batched OpenFGA relationship checks',
         description:
           'Evaluates an array of `{ user, relation, object }` checks in one round-trip. Returns one boolean per input, in order. Useful for "filter this list to items the user can see" patterns where N tuples need to be checked at once. No audit events — too noisy at batch granularity; the caller is expected to log denials at its own layer.',
+        body: authzBatchCheckInputSchema,
       },
     },
     async (request, reply) => {
-      const results = await deps.authz.batchCheck(request.body);
+      const body = request.body as AuthzCheckInput[];
+      const results = await deps.authz.batchCheck(body);
       return reply.send(results);
     },
   );

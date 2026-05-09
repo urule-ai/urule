@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { z } from 'zod';
 import type { PackageManager } from '../services/package-manager.js';
 import type { EventBus } from '@urule/events';
 import { PACKAGE_TOPICS } from '@urule/events';
@@ -7,6 +8,9 @@ export interface InstallationRoutesOptions {
   /** Optional event bus — when set, /updates emits UPDATE_AVAILABLE per outdated installation. */
   eventBus?: EventBus;
 }
+
+const wsIdParamsSchema = z.object({ wsId: z.string() });
+const installIdParamsSchema = z.object({ installId: z.string() });
 
 export function registerInstallationRoutes(
   app: FastifyInstance,
@@ -21,6 +25,7 @@ export function registerInstallationRoutes(
       summary: 'List installations in a workspace',
       description:
         'Returns every package installed in the workspace with its current version, type, status, and config. Status is one of `pending | installing | installed | failed | removing` — UI typically filters to `installed`.',
+      params: wsIdParamsSchema,
     },
   }, async (request) => {
     const { wsId } = request.params;
@@ -43,6 +48,7 @@ export function registerInstallationRoutes(
       summary: 'Check for available updates',
       description:
         "Diffs each installation's version against the latest non-yanked version in packagehub. Returns `{ workspaceId, updates: [{ installationId, packageName, installedVersion, latestVersion }], count }`. Side effect: publishes one `urule.packages.update.available` NATS event per outdated row so office-ui's notification center can surface a real-time toast.",
+      params: wsIdParamsSchema,
     },
   }, async (request) => {
     const { wsId } = request.params;
@@ -76,6 +82,7 @@ export function registerInstallationRoutes(
       summary: 'Get installation status by id',
       description:
         'Returns the installation row for the given install id (the ULID returned from `/install`). Useful for polling status while a long-running install / upgrade is in flight. 404 when the installation is unknown.',
+      params: installIdParamsSchema,
     },
   }, async (request, reply) => {
     const { installId } = request.params;

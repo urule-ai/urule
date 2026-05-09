@@ -41,6 +41,12 @@ const updateProviderSchema = z.object({
   is_active: z.boolean().optional(),
 }).strict();
 
+const providerIdParamsSchema = z.object({ providerId: z.string() });
+
+const listProvidersQuerySchema = z.object({
+  workspaceId: z.string().optional(),
+});
+
 function maskApiKey(key: string): string {
   if (!key || key.length < 8) return '****';
   return key.slice(0, 5) + '...' + key.slice(-4);
@@ -65,11 +71,12 @@ function toUiProvider(row: Record<string, unknown>, mask = true) {
 
 export function registerProviderRoutes(app: FastifyInstance, db: Database) {
   // List providers (optionally filtered by workspaceId query param)
-  app.get<{ Querystring: { workspaceId?: string } }>('/api/v1/providers', {
+  app.get<{ Querystring: z.infer<typeof listProvidersQuerySchema> }>('/api/v1/providers', {
     schema: {
       tags: ['providers'],
       summary: 'List LLM providers',
       description: 'Returns providers with masked API keys (last 4 chars only). Optional `?workspaceId=` filter scopes to a single workspace; without the filter, returns every provider in the system.',
+      querystring: listProvidersQuerySchema,
     },
   }, async (request) => {
     const { workspaceId } = request.query;
@@ -81,19 +88,16 @@ export function registerProviderRoutes(app: FastifyInstance, db: Database) {
 
   // Create provider (accepts both snake_case and camelCase fields)
   app.post<{
-    Body: Record<string, unknown>;
+    Body: z.infer<typeof createProviderSchema>;
   }>('/api/v1/providers', {
     schema: {
       tags: ['providers'],
       summary: 'Register an LLM provider key',
       description: 'Body fields: `workspaceId`, `name`, `provider` (`anthropic | openai | gemini | …`), `modelName`, `apiKey`, optional `baseUrl` (for self-hosted), optional `isDefault`. Marking a provider as default unsets the previous default for the same workspace. Body accepts both snake_case and camelCase keys for back-compat.',
+      body: createProviderSchema,
     },
   }, async (request, reply) => {
-    const parsed = createProviderSchema.safeParse(request.body);
-    if (!parsed.success) {
-      return reply.code(400).send({ error: 'Validation failed', details: parsed.error.issues });
-    }
-    const b = parsed.data;
+    const b = request.body;
     let workspaceId = (b.workspaceId ?? b.workspace_id ?? '') as string;
     // Resolve to actual workspace if not provided
     if (!workspaceId || workspaceId === 'default') {
@@ -147,11 +151,12 @@ export function registerProviderRoutes(app: FastifyInstance, db: Database) {
   });
 
   // Get single provider (masked key)
-  app.get<{ Params: { providerId: string } }>('/api/v1/providers/:providerId', {
+  app.get<{ Params: z.infer<typeof providerIdParamsSchema> }>('/api/v1/providers/:providerId', {
     schema: {
       tags: ['providers'],
       summary: 'Get provider by id (masked)',
       description: 'Returns the provider row with the API key masked to its last 4 chars. For the unmasked key (used by adapter services to actually call the LLM), see `GET /:providerId/key`.',
+      params: providerIdParamsSchema,
     },
   }, async (request, reply) => {
     const { providerId } = request.params;
@@ -164,11 +169,12 @@ export function registerProviderRoutes(app: FastifyInstance, db: Database) {
   });
 
   // Get provider's real API key (internal use by adapter service)
-  app.get<{ Params: { providerId: string } }>('/api/v1/providers/:providerId/key', {
+  app.get<{ Params: z.infer<typeof providerIdParamsSchema> }>('/api/v1/providers/:providerId/key', {
     schema: {
       tags: ['providers'],
       summary: 'Get unmasked API key (internal)',
       description: 'Returns `{ apiKey, provider, modelName }` with the real API key. Internal-use endpoint called by langgraph-adapter (and future orchestrator adapters) when picking an LlmProvider impl. Never expose this from the office-ui — UI consumes the masked endpoint instead.',
+      params: providerIdParamsSchema,
     },
   }, async (request, reply) => {
     const { providerId } = request.params;
@@ -181,22 +187,20 @@ export function registerProviderRoutes(app: FastifyInstance, db: Database) {
   });
 
   // Update provider
-  app.patch<{ Params: { providerId: string }; Body: Record<string, unknown> }>(
+  app.patch<{ Params: z.infer<typeof providerIdParamsSchema>; Body: z.infer<typeof updateProviderSchema> }>(
     '/api/v1/providers/:providerId',
     {
       schema: {
         tags: ['providers'],
         summary: 'Update provider',
         description: 'Partial update of any provider field. Setting `isDefault: true` unsets the previous default for the same workspace. To rotate the API key, send the new value in `apiKey` — historical key is dropped.',
+        params: providerIdParamsSchema,
+        body: updateProviderSchema,
       },
     },
     async (request, reply) => {
-      const parsed = updateProviderSchema.safeParse(request.body);
-      if (!parsed.success) {
-        return reply.code(400).send({ error: 'Validation failed', details: parsed.error.issues });
-      }
       const { providerId } = request.params;
-      const b = parsed.data;
+      const b = request.body;
 
       // Map snake_case to camelCase for Drizzle
       const updates: Record<string, unknown> = { updatedAt: new Date() };
@@ -231,11 +235,12 @@ export function registerProviderRoutes(app: FastifyInstance, db: Database) {
   );
 
   // Delete provider
-  app.delete<{ Params: { providerId: string } }>('/api/v1/providers/:providerId', {
+  app.delete<{ Params: z.infer<typeof providerIdParamsSchema> }>('/api/v1/providers/:providerId', {
     schema: {
       tags: ['providers'],
       summary: 'Delete a provider',
       description: 'Hard-removes the provider record. Agents configured with this `provider_id` will fall back to the workspace default on their next chat. 204 on success, 404 PROVIDER_NOT_FOUND when the id is unknown.',
+      params: providerIdParamsSchema,
     },
   }, async (request, reply) => {
     const { providerId } = request.params;

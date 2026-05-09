@@ -1,4 +1,5 @@
 import type { FastifyError, FastifyReply, FastifyRequest } from "fastify";
+import { hasZodFastifySchemaValidationErrors } from "fastify-type-provider-zod";
 import { redactSecrets } from "@urule/events";
 
 export function errorHandler(
@@ -6,6 +7,16 @@ export function errorHandler(
   request: FastifyRequest,
   reply: FastifyReply,
 ): void {
+  // Zod request-validation failures get the historical `{ error: 'Validation
+  // failed', details }` envelope — keeps the type-provider'd response shape
+  // identical to the pre-migration `safeParse()` path.
+  if (hasZodFastifySchemaValidationErrors(error)) {
+    return reply.code(400).send({
+      error: 'Validation failed',
+      details: error.validation,
+    }) as unknown as void;
+  }
+
   request.log.error(
     {
       err: {

@@ -8,11 +8,15 @@ const installPackageSchema = z.object({
   workspaceId: z.string(),
   packageName: z.string().min(1),
   version: z.string().optional(),
-  source: z.object({}).passthrough().optional(),
+  source: z.object({}).loose().optional(),
 });
 
 const upgradePackageSchema = z.object({
   version: z.string().optional(),
+});
+
+const installIdParamsSchema = z.object({
+  installId: z.string(),
 });
 
 export function registerPackageRoutes(app: FastifyInstance, manager: PackageManager): void {
@@ -24,16 +28,11 @@ export function registerPackageRoutes(app: FastifyInstance, manager: PackageMana
       summary: 'Install a package into a workspace',
       description:
         'Resolves the manifest from packagehub (or a GitHub URL / local path via `source`), runs the dependency resolver against currently-installed packages, and creates an installation row. Consults packagehub\'s entitlement endpoint first — paid / subscription packages 402 ENTITLEMENT_REQUIRED with a `paymentLink` in the body if the workspace has no row. 409 on dependency conflicts.',
+      body: installPackageSchema,
     },
   }, async (request, reply) => {
-    const parsed = installPackageSchema.safeParse(request.body);
-    if (!parsed.success) {
-      return reply.code(400).send({ error: 'Validation failed', details: parsed.error.issues });
-    }
-    const body = parsed.data as PackageInstallRequest;
-
     try {
-      const installation = await manager.install(body);
+      const installation = await manager.install(request.body);
       return reply.status(201).send(installation);
     } catch (err) {
       if (err instanceof EntitlementRequiredError) {
@@ -56,6 +55,7 @@ export function registerPackageRoutes(app: FastifyInstance, manager: PackageMana
         summary: 'Roll back to the previous version',
         description:
           "Walks the version-history stack, pops the top entry, and reverts the installation to the prior version. Each `install` and `upgrade` pushes a new history row; rollback can be called repeatedly until the stack is exhausted. 404 NO_HISTORY when the install has only one history row (you can't roll back past the initial install). Survives service restart — history persists in postgres.",
+        params: installIdParamsSchema,
       },
     },
     async (request, reply) => {
@@ -85,14 +85,12 @@ export function registerPackageRoutes(app: FastifyInstance, manager: PackageMana
       summary: 'Upgrade an installation to a newer version',
       description:
         "Body `{ version? }` — when omitted, upgrades to packagehub's latest non-yanked version. Re-runs the dependency resolver against the new manifest. The previous version is pushed onto the history stack so subsequent `/rollback` calls reverse the upgrade. 409 on dependency conflicts; the installation is reverted to its pre-upgrade state on conflict.",
+      params: installIdParamsSchema,
+      body: upgradePackageSchema,
     },
   }, async (request, reply) => {
-    const parsed = upgradePackageSchema.safeParse(request.body ?? {});
-    if (!parsed.success) {
-      return reply.code(400).send({ error: 'Validation failed', details: parsed.error.issues });
-    }
     const { installId } = request.params;
-    const { version } = parsed.data;
+    const { version } = request.body ?? {};
 
     try {
       const installation = await manager.upgrade(installId, version);
@@ -114,6 +112,7 @@ export function registerPackageRoutes(app: FastifyInstance, manager: PackageMana
       summary: 'Uninstall a package from a workspace',
       description:
         'Hard-removes the installation + cascades the version-history rows. 204 on success, 404 when the installation id is unknown. Does NOT consult packagehub or revoke entitlements — uninstalling a paid package leaves the workspace\'s entitlement intact for a future re-install.',
+      params: installIdParamsSchema,
     },
   }, async (request, reply) => {
     const { installId } = request.params;

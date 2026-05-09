@@ -44,19 +44,17 @@ export function registerReviewRoutes(app: FastifyInstance, db: Database) {
    */
   app.get<{
     Params: { name: string };
-    Querystring: { limit?: string; offset?: string; reviewerId?: string };
+    Querystring: z.infer<typeof listQuerySchema>;
   }>('/api/v1/packages/:name/reviews', {
     schema: {
       tags: ['reviews'],
       summary: 'List reviews + aggregate rating',
       description:
         'Returns newest-first paginated reviews + a `summary: { averageRating, reviewCount }` aggregate. Optional `?reviewerId=` filter for the "my reviews" view. `?limit` capped at 100.',
+      params: z.object({ name: z.string() }),
+      querystring: listQuerySchema,
     },
   }, async (request, reply) => {
-    const parsed = listQuerySchema.safeParse(request.query);
-    if (!parsed.success) {
-      return reply.code(400).send({ error: 'Validation failed', details: parsed.error.issues });
-    }
     const { name } = request.params;
 
     const [pkg] = await db.select().from(packages).where(eq(packages.name, name));
@@ -66,11 +64,11 @@ export function registerReviewRoutes(app: FastifyInstance, db: Database) {
       });
     }
 
-    const limit = Math.min(parsed.data.limit ?? 50, 100);
-    const offset = parsed.data.offset ?? 0;
+    const limit = Math.min(request.query.limit ?? 50, 100);
+    const offset = request.query.offset ?? 0;
     const filters = [eq(packageReviews.packageId, pkg.id)];
-    if (parsed.data.reviewerId) {
-      filters.push(eq(packageReviews.reviewerId, parsed.data.reviewerId));
+    if (request.query.reviewerId) {
+      filters.push(eq(packageReviews.reviewerId, request.query.reviewerId));
     }
 
     const rows = await db
@@ -118,17 +116,15 @@ export function registerReviewRoutes(app: FastifyInstance, db: Database) {
       summary: 'Submit a review',
       description:
         'Creates a review row. The body\'s `reviewerId` must match the authenticated user (anti-impersonation): 401 UNAUTHENTICATED, 403 REVIEWER_MISMATCH. UNIQUE(package_id, reviewer_id) at the DB blocks duplicates — 409 REVIEW_EXISTS tells the caller to PATCH the existing row instead. Title 1-200 chars; body up to 10K; rating 1-5.',
+      params: z.object({ name: z.string() }),
+      body: createReviewSchema,
     },
   }, async (request, reply) => {
-    const parsed = createReviewSchema.safeParse(request.body);
-    if (!parsed.success) {
-      return reply.code(400).send({ error: 'Validation failed', details: parsed.error.issues });
-    }
     const user = getUser(request);
     if (!user) {
       return reply.code(401).send({ error: { code: 'UNAUTHENTICATED', message: 'Authentication required' } });
     }
-    if (parsed.data.reviewerId !== user.id) {
+    if (request.body.reviewerId !== user.id) {
       return reply.code(403).send({
         error: { code: 'REVIEWER_MISMATCH', message: 'reviewerId must match the authenticated user' },
       });
@@ -148,11 +144,11 @@ export function registerReviewRoutes(app: FastifyInstance, db: Database) {
       const [row] = await db.insert(packageReviews).values({
         id,
         packageId: pkg.id,
-        reviewerId: parsed.data.reviewerId,
-        rating: parsed.data.rating,
-        title: parsed.data.title,
-        body: parsed.data.body ?? '',
-        version: parsed.data.version ?? null,
+        reviewerId: request.body.reviewerId,
+        rating: request.body.rating,
+        title: request.body.title,
+        body: request.body.body ?? '',
+        version: request.body.version ?? null,
         createdAt: now,
         updatedAt: now,
       }).returning();
@@ -164,7 +160,7 @@ export function registerReviewRoutes(app: FastifyInstance, db: Database) {
         return reply.code(409).send({
           error: {
             code: 'REVIEW_EXISTS',
-            message: `Reviewer "${parsed.data.reviewerId}" already reviewed "${name}". Use PATCH to update.`,
+            message: `Reviewer "${request.body.reviewerId}" already reviewed "${name}". Use PATCH to update.`,
           },
         });
       }
@@ -188,12 +184,10 @@ export function registerReviewRoutes(app: FastifyInstance, db: Database) {
       summary: 'Edit your own review',
       description:
         'Partial update of a review you authored. The handler loads the existing row first and 403 NOT_REVIEW_OWNER if the authenticated user differs from `row.reviewerId`. Distinguishes 403 from 404 so callers know whether the review exists at all.',
+      params: z.object({ name: z.string(), reviewId: z.string() }),
+      body: updateReviewSchema,
     },
   }, async (request, reply) => {
-    const parsed = updateReviewSchema.safeParse(request.body);
-    if (!parsed.success) {
-      return reply.code(400).send({ error: 'Validation failed', details: parsed.error.issues });
-    }
     const user = getUser(request);
     if (!user) {
       return reply.code(401).send({ error: { code: 'UNAUTHENTICATED', message: 'Authentication required' } });
@@ -223,10 +217,10 @@ export function registerReviewRoutes(app: FastifyInstance, db: Database) {
     }
 
     const update: Record<string, unknown> = { updatedAt: new Date() };
-    if (parsed.data.rating !== undefined) update.rating = parsed.data.rating;
-    if (parsed.data.title !== undefined) update.title = parsed.data.title;
-    if (parsed.data.body !== undefined) update.body = parsed.data.body;
-    if (parsed.data.version !== undefined) update.version = parsed.data.version;
+    if (request.body.rating !== undefined) update.rating = request.body.rating;
+    if (request.body.title !== undefined) update.title = request.body.title;
+    if (request.body.body !== undefined) update.body = request.body.body;
+    if (request.body.version !== undefined) update.version = request.body.version;
 
     const [row] = await db
       .update(packageReviews)
@@ -254,6 +248,7 @@ export function registerReviewRoutes(app: FastifyInstance, db: Database) {
         summary: 'Delete your own review',
         description:
           'Same ownership semantics as PATCH — 403 NOT_REVIEW_OWNER if the row exists but the authenticated user did not write it. 204 on successful delete.',
+        params: z.object({ name: z.string(), reviewId: z.string() }),
       },
     },
     async (request, reply) => {

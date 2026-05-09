@@ -21,7 +21,7 @@ const querySchema = z.object({
 export function registerDependencyTreeRoutes(app: FastifyInstance, db: Database) {
   app.get<{
     Params: { name: string; version: string };
-    Querystring: { maxDepth?: string };
+    Querystring: z.infer<typeof querySchema>;
   }>(
     '/api/v1/packages/:name/versions/:version/dependency-tree',
     {
@@ -30,16 +30,14 @@ export function registerDependencyTreeRoutes(app: FastifyInstance, db: Database)
         summary: 'Resolve a version\'s dependency tree',
         description:
           'Walks `manifest.dependencies` recursively and returns a tree of `{ name, versionRange, resolvedVersion, dependencies, unresolved? }` nodes. Latest non-yanked version is picked at each step. Cycles, missing packages, no-published-versions, and depth-cap hits are surfaced via `unresolved: "cycle" | "missing" | "no_version" | "max_depth"` rather than failing the whole walk. `?maxDepth` defaults to 8, range 1-16.',
+        params: z.object({ name: z.string(), version: z.string() }),
+        querystring: querySchema,
       },
     },
     async (request, reply) => {
-      const parsed = querySchema.safeParse(request.query);
-      if (!parsed.success) {
-        return reply.code(400).send({ error: 'Validation failed', details: parsed.error.issues });
-      }
       const { name, version } = request.params;
       const tree = await buildDependencyTree(db, name, version, {
-        maxDepth: parsed.data.maxDepth,
+        maxDepth: request.query.maxDepth,
       });
       if (!tree) {
         return reply.code(404).send({

@@ -10,13 +10,21 @@ const createOrgSchema = z.object({
   slug: z.string().min(1).max(50).regex(/^[a-z0-9-]+$/),
 });
 
+const orgIdParamsSchema = z.object({ orgId: z.string() });
+
+const listOrgsQuerySchema = z.object({
+  limit: z.string().optional(),
+  offset: z.string().optional(),
+});
+
 export function registerOrgRoutes(app: FastifyInstance, db: Database) {
   // List orgs
-  app.get<{ Querystring: { limit?: string; offset?: string } }>('/api/v1/orgs', {
+  app.get<{ Querystring: z.infer<typeof listOrgsQuerySchema> }>('/api/v1/orgs', {
     schema: {
       tags: ['orgs'],
       summary: 'List orgs',
       description: '`?limit` capped at 100; `?offset` for pagination. Returns every org in the system — typically only useful for admin tools since each user typically belongs to a single org.',
+      querystring: listOrgsQuerySchema,
     },
   }, async (request) => {
     const limit = Math.min(parseInt(request.query.limit ?? '50', 10), 100);
@@ -25,18 +33,15 @@ export function registerOrgRoutes(app: FastifyInstance, db: Database) {
   });
 
   // Create org
-  app.post<{ Body: { name: string; slug: string } }>('/api/v1/orgs', {
+  app.post<{ Body: z.infer<typeof createOrgSchema> }>('/api/v1/orgs', {
     schema: {
       tags: ['orgs'],
       summary: 'Create an org',
       description: 'Body `{ name, slug }`. Slug must be unique across the system — if collision is a real risk in your deployment, prefix it with a tenant prefix at the caller. New orgs land in `status: active`.',
+      body: createOrgSchema,
     },
   }, async (request, reply) => {
-    const parsed = createOrgSchema.safeParse(request.body);
-    if (!parsed.success) {
-      return reply.code(400).send({ error: 'Validation failed', details: parsed.error.issues });
-    }
-    const { name, slug } = parsed.data;
+    const { name, slug } = request.body;
     const id = ulid();
     const now = new Date();
 
@@ -53,11 +58,12 @@ export function registerOrgRoutes(app: FastifyInstance, db: Database) {
   });
 
   // Get org by ID
-  app.get<{ Params: { orgId: string } }>('/api/v1/orgs/:orgId', {
+  app.get<{ Params: z.infer<typeof orgIdParamsSchema> }>('/api/v1/orgs/:orgId', {
     schema: {
       tags: ['orgs'],
       summary: 'Get an org by id',
       description: '404 ORG_NOT_FOUND when the id is unknown.',
+      params: orgIdParamsSchema,
     },
   }, async (request, reply) => {
     const { orgId } = request.params;

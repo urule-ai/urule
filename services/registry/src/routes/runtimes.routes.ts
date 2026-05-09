@@ -12,13 +12,17 @@ const createRuntimeSchema = z.object({
   capabilities: z.record(z.string(), z.unknown()).optional(),
 });
 
+const wsIdParamsSchema = z.object({ wsId: z.string() });
+const runtimeIdParamsSchema = z.object({ runtimeId: z.string() });
+
 export function registerRuntimeRoutes(app: FastifyInstance, db: Database) {
   // List runtimes for a workspace
-  app.get<{ Params: { wsId: string } }>('/api/v1/workspaces/:wsId/runtimes', {
+  app.get<{ Params: z.infer<typeof wsIdParamsSchema> }>('/api/v1/workspaces/:wsId/runtimes', {
     schema: {
       tags: ['runtimes'],
       summary: 'List runtimes registered to a workspace',
       description: 'Returns sandbox runtime registrations the workspace can dispatch agent runs to (Docker, Firecracker, etc.). Empty list when none registered — not 404.',
+      params: wsIdParamsSchema,
     },
   }, async (request) => {
     const { wsId } = request.params;
@@ -27,19 +31,16 @@ export function registerRuntimeRoutes(app: FastifyInstance, db: Database) {
 
   // Register runtime
   app.post<{
-    Body: { workspaceId: string; provider: string; profile: string; capabilities?: Record<string, unknown> };
+    Body: z.infer<typeof createRuntimeSchema>;
   }>('/api/v1/runtimes', {
     schema: {
       tags: ['runtimes'],
       summary: 'Register a sandbox runtime',
       description: 'Body `{ workspaceId, provider, profile, capabilities? }`. The runtime-broker picks from registered runtimes when allocating sandboxes for agent runs. New runtimes land in `status: available`.',
+      body: createRuntimeSchema,
     },
   }, async (request, reply) => {
-    const parsed = createRuntimeSchema.safeParse(request.body);
-    if (!parsed.success) {
-      return reply.code(400).send({ error: 'Validation failed', details: parsed.error.issues });
-    }
-    const { workspaceId, provider, profile, capabilities } = parsed.data;
+    const { workspaceId, provider, profile, capabilities } = request.body;
     const id = ulid();
     const now = new Date();
 
@@ -58,11 +59,12 @@ export function registerRuntimeRoutes(app: FastifyInstance, db: Database) {
   });
 
   // Get runtime by ID
-  app.get<{ Params: { runtimeId: string } }>('/api/v1/runtimes/:runtimeId', {
+  app.get<{ Params: z.infer<typeof runtimeIdParamsSchema> }>('/api/v1/runtimes/:runtimeId', {
     schema: {
       tags: ['runtimes'],
       summary: 'Get runtime by id',
       description: 'Returns the runtime row including its current status + capabilities. 404 RUNTIME_NOT_FOUND when the id is unknown.',
+      params: runtimeIdParamsSchema,
     },
   }, async (request, reply) => {
     const { runtimeId } = request.params;

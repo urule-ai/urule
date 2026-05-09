@@ -3,6 +3,13 @@ import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
+import {
+  hasZodFastifySchemaValidationErrors,
+  jsonSchemaTransform,
+  serializerCompiler,
+  validatorCompiler,
+  type ZodTypeProvider,
+} from 'fastify-type-provider-zod';
 import { authMiddleware } from '@urule/auth-middleware';
 import { correlationIdPlugin } from '@urule/correlation-id';
 import { metricsPlugin } from '@urule/observability';
@@ -28,6 +35,19 @@ export async function buildServer() {
         },
       },
     },
+  }).withTypeProvider<ZodTypeProvider>();
+
+  app.setValidatorCompiler(validatorCompiler);
+  app.setSerializerCompiler(serializerCompiler);
+
+  app.setErrorHandler((err, _req, reply) => {
+    if (hasZodFastifySchemaValidationErrors(err)) {
+      return reply.code(400).send({
+        error: 'Validation failed',
+        details: err.validation,
+      });
+    }
+    reply.send(err);
   });
 
   // Correlation ID — must be the first plugin so all other middleware logs carry it
@@ -73,6 +93,7 @@ export async function buildServer() {
         { name: 'typing', description: 'Short-lived "user is typing" indicators with TTL auto-expiry.' },
       ],
     },
+    transform: jsonSchemaTransform,
   });
 
   await app.register(swaggerUi, {

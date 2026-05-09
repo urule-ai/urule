@@ -3,6 +3,12 @@ import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
+import {
+  jsonSchemaTransform,
+  serializerCompiler,
+  validatorCompiler,
+  type ZodTypeProvider,
+} from "fastify-type-provider-zod";
 import type { Config } from "./config.js";
 import { authMiddleware } from "@urule/auth-middleware";
 import { correlationIdPlugin } from "@urule/correlation-id";
@@ -28,7 +34,10 @@ export async function buildServer(config: Config) {
         },
       },
     },
-  });
+  }).withTypeProvider<ZodTypeProvider>();
+
+  app.setValidatorCompiler(validatorCompiler);
+  app.setSerializerCompiler(serializerCompiler);
 
   app.setErrorHandler(errorHandler);
 
@@ -72,6 +81,7 @@ export async function buildServer(config: Config) {
         { name: 'authz', description: 'Direct OpenFGA relationship checks (single + batch).' },
       ],
     },
+    transform: jsonSchemaTransform,
   });
 
   await app.register(swaggerUi, {

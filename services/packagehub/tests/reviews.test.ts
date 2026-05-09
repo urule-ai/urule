@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import Fastify from 'fastify';
+import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
 import { authMiddleware } from '@urule/auth-middleware';
 import { registerReviewRoutes } from '../src/routes/reviews.routes.js';
 
@@ -93,6 +94,8 @@ function makeMockDb(behavior: Behavior = {}) {
 
 async function buildApp(behavior: Behavior = {}) {
   const app = Fastify({ logger: false });
+  app.setValidatorCompiler(validatorCompiler);
+  app.setSerializerCompiler(serializerCompiler);
   await app.register(authMiddleware, { skipAuth: true });
   registerReviewRoutes(app, makeMockDb(behavior) as never);
   return app;

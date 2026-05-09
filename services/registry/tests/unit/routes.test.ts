@@ -2,17 +2,22 @@ import { describe, it, expect } from 'vitest';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
+import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
 import { authMiddleware } from '@urule/auth-middleware';
 import { registerAuthRoutes } from '../../src/routes/auth.routes.js';
+import { errorHandler } from '../../src/middleware/error-handler.js';
 
 // We test auth routes and validation since they don't need a DB
 
 describe('registry routes', () => {
   async function buildTestApp() {
     const app = Fastify({ logger: false });
+    app.setValidatorCompiler(validatorCompiler);
+    app.setSerializerCompiler(serializerCompiler);
     await app.register(cors, { origin: true });
     await app.register(rateLimit, { max: 1000, timeWindow: '1 minute' });
     await app.register(authMiddleware, { skipAuth: true });
+    app.setErrorHandler(errorHandler);
     app.get('/healthz', async () => ({ status: 'ok' }));
     registerAuthRoutes(app);
     return app;
