@@ -70,8 +70,16 @@ jobs:
           PORT: 3000
           HOSTNAME: 0.0.0.0
 
+      - name: Probe server (diagnostic)
+        run: |
+          sleep 3
+          echo "--- curl http://127.0.0.1:3000/ ---"
+          curl -sv -o /dev/null -m 5 http://127.0.0.1:3000/ 2>&1 | head -20 || echo "(curl 127.0.0.1 failed)"
+          echo "--- curl http://localhost:3000/ ---"
+          curl -sv -o /dev/null -m 5 http://localhost:3000/ 2>&1 | head -20 || echo "(curl localhost failed)"
+
       - name: Wait for server
-        run: npx wait-on http://localhost:3000 --timeout 60000
+        run: npx wait-on http://127.0.0.1:3000 --timeout 60000
         working-directory: apps/office-ui
 
       - name: Dump server log (on failure)
