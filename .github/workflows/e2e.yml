@@ -70,16 +70,12 @@ jobs:
           PORT: 3000
           HOSTNAME: 0.0.0.0
 
-      - name: Probe server (diagnostic)
-        run: |
-          sleep 3
-          echo "--- curl http://127.0.0.1:3000/ ---"
-          curl -sv -o /dev/null -m 5 http://127.0.0.1:3000/ 2>&1 | head -20 || echo "(curl 127.0.0.1 failed)"
-          echo "--- curl http://localhost:3000/ ---"
-          curl -sv -o /dev/null -m 5 http://localhost:3000/ 2>&1 | head -20 || echo "(curl localhost failed)"
-
+      # The server returns 307 on `/` (redirect to /login or /office), so a
+      # default wait-on HTTP probe (waits for 2xx) never resolves. A TCP probe
+      # is sufficient — we just need the listener up; Playwright will handle
+      # the actual page navigation and redirects.
       - name: Wait for server
-        run: npx wait-on http://127.0.0.1:3000 --timeout 60000
+        run: npx wait-on tcp:127.0.0.1:3000 --timeout 60000
         working-directory: apps/office-ui
 
       - name: Dump server log (on failure)
