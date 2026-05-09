@@ -60,7 +60,9 @@ jobs:
         working-directory: apps/office-ui
         run: |
           cp -r .next/static .next/standalone/.next/static
-          cp -r public .next/standalone/public
+          # public/ is empty in this repo (git doesn't track empty dirs, so it
+          # is absent in CI checkouts); skip cleanly if it doesn't exist.
+          if [ -d public ]; then cp -r public .next/standalone/public; fi
           node .next/standalone/server.js &
         env:
           PORT: 3000
