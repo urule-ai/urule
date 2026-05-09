@@ -50,6 +50,18 @@ jobs:
         env:
           NEXT_TELEMETRY_DISABLED: '1'
 
+      - name: Inspect standalone output layout
+        working-directory: apps/office-ui
+        run: |
+          echo "--- top of .next/standalone ---"
+          ls -la .next/standalone || true
+          echo "--- find server.js inside .next/standalone ---"
+          find .next/standalone -maxdepth 5 -name 'server.js' || true
+          echo "--- find any .next dirs inside standalone ---"
+          find .next/standalone -maxdepth 5 -type d -name '.next' || true
+          echo "--- contents of standalone/apps/office-ui (if it exists) ---"
+          ls -la .next/standalone/apps/office-ui 2>/dev/null || echo "(missing)"
+
       # `output: "standalone"` is required for the production Docker image, but
       # `next start` is a no-op under that mode. Launch the standalone server
       # directly. With `outputFileTracingRoot` set in next.config.mjs, the
