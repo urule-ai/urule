@@ -24,7 +24,7 @@ const createProviderSchema = z.object({
   base_url: z.string().optional(),
   isDefault: z.boolean().optional(),
   is_default: z.boolean().optional(),
-});
+}).superRefine(validateProviderApiKey);
 
 const updateProviderSchema = z.object({
   name: z.string().min(1).optional(),
@@ -40,6 +40,58 @@ const updateProviderSchema = z.object({
   isActive: z.boolean().optional(),
   is_active: z.boolean().optional(),
 }).strict();
+
+type ProviderApiKeyInput = {
+  provider?: string;
+  apiKey?: string;
+  api_key?: string;
+  baseUrl?: string;
+  base_url?: string;
+};
+
+const providerApiKeyPrefixes: Record<string, { prefix: string; label: string }> = {
+  anthropic: { prefix: 'sk-ant-', label: 'Anthropic' },
+  claude: { prefix: 'sk-ant-', label: 'Anthropic' },
+  openai: { prefix: 'sk-', label: 'OpenAI' },
+  gemini: { prefix: 'AIza', label: 'Gemini' },
+  google: { prefix: 'AIza', label: 'Google' },
+  openrouter: { prefix: 'sk-or-', label: 'OpenRouter' },
+};
+
+function validateProviderApiKey(data: ProviderApiKeyInput, ctx: z.RefinementCtx) {
+  const apiKey = data.apiKey ?? data.api_key;
+  const issue = getProviderApiKeyIssue({
+    provider: data.provider,
+    apiKey,
+    baseUrl: data.baseUrl ?? data.base_url,
+  });
+  if (!issue) return;
+
+  const path = data.apiKey !== undefined ? ['apiKey'] : ['api_key'];
+  ctx.addIssue({ code: 'custom', path, message: issue });
+}
+
+function getProviderApiKeyIssue({
+  provider,
+  apiKey,
+  baseUrl,
+}: {
+  provider?: string;
+  apiKey?: string;
+  baseUrl?: string;
+}): string | null {
+  if (apiKey === undefined || apiKey === '') return null;
+
+  if (apiKey !== apiKey.trim()) return 'API key must not include leading or trailing whitespace';
+  if (baseUrl?.trim()) return null;
+
+  const expected = providerApiKeyPrefixes[provider?.trim().toLowerCase() ?? ''];
+  if (expected && !apiKey.startsWith(expected.prefix)) {
+    return `${expected.label} API keys must start with "${expected.prefix}"`;
+  }
+
+  return null;
+}
 
 const providerIdParamsSchema = z.object({ providerId: z.string() });
 
@@ -211,6 +263,30 @@ export function registerProviderRoutes(app: FastifyInstance, db: Database) {
       if (b.baseUrl !== undefined || b.base_url !== undefined) updates.baseUrl = b.baseUrl ?? b.base_url;
       if (b.isDefault !== undefined || b.is_default !== undefined) updates.isDefault = b.isDefault ?? b.is_default;
       if (b.isActive !== undefined || b.is_active !== undefined) updates.isActive = b.isActive ?? b.is_active;
+
+      const needsApiKeyValidation =
+        updates.provider !== undefined ||
+        updates.apiKey !== undefined ||
+        updates.baseUrl !== undefined;
+      if (needsApiKeyValidation) {
+        const [existing] = await db.select().from(providers).where(eq(providers.id, providerId));
+        if (!existing) {
+          reply.status(404).send({ error: { code: 'PROVIDER_NOT_FOUND', message: `Provider ${providerId} not found` } });
+          return;
+        }
+
+        const issue = getProviderApiKeyIssue({
+          provider: (updates.provider as string | undefined) ?? existing.provider,
+          apiKey: (updates.apiKey as string | undefined) ?? existing.apiKey,
+          baseUrl: (updates.baseUrl as string | undefined) ?? existing.baseUrl,
+        });
+        if (issue) {
+          return reply.code(400).send({
+            error: 'Validation failed',
+            details: [{ code: 'custom', path: b.apiKey !== undefined ? ['apiKey'] : ['api_key'], message: issue }],
+          });
+        }
+      }
 
       const [row] = await db
         .update(providers)
