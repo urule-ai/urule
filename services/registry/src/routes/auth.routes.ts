@@ -28,20 +28,17 @@ export function registerAuthRoutes(app: FastifyInstance) {
    * Exchanges username+password for Keycloak OIDC tokens.
    */
   app.post<{
-    Body: { email: string; password: string };
+    Body: z.infer<typeof loginSchema>;
   }>('/auth/login', {
     schema: {
       tags: ['auth'],
       summary: 'Username/password login (proxies to Keycloak)',
       description:
         "Exchanges username+password for Keycloak OIDC tokens. Returns `{ access_token, refresh_token, expires_in }`. 400 on missing/invalid input; 401 on bad credentials; 502 when Keycloak is unreachable. Used by the office-ui login form and the demo flow.",
+      body: loginSchema,
     },
   }, async (request, reply) => {
-    const parsed = loginSchema.safeParse(request.body);
-    if (!parsed.success) {
-      return reply.code(400).send({ error: 'Validation failed', details: parsed.error.issues });
-    }
-    const { email, password } = parsed.data;
+    const { email, password } = request.body;
 
     try {
       const tokenUrl = `${keycloakUrl}/realms/${realm}/protocol/openid-connect/token`;

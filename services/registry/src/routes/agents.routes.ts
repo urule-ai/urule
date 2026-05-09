@@ -43,6 +43,15 @@ const updateAgentSchema = z.object({
   mcpBindings: z.array(z.unknown()).optional(),
 }).strict();
 
+const agentIdParamsSchema = z.object({ agentId: z.string() });
+const wsIdParamsSchema = z.object({ wsId: z.string() });
+const agentMemoryParamsSchema = z.object({ agentId: z.string(), memoryId: z.string() });
+
+const paginationQuerySchema = z.object({
+  limit: z.string().optional(),
+  offset: z.string().optional(),
+});
+
 /** Transform a Drizzle agent row into the shape the UI expects (snake_case + derived fields). */
 function toUiAgent(row: Record<string, unknown>, provider?: Record<string, unknown> | null) {
   const config = (row.config ?? {}) as Record<string, unknown>;
@@ -81,11 +90,12 @@ function toUiAgent(row: Record<string, unknown>, provider?: Record<string, unkno
 
 export function registerAgentRoutes(app: FastifyInstance, db: Database) {
   // List all agents (across all workspaces)
-  app.get<{ Querystring: { limit?: string; offset?: string } }>('/api/v1/agents', {
+  app.get<{ Querystring: z.infer<typeof paginationQuerySchema> }>('/api/v1/agents', {
     schema: {
       tags: ['agents'],
       summary: 'List all agents',
       description: 'Pagination via `?limit` (capped 100) + `?offset`. Each row is decorated with its associated provider record (joined on `agent.config.provider_id`). Admin-shaped — most callers should use `/workspaces/:wsId/agents` instead.',
+      querystring: paginationQuerySchema,
     },
   }, async (request) => {
     const limit = Math.min(parseInt(request.query.limit ?? '50', 10), 100);
@@ -104,11 +114,13 @@ export function registerAgentRoutes(app: FastifyInstance, db: Database) {
   });
 
   // List agents for a workspace
-  app.get<{ Params: { wsId: string }; Querystring: { limit?: string; offset?: string } }>('/api/v1/workspaces/:wsId/agents', {
+  app.get<{ Params: z.infer<typeof wsIdParamsSchema>; Querystring: z.infer<typeof paginationQuerySchema> }>('/api/v1/workspaces/:wsId/agents', {
     schema: {
       tags: ['agents'],
       summary: 'List agents in a workspace',
       description: 'Pagination via `?limit` (capped 100) + `?offset`. Empty array (200) when the workspace has no agents — not 404. The Office UI agent directory hits this directly.',
+      params: wsIdParamsSchema,
+      querystring: paginationQuerySchema,
     },
   }, async (request) => {
     const { wsId } = request.params;
@@ -120,20 +132,17 @@ export function registerAgentRoutes(app: FastifyInstance, db: Database) {
 
   // Register agent
   app.post<{
-    Body: { workspaceId?: string; name: string; description?: string; config?: Record<string, unknown> };
+    Body: z.infer<typeof createAgentSchema>;
   }>('/api/v1/agents', {
     schema: {
       tags: ['agents'],
       summary: 'Register an agent',
       description: 'Body `{ workspaceId, name, description?, config? }`. `config` carries the agent\'s personality + provider_id + system prompt; the langgraph-adapter chat path reads it on every turn. New agents land in `status: idle`.',
+      body: createAgentSchema,
     },
   }, async (request, reply) => {
-    const parsed = createAgentSchema.safeParse(request.body);
-    if (!parsed.success) {
-      return reply.code(400).send({ error: 'Validation failed', details: parsed.error.issues });
-    }
-    let { workspaceId } = parsed.data;
-    const { name, description, config } = parsed.data;
+    let { workspaceId } = request.body;
+    const { name, description, config } = request.body;
     // Resolve workspace if not provided
     if (!workspaceId || workspaceId === 'default') {
       const [ws] = await db.select().from(workspaces).limit(1);
@@ -166,11 +175,12 @@ export function registerAgentRoutes(app: FastifyInstance, db: Database) {
   });
 
   // Get agent by ID
-  app.get<{ Params: { agentId: string } }>('/api/v1/agents/:agentId', {
+  app.get<{ Params: z.infer<typeof agentIdParamsSchema> }>('/api/v1/agents/:agentId', {
     schema: {
       tags: ['agents'],
       summary: 'Get agent by id (with provider join)',
       description: 'Returns the agent row with its provider record joined in. 404 AGENT_NOT_FOUND when the id is unknown.',
+      params: agentIdParamsSchema,
     },
   }, async (request, reply) => {
     const { agentId } = request.params;
@@ -193,11 +203,12 @@ export function registerAgentRoutes(app: FastifyInstance, db: Database) {
   });
 
   // Agent metrics — derived from messages + conversation_agents on read.
-  app.get<{ Params: { agentId: string } }>('/api/v1/agents/:agentId/metrics', {
+  app.get<{ Params: z.infer<typeof agentIdParamsSchema> }>('/api/v1/agents/:agentId/metrics', {
     schema: {
       tags: ['agents'],
       summary: 'Agent activity metrics (real, derived)',
       description: 'Returns `{ messages_sent, messages_sent_24h, conversations_participated, last_active }`. Computed live from the messages + conversation_agents tables — the `messages_sender_id_idx` covers the aggregate. CPU/memory metrics return 0 deliberately (agents are logical actors, not OS processes).',
+      params: agentIdParamsSchema,
     },
   }, async (request, reply) => {
     const { agentId } = request.params;
@@ -239,11 +250,12 @@ export function registerAgentRoutes(app: FastifyInstance, db: Database) {
   });
 
   // Agent health — derived from last activity timestamp on messages.
-  app.get<{ Params: { agentId: string } }>('/api/v1/agents/:agentId/health', {
+  app.get<{ Params: z.infer<typeof agentIdParamsSchema> }>('/api/v1/agents/:agentId/health', {
     schema: {
       tags: ['agents'],
       summary: 'Agent health snapshot',
       description: 'Returns `{ status, lastActive, recentErrors, healthy }` — drives the agent-detail page\'s health badge. Healthy iff (a) agent\'s status is `active` or `idle`, (b) last activity within 24h, (c) no errors in the last 100 messages.',
+      params: agentIdParamsSchema,
     },
   }, async (request, reply) => {
     const { agentId } = request.params;
@@ -274,31 +286,35 @@ export function registerAgentRoutes(app: FastifyInstance, db: Database) {
   });
 
   // Agent conversations stub
-  app.get<{ Params: { agentId: string } }>('/api/v1/agents/:agentId/conversations', {
+  app.get<{ Params: z.infer<typeof agentIdParamsSchema> }>('/api/v1/agents/:agentId/conversations', {
     schema: {
       tags: ['agents'],
       summary: "Agent's conversations (stub)",
       description: "Stub returning `[]` today. Filtering /conversations by `?agentId=` is the proper wire-up; this endpoint exists so the office-ui agent-detail page doesn't 404.",
+      params: agentIdParamsSchema,
     },
   }, async () => []);
 
   // Agent logs stub
-  app.get<{ Params: { agentId: string } }>('/api/v1/agents/:agentId/logs', {
+  app.get<{ Params: z.infer<typeof agentIdParamsSchema> }>('/api/v1/agents/:agentId/logs', {
     schema: {
       tags: ['agents'],
       summary: "Agent's activity log (stub)",
       description: 'Stub returning `[]` today. Filtering /logs by `?actor_id=:agentId&actor_type=agent` is the canonical query; this endpoint is here for forward-compat.',
+      params: agentIdParamsSchema,
     },
   }, async () => []);
 
   // Agent memories — Drizzle-backed CRUD against the agent_memories table.
-  app.get<{ Params: { agentId: string }; Querystring: { limit?: string; offset?: string } }>(
+  app.get<{ Params: z.infer<typeof agentIdParamsSchema>; Querystring: z.infer<typeof paginationQuerySchema> }>(
     '/api/v1/agents/:agentId/memories',
     {
       schema: {
         tags: ['agents'],
         summary: "List agent memories",
         description: "Returns the agent's persistent memory rows newest-first. Pagination via `?limit` (capped 100) + `?offset`. Memories are scoped per-agent — different agents in the same workspace don't share memory.",
+        params: agentIdParamsSchema,
+        querystring: paginationQuerySchema,
       },
     },
     async (request) => {
@@ -316,20 +332,18 @@ export function registerAgentRoutes(app: FastifyInstance, db: Database) {
     },
   );
 
-  app.post<{ Params: { agentId: string }; Body: { content: string; kind?: string; tags?: string[] } }>(
+  app.post<{ Params: z.infer<typeof agentIdParamsSchema>; Body: z.infer<typeof memoryCreateSchema> }>(
     '/api/v1/agents/:agentId/memories',
     {
       schema: {
         tags: ['agents'],
         summary: 'Add an agent memory',
         description: 'Body `{ content, kind?, tags? }`. `kind` defaults to `note` (other values: `goal`, `fact`, `correction`). 404 AGENT_NOT_FOUND if the agent id is unknown.',
+        params: agentIdParamsSchema,
+        body: memoryCreateSchema,
       },
     },
     async (request, reply) => {
-      const parsed = memoryCreateSchema.safeParse(request.body);
-      if (!parsed.success) {
-        return reply.code(400).send({ error: 'Validation failed', details: parsed.error.issues });
-      }
       const { agentId } = request.params;
       const [agent] = await db.select({ id: agents.id }).from(agents).where(eq(agents.id, agentId));
       if (!agent) {
@@ -338,21 +352,22 @@ export function registerAgentRoutes(app: FastifyInstance, db: Database) {
       const [memory] = await db.insert(agentMemories).values({
         id: ulid(),
         agentId,
-        content: parsed.data.content,
-        kind: parsed.data.kind ?? 'note',
-        tags: parsed.data.tags ?? [],
+        content: request.body.content,
+        kind: request.body.kind ?? 'note',
+        tags: request.body.tags ?? [],
       }).returning();
       return reply.code(201).send(memory);
     },
   );
 
-  app.delete<{ Params: { agentId: string; memoryId: string } }>(
+  app.delete<{ Params: z.infer<typeof agentMemoryParamsSchema> }>(
     '/api/v1/agents/:agentId/memories/:memoryId',
     {
       schema: {
         tags: ['agents'],
         summary: 'Delete an agent memory',
         description: '204 on success, 404 MEMORY_NOT_FOUND if the id is unknown or belongs to a different agent.',
+        params: agentMemoryParamsSchema,
       },
     },
     async (request, reply) => {
@@ -369,22 +384,20 @@ export function registerAgentRoutes(app: FastifyInstance, db: Database) {
   );
 
   // Agent status update
-  app.post<{ Params: { agentId: string }; Body: { status: string } }>(
+  app.post<{ Params: z.infer<typeof agentIdParamsSchema>; Body: z.infer<typeof agentStatusSchema> }>(
     '/api/v1/agents/:agentId/status',
     {
       schema: {
         tags: ['agents'],
         summary: "Update agent status",
         description: "Body `{ status }` — `idle | active | thinking | offline | error`. Used by the chat path (langgraph-adapter flips the status to `thinking` on incoming user message, back to `idle` on completion). Emits an `entityUpdated` audit event on every change.",
+        params: agentIdParamsSchema,
+        body: agentStatusSchema,
       },
     },
     async (request, reply) => {
-      const parsed = agentStatusSchema.safeParse(request.body);
-      if (!parsed.success) {
-        return reply.code(400).send({ error: 'Validation failed', details: parsed.error.issues });
-      }
       const { agentId } = request.params;
-      const { status } = parsed.data;
+      const { status } = request.body;
       const [agent] = await db
         .update(agents)
         .set({ status, updatedAt: new Date() })
@@ -407,22 +420,20 @@ export function registerAgentRoutes(app: FastifyInstance, db: Database) {
   );
 
   // Update agent
-  app.patch<{ Params: { agentId: string }; Body: Record<string, unknown> }>(
+  app.patch<{ Params: z.infer<typeof agentIdParamsSchema>; Body: z.infer<typeof updateAgentSchema> }>(
     '/api/v1/agents/:agentId',
     {
       schema: {
         tags: ['agents'],
         summary: 'Update an agent',
         description: 'Partial update of any agent field — name, description, config (system prompt, provider_id, etc.). 404 AGENT_NOT_FOUND when the id is unknown.',
+        params: agentIdParamsSchema,
+        body: updateAgentSchema,
       },
     },
     async (request, reply) => {
-      const parsed = updateAgentSchema.safeParse(request.body);
-      if (!parsed.success) {
-        return reply.code(400).send({ error: 'Validation failed', details: parsed.error.issues });
-      }
       const { agentId } = request.params;
-      const updates = parsed.data;
+      const updates = request.body;
 
       const [agent] = await db
         .update(agents)

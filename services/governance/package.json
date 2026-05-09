@@ -21,8 +21,10 @@
     "@urule/events": "*",
     "@urule/observability": "*",
     "fastify": "^5.3.3",
+    "fastify-type-provider-zod": "^6.1.0",
     "nats": "^2.29.1",
-    "ulid": "^2.3.0"
+    "ulid": "^2.3.0",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@types/node": "^22.15.2",

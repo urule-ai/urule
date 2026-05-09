@@ -3,6 +3,13 @@ import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
+import {
+  hasZodFastifySchemaValidationErrors,
+  jsonSchemaTransform,
+  serializerCompiler,
+  validatorCompiler,
+  type ZodTypeProvider,
+} from 'fastify-type-provider-zod';
 import { authMiddleware } from '@urule/auth-middleware';
 import { correlationIdPlugin } from '@urule/correlation-id';
 import { EventBus } from '@urule/events';
@@ -32,6 +39,22 @@ export async function buildServer(config: Config) {
         },
       },
     },
+  }).withTypeProvider<ZodTypeProvider>();
+
+  app.setValidatorCompiler(validatorCompiler);
+  app.setSerializerCompiler(serializerCompiler);
+
+  // Map Zod validation failures back to the historical `{ error: 'Validation
+  // failed', details: issues }` shape so existing API consumers + tests don't
+  // see the type-provider's default Fastify error envelope.
+  app.setErrorHandler((err, _req, reply) => {
+    if (hasZodFastifySchemaValidationErrors(err)) {
+      return reply.code(400).send({
+        error: 'Validation failed',
+        details: err.validation,
+      });
+    }
+    reply.send(err);
   });
 
   // Correlation ID — must be the first plugin so all other middleware logs carry it
@@ -72,6 +95,7 @@ export async function buildServer(config: Config) {
         { name: 'installations', description: 'List installations + check for available updates.' },
       ],
     },
+    transform: jsonSchemaTransform,
   });
 
   await app.register(swaggerUi, {

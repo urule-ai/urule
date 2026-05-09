@@ -19,6 +19,9 @@ const updateWorkspaceSchema = z.object({
   status: z.string().optional(),
 }).strict();
 
+const orgIdParamsSchema = z.object({ orgId: z.string() });
+const wsIdParamsSchema = z.object({ wsId: z.string() });
+
 /** Transform Drizzle workspace row to UI-expected snake_case. */
 function toUiWorkspace(row: Record<string, unknown>) {
   return {
@@ -83,23 +86,20 @@ export function registerWorkspaceRoutes(app: FastifyInstance, db: Database) {
   });
 
   // Update current workspace (for settings page)
-  app.patch('/api/v1/workspaces/current', {
+  app.patch<{ Body: z.infer<typeof updateWorkspaceSchema> }>('/api/v1/workspaces/current', {
     schema: {
       tags: ['workspaces'],
       summary: 'Update the current workspace',
       description: 'Partial update — name, description, etc. Used by the office-ui settings page. Targets the same workspace that `GET /current` would return.',
+      body: updateWorkspaceSchema,
     },
   }, async (request, reply) => {
-    const parsed = updateWorkspaceSchema.safeParse(request.body);
-    if (!parsed.success) {
-      return reply.code(400).send({ error: 'Validation failed', details: parsed.error.issues });
-    }
     const rows = await db.select().from(workspaces).limit(1);
     if (rows.length === 0) {
       reply.status(404).send({ error: { code: 'NO_WORKSPACE', message: 'No workspace configured' } });
       return;
     }
-    const updates = parsed.data as Record<string, unknown>;
+    const updates = request.body as Record<string, unknown>;
     const [updated] = await db.update(workspaces)
       .set({ ...updates, updatedAt: new Date() })
       .where(eq(workspaces.id, rows[0]!.id))
@@ -120,11 +120,12 @@ export function registerWorkspaceRoutes(app: FastifyInstance, db: Database) {
   });
 
   // List workspaces for an org
-  app.get<{ Params: { orgId: string } }>('/api/v1/orgs/:orgId/workspaces', {
+  app.get<{ Params: z.infer<typeof orgIdParamsSchema> }>('/api/v1/orgs/:orgId/workspaces', {
     schema: {
       tags: ['workspaces'],
       summary: 'List workspaces in an org',
       description: 'Returns every workspace belonging to the given org. Empty array (200) when the org has no workspaces yet — not 404.',
+      params: orgIdParamsSchema,
     },
   }, async (request) => {
     const { orgId } = request.params;
@@ -133,21 +134,18 @@ export function registerWorkspaceRoutes(app: FastifyInstance, db: Database) {
   });
 
   // Create workspace
-  app.post<{ Body: { orgId: string; name: string; slug: string; description?: string } }>(
+  app.post<{ Body: z.infer<typeof createWorkspaceSchema> }>(
     '/api/v1/workspaces',
     {
       schema: {
         tags: ['workspaces'],
         summary: 'Create a workspace',
         description: 'Body `{ orgId, name, slug, description? }`. Slug must be unique within the org. New workspaces land in `status: active`.',
+        body: createWorkspaceSchema,
       },
     },
     async (request, reply) => {
-      const parsed = createWorkspaceSchema.safeParse(request.body);
-      if (!parsed.success) {
-        return reply.code(400).send({ error: 'Validation failed', details: parsed.error.issues });
-      }
-      const { orgId, name, slug, description } = parsed.data;
+      const { orgId, name, slug, description } = request.body;
       const id = ulid();
       const now = new Date();
 
@@ -167,11 +165,12 @@ export function registerWorkspaceRoutes(app: FastifyInstance, db: Database) {
   );
 
   // Get workspace by ID
-  app.get<{ Params: { wsId: string } }>('/api/v1/workspaces/:wsId', {
+  app.get<{ Params: z.infer<typeof wsIdParamsSchema> }>('/api/v1/workspaces/:wsId', {
     schema: {
       tags: ['workspaces'],
       summary: 'Get workspace by id',
       description: '404 WORKSPACE_NOT_FOUND when the id is unknown.',
+      params: wsIdParamsSchema,
     },
   }, async (request, reply) => {
     const { wsId } = request.params;

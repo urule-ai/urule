@@ -10,11 +10,14 @@ import { packagePubkeys } from '../db/schema/package-pubkeys.js';
 
 const publishVersionSchema = z.object({
   version: z.string().regex(/^\d+\.\d+\.\d+/),
-  manifest: z.object({}).passthrough(),
+  manifest: z.object({}).loose(),
   readme: z.string().optional(),
   checksum: z.string().optional(),
   signature: z.string().optional(),
 });
+
+const nameParamsSchema = z.object({ name: z.string() });
+const nameVersionParamsSchema = z.object({ name: z.string(), version: z.string() });
 
 export function registerVersionRoutes(app: FastifyInstance, db: Database) {
   // List versions for a package
@@ -26,6 +29,7 @@ export function registerVersionRoutes(app: FastifyInstance, db: Database) {
         summary: 'List published versions',
         description:
           'Returns versions newest-first by `publishedAt`. Includes yanked versions; consumers should filter on `yanked: false` when picking the install target. 404 when the package name is unknown.',
+        params: nameParamsSchema,
       },
     },
     async (request, reply) => {
@@ -50,26 +54,19 @@ export function registerVersionRoutes(app: FastifyInstance, db: Database) {
   // Publish a new version
   app.post<{
     Params: { name: string };
-    Body: {
-      version: string;
-      manifest: Record<string, unknown>;
-      readme?: string;
-      checksum?: string;
-    };
+    Body: z.infer<typeof publishVersionSchema>;
   }>('/api/v1/packages/:name/versions', {
     schema: {
       tags: ['versions'],
       summary: 'Publish a new version',
       description:
         'Creates a new version row. If the parent package was registered with a `publisherPubkey`, the request body MUST include a base64 Ed25519 `signature` over `sha256(canonicalJson(manifest) || readme || version)` — verified against any active key in `package_pubkeys`. 400 SIGNATURE_REQUIRED on missing sig, 401 SIGNATURE_INVALID on mismatch.',
+      params: nameParamsSchema,
+      body: publishVersionSchema,
     },
   }, async (request, reply) => {
-    const parsed = publishVersionSchema.safeParse(request.body);
-    if (!parsed.success) {
-      return reply.code(400).send({ error: 'Validation failed', details: parsed.error.issues });
-    }
     const { name } = request.params;
-    const { version, manifest, readme, checksum, signature } = parsed.data;
+    const { version, manifest, readme, checksum, signature } = request.body;
 
     const [pkg] = await db.select().from(packages).where(eq(packages.name, name));
     if (!pkg) {
@@ -153,6 +150,7 @@ export function registerVersionRoutes(app: FastifyInstance, db: Database) {
         summary: 'Get a specific version',
         description:
           'Returns the version row including `manifest`, `readme`, `checksum`, `signature`, `signatureKind`, and `yanked` flag. 404 when either the package or the version is unknown.',
+        params: nameVersionParamsSchema,
       },
     },
     async (request, reply) => {
@@ -200,6 +198,7 @@ export function registerVersionRoutes(app: FastifyInstance, db: Database) {
         summary: 'Verify a version signature',
         description:
           "Returns `{ verified, kind, publisher, reason? }`. `verified: true` means the version's signature matched any currently-active key on the package; `publisher` is the matching key's base64 representation. `verified: false` with `reason: 'unsigned'` is the back-compat path for legacy unsigned packages.",
+        params: nameVersionParamsSchema,
       },
     },
     async (request, reply) => {

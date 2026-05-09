@@ -53,6 +53,7 @@ export function registerPubkeysRoutes(app: FastifyInstance, db: Database): void 
         summary: 'List publisher pubkeys + rotation history',
         description:
           'Returns every pubkey ever registered for the package — both `active` and `revoked`. Useful for transparency / audit; consumers verifying a signature should use `/verify` instead since it walks active keys server-side.',
+        params: z.object({ name: z.string() }),
       },
     },
     async (request, reply) => {
@@ -80,15 +81,13 @@ export function registerPubkeysRoutes(app: FastifyInstance, db: Database): void 
         summary: 'Add a new pubkey (rotation)',
         description:
           'Registers a new active pubkey on the package. Body must include the new `pubkey` (base64 Ed25519) and a `proof` — base64 Ed25519 signature over `rotationDigest("add", packageName, newPubkey)`, computed with any currently-active private key. Idempotent: re-registering the same pubkey returns the existing row. 401 PROOF_INVALID on signature mismatch; 400 PACKAGE_UNSIGNED if the package has no active keys (anonymous packages must re-publish to register a key).',
+        params: z.object({ name: z.string() }),
+        body: addPubkeySchema,
       },
     },
     async (request, reply) => {
       const { name } = request.params;
-      const parsed = addPubkeySchema.safeParse(request.body);
-      if (!parsed.success) {
-        return reply.code(400).send({ error: 'Validation failed', details: parsed.error.issues });
-      }
-      const { pubkey, pubkeyKind = 'ed25519', proof } = parsed.data;
+      const { pubkey, pubkeyKind = 'ed25519', proof } = request.body;
 
       const [pkg] = await db.select().from(packages).where(eq(packages.name, name));
       if (!pkg) {
@@ -167,14 +166,12 @@ export function registerPubkeysRoutes(app: FastifyInstance, db: Database): void 
       summary: 'Revoke a pubkey',
       description:
         'Marks a pubkey as `revoked`. Body must include a `proof` — base64 Ed25519 signature over `rotationDigest("revoke", packageName, targetPubkey)` from any currently-active key (including the target, so a key can revoke itself when a successor exists). 409 LAST_ACTIVE_KEY when the target is the only active row — register a successor first. 409 ALREADY_REVOKED when the target is already revoked.',
+      params: z.object({ name: z.string(), id: z.string() }),
+      body: revokePubkeySchema,
     },
   }, async (request, reply) => {
     const { name, id } = request.params;
-    const parsed = revokePubkeySchema.safeParse(request.body);
-    if (!parsed.success) {
-      return reply.code(400).send({ error: 'Validation failed', details: parsed.error.issues });
-    }
-    const { proof } = parsed.data;
+    const { proof } = request.body;
 
     const [pkg] = await db.select().from(packages).where(eq(packages.name, name));
     if (!pkg) {

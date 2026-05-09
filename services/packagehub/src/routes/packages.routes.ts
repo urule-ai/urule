@@ -66,27 +66,17 @@ export function registerPackageRoutes(app: FastifyInstance, db: Database) {
 
   // List / search packages (with latest version manifest attached)
   app.get<{
-    Querystring: {
-      q?: string;
-      type?: string;
-      verified?: string;
-      sort?: string;
-      limit?: string;
-      offset?: string;
-    };
+    Querystring: z.infer<typeof searchQuerySchema>;
   }>('/api/v1/packages', {
     schema: {
       tags: ['packages'],
       summary: 'Search / list packages',
       description:
         'Returns packages matching the query parameters with the latest non-yanked version manifest attached. Supports `?q=` text search, `?type=` exact match, `?verified=true` filter, and `?sort=popular|recent`. Public route — no auth required.',
+      querystring: searchQuerySchema,
     },
-  }, async (request, reply) => {
-    const parsed = searchQuerySchema.safeParse(request.query);
-    if (!parsed.success) {
-      return reply.code(400).send({ error: 'Validation failed', details: parsed.error.issues });
-    }
-    const { q, type, verified, sort, limit } = parsed.data;
+  }, async (request) => {
+    const { q, type, verified, sort, limit } = request.query;
 
     let results;
     if (sort === 'popular') {
@@ -104,32 +94,20 @@ export function registerPackageRoutes(app: FastifyInstance, db: Database) {
 
   // Register / publish a package
   app.post<{
-    Body: {
-      name: string;
-      type: string;
-      description?: string;
-      author: string;
-      repository?: string;
-      homepage?: string;
-      license?: string;
-      tags?: string[];
-    };
+    Body: z.infer<typeof publishPackageSchema>;
   }>('/api/v1/packages', {
     schema: {
       tags: ['packages'],
       summary: 'Register a new package',
       description:
         'Creates a package record. Optional `publisherPubkey` (base64 Ed25519) opts the package into mandatory signed-version publishes. License tier defaults to `free`; `paid` / `subscription` tiers must include `priceCents` + a `paymentLink` for the marketplace flow.',
+      body: publishPackageSchema,
     },
   }, async (request, reply) => {
-    const parsed = publishPackageSchema.safeParse(request.body);
-    if (!parsed.success) {
-      return reply.code(400).send({ error: 'Validation failed', details: parsed.error.issues });
-    }
     const {
       name, type, description, author, repository, homepage, license, tags,
       publisherPubkey, pubkeyKind, licenseTier, priceCents, paymentProvider, paymentLink,
-    } = parsed.data;
+    } = request.body;
     const id = ulid();
     const now = new Date();
 
@@ -180,6 +158,7 @@ export function registerPackageRoutes(app: FastifyInstance, db: Database) {
       summary: 'Get package by name',
       description:
         'Returns the package row including signing metadata (`publisherPubkey`, `pubkeyKind`) and marketplace fields (`licenseTier`, `priceCents`, `paymentLink`). 404 when the name is unknown.',
+      params: z.object({ name: z.string() }),
     },
   }, async (request, reply) => {
     const { name } = request.params;

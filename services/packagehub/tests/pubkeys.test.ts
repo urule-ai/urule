@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import Fastify from 'fastify';
 import { generateKeyPairSync, sign } from 'node:crypto';
+import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
 import { authMiddleware } from '@urule/auth-middleware';
 import { registerPubkeysRoutes } from '../src/routes/pubkeys.routes.js';
 import { rotationDigest } from '../src/services/signing.js';
@@ -104,6 +105,8 @@ function makeMockDb(behavior: Behavior = {}) {
 
 async function buildApp(behavior: Behavior = {}) {
   const app = Fastify({ logger: false });
+  app.setValidatorCompiler(validatorCompiler);
+  app.setSerializerCompiler(serializerCompiler);
   await app.register(authMiddleware, { skipAuth: true });
   registerPubkeysRoutes(app, makeMockDb(behavior) as never);
   return app;

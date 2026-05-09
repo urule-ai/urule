@@ -32,20 +32,17 @@ export function registerEntitlementRoutes(app: FastifyInstance, db: Database) {
    *   entitlement row (purchase, subscription, or admin grant).
    */
   app.get<{
-    Querystring: { packageName: string; workspaceId?: string; userId?: string };
+    Querystring: z.infer<typeof checkQuerySchema>;
   }>('/api/v1/entitlements', {
     schema: {
       tags: ['entitlements'],
       summary: 'Check entitlement (install gate)',
       description:
         'Authoritative gate consulted by the packages service before install. Returns `{ allowed: true, reason: "free" | "entitled" | "grant" }` for free packages and rows that pass; `{ allowed: false, reason: "requires_purchase", paymentLink }` otherwise. The packages service forwards `paymentLink` in its 402 ENTITLEMENT_REQUIRED error body so the UI can surface the checkout CTA without a second round-trip.',
+      querystring: checkQuerySchema,
     },
   }, async (request, reply) => {
-    const parsed = checkQuerySchema.safeParse(request.query);
-    if (!parsed.success) {
-      return reply.code(400).send({ error: 'Validation failed', details: parsed.error.issues });
-    }
-    const { packageName, workspaceId, userId } = parsed.data;
+    const { packageName, workspaceId, userId } = request.query;
     if (!workspaceId && !userId) {
       return reply.code(400).send({
         error: { code: 'CONSUMER_REQUIRED', message: 'workspaceId or userId required' },
@@ -109,13 +106,10 @@ export function registerEntitlementRoutes(app: FastifyInstance, db: Database) {
       summary: 'Mint an entitlement row',
       description:
         'Creates an entitlement record (`kind: purchase | subscription | grant`). The Stripe webhook receiver calls this on `checkout.session.completed`; admin tools call it for manual grants. Idempotent on the (packageId, externalRef) tuple — a retried call with the same external reference returns the existing row.',
+      body: grantSchema,
     },
   }, async (request, reply) => {
-    const parsed = grantSchema.safeParse(request.body);
-    if (!parsed.success) {
-      return reply.code(400).send({ error: 'Validation failed', details: parsed.error.issues });
-    }
-    const { packageName, workspaceId, userId, kind, externalRef, expiresAt } = parsed.data;
+    const { packageName, workspaceId, userId, kind, externalRef, expiresAt } = request.body;
 
     const [pkg] = await db.select().from(packages).where(eq(packages.name, packageName));
     if (!pkg) {
@@ -161,6 +155,7 @@ export function registerEntitlementRoutes(app: FastifyInstance, db: Database) {
         summary: 'Revoke an entitlement',
         description:
           'Hard-deletes the entitlement row. Used by the refund flow: a Stripe `charge.refunded` webhook (or admin tool) hits this endpoint with the entitlement id captured at mint time. 404 ENTITLEMENT_NOT_FOUND if already revoked.',
+        params: z.object({ id: z.string() }),
       },
     },
     async (request, reply) => {

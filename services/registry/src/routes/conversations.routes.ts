@@ -23,6 +23,18 @@ const createMessageSchema = z.object({
   actionButtons: z.array(z.unknown()).optional(),
 });
 
+const conversationIdParamsSchema = z.object({ conversationId: z.string() });
+
+const listConversationsQuerySchema = z.object({
+  workspaceId: z.string().optional(),
+  limit: z.string().optional(),
+  offset: z.string().optional(),
+});
+
+const messagesQuerySchema = z.object({
+  limit: z.string().optional(),
+});
+
 /** Transform a Drizzle conversation row to UI-expected snake_case. */
 function toUiConversation(row: Record<string, unknown>) {
   return {
@@ -75,20 +87,17 @@ function toUiAgentSummary(row: Record<string, unknown>) {
 export function registerConversationRoutes(app: FastifyInstance, db: Database) {
   // Create conversation
   app.post<{
-    Body: { workspaceId: string; title: string; type?: string; agentIds?: string[] };
+    Body: z.infer<typeof createConversationSchema>;
   }>('/api/v1/conversations', {
     schema: {
       tags: ['conversations'],
       summary: 'Create a conversation',
       description: 'Body `{ workspaceId, title, type?, agentIds? }`. Type defaults to `direct` (DM); other values are `group | meeting | channel`. `agentIds` links agent participants — each gets a row in `conversation_agents`.',
+      body: createConversationSchema,
     },
   }, async (request, reply) => {
-    const parsed = createConversationSchema.safeParse(request.body);
-    if (!parsed.success) {
-      return reply.code(400).send({ error: 'Validation failed', details: parsed.error.issues });
-    }
-    let { workspaceId } = parsed.data;
-    const { title, type, agentIds } = parsed.data;
+    let { workspaceId } = request.body;
+    const { title, type, agentIds } = request.body;
     // Resolve workspace if not provided
     if (!workspaceId || workspaceId === 'default') {
       const [ws] = await db.select().from(workspaces).limit(1);
@@ -117,11 +126,12 @@ export function registerConversationRoutes(app: FastifyInstance, db: Database) {
   });
 
   // List conversations with last_message, message_count, agents
-  app.get<{ Querystring: { workspaceId?: string; limit?: string; offset?: string } }>('/api/v1/conversations', {
+  app.get<{ Querystring: z.infer<typeof listConversationsQuerySchema> }>('/api/v1/conversations', {
     schema: {
       tags: ['conversations'],
       summary: 'List conversations',
       description: 'Newest-first by `updatedAt`. Optional `?workspaceId=` filter, `?limit` capped at 100. Each row includes the last message preview, message count, and linked agents — pre-joined for the office-ui chat list.',
+      querystring: listConversationsQuerySchema,
     },
   }, async (request) => {
     const { workspaceId } = request.query;
@@ -179,11 +189,12 @@ export function registerConversationRoutes(app: FastifyInstance, db: Database) {
   });
 
   // Get single conversation
-  app.get<{ Params: { conversationId: string } }>('/api/v1/conversations/:conversationId', {
+  app.get<{ Params: z.infer<typeof conversationIdParamsSchema> }>('/api/v1/conversations/:conversationId', {
     schema: {
       tags: ['conversations'],
       summary: 'Get conversation by id',
       description: 'Returns the conversation row including the linked agent list. For full message history use `/messages`. 404 CONVERSATION_NOT_FOUND when the id is unknown.',
+      params: conversationIdParamsSchema,
     },
   }, async (request, reply) => {
     const { conversationId } = request.params;
@@ -211,11 +222,12 @@ export function registerConversationRoutes(app: FastifyInstance, db: Database) {
   });
 
   // Delete conversation (cascades to messages and conversation_agents)
-  app.delete<{ Params: { conversationId: string } }>('/api/v1/conversations/:conversationId', {
+  app.delete<{ Params: z.infer<typeof conversationIdParamsSchema> }>('/api/v1/conversations/:conversationId', {
     schema: {
       tags: ['conversations'],
       summary: 'Delete a conversation',
       description: 'Hard-removes the conversation. Cascades message rows + conversation_agents links via the FK. Branches forked from this conversation become top-level orphans (no FK on parent_conversation_id, by design). 204 on success.',
+      params: conversationIdParamsSchema,
     },
   }, async (request, reply) => {
     const { conversationId } = request.params;
@@ -229,21 +241,19 @@ export function registerConversationRoutes(app: FastifyInstance, db: Database) {
 
   // Post message to conversation
   app.post<{
-    Params: { conversationId: string };
-    Body: { senderId: string; senderType?: string; content: string; contentType?: string; actionButtons?: unknown[] };
+    Params: z.infer<typeof conversationIdParamsSchema>;
+    Body: z.infer<typeof createMessageSchema>;
   }>('/api/v1/conversations/:conversationId/messages', {
     schema: {
       tags: ['conversations'],
       summary: 'Append a message to a conversation',
       description: 'Body `{ senderId, senderType, content, contentType?, actionButtons? }`. SenderType is `user | agent | system`; contentType is `text | markdown | tool_call | tool_result`. Used by langgraph-adapter to persist agent replies, and by the office-ui chat box for user turns.',
+      params: conversationIdParamsSchema,
+      body: createMessageSchema,
     },
   }, async (request, reply) => {
-    const parsed = createMessageSchema.safeParse(request.body);
-    if (!parsed.success) {
-      return reply.code(400).send({ error: 'Validation failed', details: parsed.error.issues });
-    }
     const { conversationId } = request.params;
-    const { senderId, senderType, content, contentType, actionButtons } = parsed.data;
+    const { senderId, senderType, content, contentType, actionButtons } = request.body;
 
     // Verify conversation exists
     const [conv] = await db.select().from(conversations).where(eq(conversations.id, conversationId));
@@ -301,13 +311,15 @@ export function registerConversationRoutes(app: FastifyInstance, db: Database) {
 
   // List messages for conversation
   app.get<{
-    Params: { conversationId: string };
-    Querystring: { limit?: string };
+    Params: z.infer<typeof conversationIdParamsSchema>;
+    Querystring: z.infer<typeof messagesQuerySchema>;
   }>('/api/v1/conversations/:conversationId/messages', {
     schema: {
       tags: ['conversations'],
       summary: 'List messages in a conversation',
       description: 'Returns messages chronological-oldest-first up to `?limit` (default 50). The langgraph-adapter chat path reads this when assembling history for the next LLM call.',
+      params: conversationIdParamsSchema,
+      querystring: messagesQuerySchema,
     },
   }, async (request, reply) => {
     const { conversationId } = request.params;
@@ -344,21 +356,19 @@ export function registerConversationRoutes(app: FastifyInstance, db: Database) {
    *   conversation. 201 with the new conversation row on success.
    */
   app.post<{
-    Params: { conversationId: string };
+    Params: z.infer<typeof conversationIdParamsSchema>;
     Body: z.infer<typeof branchConversationSchema>;
   }>('/api/v1/conversations/:conversationId/branch', {
     schema: {
       tags: ['conversations'],
       summary: 'Fork a conversation at a message',
       description: "Body `{ fromMessageId, title?, agentIds? }`. Creates a new conversation linked via `parent_conversation_id` + `branched_from_message_id` and copies every message up to and including `fromMessageId` into the branch with fresh ULIDs — subsequent edits in either branch are independent. Inherits parent agents unless `agentIds` overrides. Title defaults to `\"<parent.title> (branch)\"`. 404 on missing parent or message; 400 MESSAGE_NOT_IN_CONVERSATION when `fromMessageId` belongs to a different conversation.",
+      params: conversationIdParamsSchema,
+      body: branchConversationSchema,
     },
   }, async (request, reply) => {
-    const parsed = branchConversationSchema.safeParse(request.body);
-    if (!parsed.success) {
-      return reply.code(400).send({ error: 'Validation failed', details: parsed.error.issues });
-    }
     const { conversationId } = request.params;
-    const { fromMessageId, title, agentIds } = parsed.data;
+    const { fromMessageId, title, agentIds } = request.body;
 
     const [parent] = await db.select().from(conversations).where(eq(conversations.id, conversationId));
     if (!parent) {
@@ -454,12 +464,13 @@ export function registerConversationRoutes(app: FastifyInstance, db: Database) {
    *   for a deeper tree the caller iterates).
    */
   app.get<{
-    Params: { conversationId: string };
+    Params: z.infer<typeof conversationIdParamsSchema>;
   }>('/api/v1/conversations/:conversationId/branches', {
     schema: {
       tags: ['conversations'],
       summary: 'List branches forked from this conversation',
       description: 'Returns immediate children newest-first. For a deeper tree, the caller iterates. Empty array (200) when this conversation has no branches — not 404.',
+      params: conversationIdParamsSchema,
     },
   }, async (request, reply) => {
     const { conversationId } = request.params;
