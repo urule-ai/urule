@@ -6,36 +6,25 @@ test.describe('Journey 3: Dashboard', () => {
   });
 
   test('should display stat cards', async ({ authenticatedPage: page }) => {
-    // Look for stat-like content (numbers, labels)
-    await page.waitForTimeout(2000);
-    const body = await page.textContent('body');
-    // Dashboard should have agent-related content
-    expect(body).toBeTruthy();
+    const statCards = page.locator('div.grid.grid-cols-2.xl\\:grid-cols-4.gap-4');
+
+    await expect(statCards.getByText('Total Agents', { exact: true })).toBeVisible({ timeout: 15000 });
+    await expect(statCards.getByText('Active Now', { exact: true })).toBeVisible();
+    await expect(statCards.getByText('Pending Approvals', { exact: true })).toBeVisible();
+    await expect(statCards.getByText('Offline', { exact: true })).toBeVisible();
   });
 
   test('should show agent activity section', async ({ authenticatedPage: page }) => {
-    await page.waitForTimeout(2000);
-    // Agents section should be present
-    const content = await page.textContent('body');
-    expect(content?.toLowerCase()).toContain('agent');
+    await expect(page.getByRole('heading', { name: /live agent activity/i })).toBeVisible({ timeout: 15000 });
   });
 
   test('should navigate to agents page via quick action', async ({ authenticatedPage: page }) => {
-    await page.waitForTimeout(1000);
-    // Look for agent-related navigation
-    const agentLink = page.getByRole('link', { name: /agent/i }).first();
-    if (await agentLink.isVisible()) {
-      await agentLink.click();
-      await page.waitForURL('**/agents**');
-    }
+    await page.getByRole('link', { name: /agent directory/i }).click();
+    await page.waitForURL('**/agents**');
   });
 
   test('should show infrastructure tab', async ({ authenticatedPage: page }) => {
-    await page.waitForTimeout(1000);
-    const infraTab = page.getByText(/infrastructure/i);
-    if (await infraTab.isVisible()) {
-      await infraTab.click();
-      await page.waitForTimeout(500);
-    }
+    await page.getByRole('button', { name: /infrastructure/i }).click();
+    await expect(page.getByText('Cluster Overview')).toBeVisible({ timeout: 5000 });
   });
 });
