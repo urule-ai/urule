@@ -50,20 +50,21 @@ jobs:
         env:
           NEXT_TELEMETRY_DISABLED: '1'
 
-      # The Next config sets `output: "standalone"` (required for the production
-      # Docker image), so `next start` warns and exits without binding. Launch the
-      # standalone server directly. With no `outputFileTracingRoot` set, Next emits
-      # `.next/standalone/server.js` at the top of the standalone tree, with the
-      # server bundle in `.next/standalone/.next/`. The bundle excludes
-      # `.next/static` and `public/`, so copy them next to server.js before launch.
+      # `output: "standalone"` is required for the production Docker image, but
+      # `next start` is a no-op under that mode. Launch the standalone server
+      # directly. With `outputFileTracingRoot` set in next.config.mjs, the
+      # standalone tree is rooted at `.next/standalone/apps/office-ui/` (mirrors
+      # the workspace path). The bundle excludes `.next/static` and `public/`,
+      # so they're copied alongside server.js before launch — same shape as
+      # apps/office-ui/Dockerfile.
       - name: Start production server
         working-directory: apps/office-ui
         run: |
-          cp -r .next/static .next/standalone/.next/static
+          cp -r .next/static .next/standalone/apps/office-ui/.next/static
           # public/ is empty in this repo (git doesn't track empty dirs, so it
           # is absent in CI checkouts); skip cleanly if it doesn't exist.
-          if [ -d public ]; then cp -r public .next/standalone/public; fi
-          node .next/standalone/server.js &
+          if [ -d public ]; then cp -r public .next/standalone/apps/office-ui/public; fi
+          node .next/standalone/apps/office-ui/server.js &
         env:
           PORT: 3000
           HOSTNAME: 0.0.0.0
