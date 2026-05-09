@@ -50,36 +50,22 @@ jobs:
         env:
           NEXT_TELEMETRY_DISABLED: '1'
 
-      - name: Inspect standalone output layout
-        working-directory: apps/office-ui
-        run: |
-          echo "--- top of .next/standalone ---"
-          ls -la .next/standalone || true
-          echo "--- find server.js ---"
-          find .next/standalone -maxdepth 5 -name 'server.js' || true
-          echo "--- find .next dirs ---"
-          find .next/standalone -maxdepth 5 -type d -name '.next' || true
-          echo "--- find node_modules dirs ---"
-          find .next/standalone -maxdepth 3 -type d -name 'node_modules' || true
-          echo "--- find apps subtree ---"
-          find .next/standalone -maxdepth 3 -type d -name 'apps' -o -name 'office-ui' || true
-
       # `output: "standalone"` is required for the production Docker image, but
       # `next start` is a no-op under that mode. Launch the standalone server
-      # directly. The bundle excludes `.next/static` and `public/`, so they
-      # are copied alongside server.js before launch.
+      # directly. With experimental.outputFileTracingRoot set in next.config.mjs
+      # the tree is rooted at .next/standalone/apps/office-ui/. The bundle
+      # excludes .next/static and public/, so copy them alongside server.js.
+      # Use nohup + disown so the server survives this shell's exit, and tee
+      # logs to a file we can inspect on failure.
       - name: Start production server
         working-directory: apps/office-ui
         run: |
-          set -x
-          # Create parent dirs proactively in case the standalone layout omits them
-          SERVER_JS=$(find .next/standalone -maxdepth 5 -name 'server.js' | head -1)
-          SERVER_DIR=$(dirname "$SERVER_JS")
-          echo "server.js found at: $SERVER_JS (dir: $SERVER_DIR)"
-          mkdir -p "$SERVER_DIR/.next"
-          cp -r .next/static "$SERVER_DIR/.next/static"
-          if [ -d public ]; then cp -r public "$SERVER_DIR/public"; fi
-          node "$SERVER_JS" &
+          cp -r .next/static .next/standalone/apps/office-ui/.next/static
+          if [ -d public ]; then cp -r public .next/standalone/apps/office-ui/public; fi
+          nohup node .next/standalone/apps/office-ui/server.js \
+            > /tmp/next-server.log 2>&1 &
+          disown
+          echo "server PID: $!"
         env:
           PORT: 3000
           HOSTNAME: 0.0.0.0
@@ -87,6 +73,16 @@ jobs:
       - name: Wait for server
         run: npx wait-on http://localhost:3000 --timeout 60000
         working-directory: apps/office-ui
+
+      - name: Dump server log (on failure)
+        if: failure()
+        run: |
+          echo "--- /tmp/next-server.log ---"
+          cat /tmp/next-server.log || echo "(no log file)"
+          echo "--- listening sockets ---"
+          ss -tlnp 2>/dev/null || netstat -tlnp 2>/dev/null || true
+          echo "--- node processes ---"
+          ps -ef | grep -E "(node|next)" | grep -v grep || true
 
       - name: Run Playwright tests
         working-directory: apps/office-ui
