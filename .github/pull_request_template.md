@@ -5,9 +5,10 @@
 -
 
 ## Testing
-- [ ] Tests pass (`make test`)
+- [ ] `make test` passes
+- [ ] `make e2e-playwright` passes (required if this PR touches `apps/office-ui/**`, `services/**`, or `infra/**`) — paste the result (pass count, browser projects) below
 - [ ] New tests added for new functionality
-- [ ] Manually tested locally
+- [ ] Tested locally (describe what you did)
 
 ## Checklist
 - [ ] Code follows project conventions (TypeScript ESM, Fastify patterns)
