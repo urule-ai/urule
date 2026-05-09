@@ -7,12 +7,14 @@ on:
       - 'apps/office-ui/**'
       - 'services/**'
       - 'infra/**'
+      - '.github/workflows/e2e.yml'
   pull_request:
     branches: [main]
     paths:
       - 'apps/office-ui/**'
       - 'services/**'
       - 'infra/**'
+      - '.github/workflows/e2e.yml'
 
 jobs:
   playwright:
@@ -48,15 +50,43 @@ jobs:
         env:
           NEXT_TELEMETRY_DISABLED: '1'
 
+      # `output: "standalone"` is required for the production Docker image, but
+      # `next start` is a no-op under that mode. Launch the standalone server
+      # directly. With experimental.outputFileTracingRoot set in next.config.mjs
+      # the tree is rooted at .next/standalone/apps/office-ui/. The bundle
+      # excludes .next/static and public/, so copy them alongside server.js.
+      # Use nohup + disown so the server survives this shell's exit, and tee
+      # logs to a file we can inspect on failure.
       - name: Start production server
         working-directory: apps/office-ui
-        run: npm run start &
+        run: |
+          cp -r .next/static .next/standalone/apps/office-ui/.next/static
+          if [ -d public ]; then cp -r public .next/standalone/apps/office-ui/public; fi
+          nohup node .next/standalone/apps/office-ui/server.js \
+            > /tmp/next-server.log 2>&1 &
+          disown
+          echo "server PID: $!"
         env:
           PORT: 3000
+          HOSTNAME: 0.0.0.0
 
+      # The server returns 307 on `/` (redirect to /login or /office), so a
+      # default wait-on HTTP probe (waits for 2xx) never resolves. A TCP probe
+      # is sufficient — we just need the listener up; Playwright will handle
+      # the actual page navigation and redirects.
       - name: Wait for server
-        run: npx wait-on http://localhost:3000 --timeout 60000
+        run: npx wait-on tcp:127.0.0.1:3000 --timeout 60000
         working-directory: apps/office-ui
+
+      - name: Dump server log (on failure)
+        if: failure()
+        run: |
+          echo "--- /tmp/next-server.log ---"
+          cat /tmp/next-server.log || echo "(no log file)"
+          echo "--- listening sockets ---"
+          ss -tlnp 2>/dev/null || netstat -tlnp 2>/dev/null || true
+          echo "--- node processes ---"
+          ps -ef | grep -E "(node|next)" | grep -v grep || true
 
       - name: Run Playwright tests
         working-directory: apps/office-ui
