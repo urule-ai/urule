@@ -7,13 +7,16 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const nextConfig = {
   output: "standalone",
   // Tell Next to trace deps from the workspace root, not just apps/office-ui.
-  // Without this, the standalone bundle is emitted at .next/standalone/server.js
-  // and ships with no node_modules/ — start-up then resolves Next internals
-  // against the workspace's hoisted node_modules and crashes on the first
-  // missing internal file. With it set, the standalone tree is rooted at
-  // .next/standalone/apps/office-ui/ and includes a pruned node_modules/
-  // alongside it (matches what apps/office-ui/Dockerfile expects).
-  outputFileTracingRoot: join(__dirname, "../../"),
+  // Without this, the standalone bundle ships with no node_modules/ alongside
+  // server.js — start-up then resolves Next internals against the workspace's
+  // hoisted node_modules and crashes on the first missing internal file
+  // (./node-polyfill-crypto in this repo). With it set, the standalone tree
+  // includes a pruned node_modules/ that has everything the runtime needs.
+  // In Next 14.x this option lives under `experimental` (promoted to
+  // top-level in Next 15).
+  experimental: {
+    outputFileTracingRoot: join(__dirname, "../../"),
+  },
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "**" },
