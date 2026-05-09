@@ -50,6 +50,16 @@ jobs:
         env:
           NEXT_TELEMETRY_DISABLED: '1'
 
+      - name: Inspect standalone output layout
+        working-directory: apps/office-ui
+        run: |
+          echo "--- top of .next/standalone ---"
+          ls -la .next/standalone || true
+          echo "--- find server.js inside .next/standalone ---"
+          find .next/standalone -maxdepth 4 -name 'server.js' || true
+          echo "--- find directories named 'office-ui' or 'apps' under standalone ---"
+          find .next/standalone -maxdepth 4 -type d \( -name 'office-ui' -o -name 'apps' \) || true
+
       # The Next config sets `output: "standalone"` (required by apps/office-ui/Dockerfile),
       # so `next start` warns and exits without binding. Launch the standalone server
       # directly, mirroring what the Dockerfile does in production. The standalone bundle
