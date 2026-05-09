@@ -7,12 +7,14 @@ on:
       - 'apps/office-ui/**'
       - 'services/**'
       - 'infra/**'
+      - '.github/workflows/e2e.yml'
   pull_request:
     branches: [main]
     paths:
       - 'apps/office-ui/**'
       - 'services/**'
       - 'infra/**'
+      - '.github/workflows/e2e.yml'
 
 jobs:
   playwright:
