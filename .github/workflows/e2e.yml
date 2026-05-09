@@ -48,11 +48,19 @@ jobs:
         env:
           NEXT_TELEMETRY_DISABLED: '1'
 
+      # The Next config sets `output: "standalone"` (required by apps/office-ui/Dockerfile),
+      # so `next start` warns and exits without binding. Launch the standalone server
+      # directly, mirroring what the Dockerfile does in production. The standalone bundle
+      # excludes static/ and public/ — copy them in before launch.
       - name: Start production server
         working-directory: apps/office-ui
-        run: npm run start &
+        run: |
+          cp -r .next/static .next/standalone/apps/office-ui/.next/static
+          cp -r public .next/standalone/apps/office-ui/public
+          node .next/standalone/apps/office-ui/server.js &
         env:
           PORT: 3000
+          HOSTNAME: 0.0.0.0
 
       - name: Wait for server
         run: npx wait-on http://localhost:3000 --timeout 60000
