@@ -93,6 +93,16 @@ function getProviderApiKeyIssue({
   return null;
 }
 
+function providerApiKeyValidationDetails(field: 'apiKey' | 'api_key', message: string) {
+  return [{
+    keyword: 'custom',
+    instancePath: `/${field}`,
+    schemaPath: `#/${field}/custom`,
+    params: {},
+    message,
+  }];
+}
+
 const providerIdParamsSchema = z.object({ providerId: z.string() });
 
 const listProvidersQuerySchema = z.object({
@@ -283,7 +293,7 @@ export function registerProviderRoutes(app: FastifyInstance, db: Database) {
         if (issue) {
           return reply.code(400).send({
             error: 'Validation failed',
-            details: [{ code: 'custom', path: b.apiKey !== undefined ? ['apiKey'] : ['api_key'], message: issue }],
+            details: providerApiKeyValidationDetails(b.apiKey !== undefined ? 'apiKey' : 'api_key', issue),
           });
         }
       }

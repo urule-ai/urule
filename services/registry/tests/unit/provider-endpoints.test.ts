@@ -45,11 +45,15 @@ async function buildApp(db = makeMockDb()) {
 }
 
 function expectValidationDetail(details: unknown, field: string, message: string) {
-  expect((details as Array<Record<string, unknown>>).some((detail) => {
+  const match = (details as Array<Record<string, unknown>>).find((detail) => {
     if (detail.message !== message) return false;
-    if (Array.isArray(detail.path) && detail.path.join('.') === field) return true;
     return detail.instancePath === `/${field}`;
-  })).toBe(true);
+  });
+  expect(match).toBeDefined();
+  expect(match).toHaveProperty('keyword');
+  expect(match).toHaveProperty('schemaPath', `#/${field}/custom`);
+  expect(match).toHaveProperty('params');
+  expect(match).not.toHaveProperty('path');
 }
 
 describe('provider endpoints - API key validation', () => {
