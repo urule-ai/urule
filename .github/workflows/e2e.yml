@@ -34,7 +34,7 @@ jobs:
 
       - name: Install Playwright browsers
         working-directory: apps/office-ui
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install --with-deps chromium webkit
 
       # Production build avoids the per-route JIT compile that `next dev`
       # pays on first hit (a cold /login compile takes ~13s under CI's
