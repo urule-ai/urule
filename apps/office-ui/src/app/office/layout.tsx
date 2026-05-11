@@ -12,6 +12,7 @@ import { MobileBottomNav } from "@/components/layout/MobileBottomNav";
 import { useNotificationSounds } from "@/hooks/useNotificationSounds";
 import { useNotificationCapture } from "@/hooks/useNotificationCapture";
 import { useApprovalEvents } from "@/hooks/useApprovalEvents";
+import { useAuthHasHydrated } from "@/hooks/useAuthHasHydrated";
 import { WidgetZone } from "@/widgets";
 import api from "@/lib/api";
 
@@ -21,6 +22,12 @@ export default function OfficeLayout({
   children: React.ReactNode;
 }) {
   const { isAuthenticated } = useAuthStore();
+  // Gate the auth-redirect effect on persist hydration. Otherwise the effect
+  // fires once with the default `isAuthenticated: false` on first render,
+  // pushes to /login, and races the rehydration that would have set it true.
+  // Surfaces in CI tests that goto('/office') (#65) and as a redirect flicker
+  // on slow devices in prod.
+  const authHydrated = useAuthHasHydrated();
   const router = useRouter();
   const pathname = usePathname();
   const [setupChecked, setSetupChecked] = useState(false);
@@ -33,6 +40,7 @@ export default function OfficeLayout({
   useApprovalEvents("default");
 
   useEffect(() => {
+    if (!authHydrated) return;
     if (!isAuthenticated) {
       router.replace("/login");
       return;
@@ -52,9 +60,9 @@ export default function OfficeLayout({
     } else {
       setSetupChecked(true);
     }
-  }, [isAuthenticated, router, pathname]);
+  }, [authHydrated, isAuthenticated, router, pathname]);
 
-  if (!isAuthenticated || !setupChecked) return null;
+  if (!authHydrated || !isAuthenticated || !setupChecked) return null;
 
   return (
     <div className="flex h-screen bg-background-dark overflow-hidden">
