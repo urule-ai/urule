@@ -24,6 +24,11 @@ RUN npm ci
 FROM deps AS builder
 ENV NEXT_TELEMETRY_DISABLED=1
 COPY apps/office-ui apps/office-ui
+# Ensure public/ exists so the runner stage's COPY succeeds even when the
+# repo's apps/office-ui/public is empty (git doesn't track empty dirs, so a
+# fresh clone has no public/ at all). Without this, `docker build` fails on
+# `COPY .../public ./public` in the runner stage. (#64)
+RUN mkdir -p apps/office-ui/public
 RUN npm run build -w @urule/office-ui
 
 FROM node:20-slim AS runner
