@@ -524,8 +524,18 @@ export default function SetupPage() {
   const [testError, setTestError] = useState<string | null>(null);
   const [providerId, setProviderId] = useState<string | null>(null);
 
+  // Redirect unauthenticated users to /login. Must run in useEffect rather
+  // than during render — calling router.replace() during SSR walks through
+  // startTransition → Object.replace which reads `location`, a browser-only
+  // global, and throws `ReferenceError: location is not defined` at build
+  // time during the static-generation pass. (#63)
+  useEffect(() => {
+    if (!isAuthenticated) {
+      router.replace("/login");
+    }
+  }, [isAuthenticated, router]);
+
   if (!isAuthenticated) {
-    router.replace("/login");
     return null;
   }
 
