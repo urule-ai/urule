@@ -2,8 +2,7 @@ import { test, expect } from './fixtures/auth';
 
 test.describe('Journey 8: Command Palette', () => {
   test.describe('8.1 Open / close', () => {
-    // TODO(#65): chromium spec broken since 2026-05-04; see issue for failure trace.
-    test.fixme('opens via Cmd+K (or Ctrl+K)', async ({ authenticatedPage: page }) => {
+    test('opens via Cmd+K (or Ctrl+K)', async ({ authenticatedPage: page }) => {
       await page.goto('/office');
       await page.waitForTimeout(800);
       // Use Meta on Mac, Control elsewhere — Playwright dispatches both via 'Meta+K'
@@ -17,8 +16,7 @@ test.describe('Journey 8: Command Palette', () => {
       await expect(page.getByTestId('command-palette')).toBeVisible();
     });
 
-    // TODO(#65): chromium spec broken since 2026-05-04; see issue for failure trace.
-    test.fixme('Escape closes the palette', async ({ authenticatedPage: page }) => {
+    test('Escape closes the palette', async ({ authenticatedPage: page }) => {
       await page.goto('/office');
       await page.waitForTimeout(800);
       await page.keyboard.press('Control+k');
@@ -34,8 +32,7 @@ test.describe('Journey 8: Command Palette', () => {
   });
 
   test.describe('8.2 Filtering + selection', () => {
-    // TODO(#65): chromium spec broken since 2026-05-04; see issue for failure trace.
-    test.fixme('typing filters the command list', async ({ authenticatedPage: page }) => {
+    test('typing filters the command list', async ({ authenticatedPage: page }) => {
       await page.goto('/office');
       await page.waitForTimeout(800);
       await page.keyboard.press('Control+k');
@@ -50,8 +47,7 @@ test.describe('Journey 8: Command Palette', () => {
       await expect(page.getByTestId('command-nav-workspaces')).not.toBeVisible();
     });
 
-    // TODO(#65): chromium spec broken since 2026-05-04; see issue for failure trace.
-    test.fixme('Enter runs the selected command (navigation case)', async ({ authenticatedPage: page }) => {
+    test('Enter runs the selected command (navigation case)', async ({ authenticatedPage: page }) => {
       await page.goto('/office');
       await page.waitForTimeout(800);
       await page.keyboard.press('Control+k');
