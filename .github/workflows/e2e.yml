@@ -32,9 +32,13 @@ jobs:
         working-directory: apps/office-ui
         run: npm ci
 
+      # Install both chromium AND webkit — the mobile project in
+      # playwright.config.ts emulates iPhone 14, which Playwright drives via
+      # webkit. Without webkit installed, every mobile test fails in 3-4ms
+      # with "Executable doesn't exist at .cache/ms-playwright/webkit-*". (#61)
       - name: Install Playwright browsers
         working-directory: apps/office-ui
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install --with-deps chromium webkit
 
       # Production build avoids the per-route JIT compile that `next dev`
       # pays on first hit (a cold /login compile takes ~13s under CI's
