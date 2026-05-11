@@ -8,9 +8,7 @@ test.describe('Journey 2: Onboarding', () => {
     await page.waitForTimeout(1000);
   });
 
-  // TODO(#65): chromium spec broken since 2026-05-04; likely related to the
-  // /setup SSR ReferenceError tracked in #63. See #65 for failure trace.
-  test.fixme('should display provider options', async ({ page }) => {
+  test('should display provider options', async ({ page }) => {
     await page.goto('/setup');
     await page.waitForTimeout(1000);
     // Look for provider names
