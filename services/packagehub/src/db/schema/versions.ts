@@ -1,4 +1,4 @@
-import { pgTable, varchar, text, jsonb, timestamp, boolean, index } from 'drizzle-orm/pg-core';
+import { pgTable, varchar, text, jsonb, timestamp, boolean, index } from 'drizzle-orm/pg-core'; // text used for cosign bundles + sigstore identities
 import { packages } from './packages.js';
 
 export const packageVersions = pgTable('package_versions', {
@@ -12,7 +12,10 @@ export const packageVersions = pgTable('package_versions', {
   yanked: boolean('yanked').notNull().default(false),
   // Signature over the canonical (manifest || readme || version) digest.
   // NULL when the parent package has no publisher_pubkey (back-compat path).
-  signature: varchar('signature', { length: 256 }),
+  // For `signature_kind = 'ed25519'` this is a 64-byte base64 signature; for
+  // `'sigstore-oidc'` it is a serialized cosign bundle (JSON, kilobytes-
+  // scale) — `text` to fit either.
+  signature: text('signature'),
   signatureKind: varchar('signature_kind', { length: 20 }).notNull().default('ed25519'),
   signedAt: timestamp('signed_at', { withTimezone: true }),
 }, (table) => ({

@@ -1,4 +1,4 @@
-import { pgTable, varchar, timestamp, index } from 'drizzle-orm/pg-core';
+import { pgTable, varchar, text, timestamp, index } from 'drizzle-orm/pg-core';
 import { packages } from './packages.js';
 
 /*
@@ -28,7 +28,12 @@ export const packagePubkeys = pgTable('package_pubkeys', {
   packageId: varchar('package_id', { length: 26 })
     .notNull()
     .references(() => packages.id, { onDelete: 'cascade' }),
-  pubkey: varchar('pubkey', { length: 64 }).notNull(),
+  // `pubkey` stores either a base64 Ed25519 raw pubkey (≤44 chars) OR — when
+  // `pubkey_kind = 'sigstore-oidc'` — a JSON document with the expected
+  // `{ issuer, subject }` identity that any cosign bundle must match. The
+  // identity strings (e.g., a GitHub Actions workflow path) easily exceed
+  // 64 chars, so the column is `text` rather than the Ed25519-era varchar.
+  pubkey: text('pubkey').notNull(),
   pubkeyKind: varchar('pubkey_kind', { length: 20 }).notNull().default('ed25519'),
   status: varchar('status', { length: 12 }).notNull().default('active'),
   addedAt: timestamp('added_at', { withTimezone: true }).notNull().defaultNow(),

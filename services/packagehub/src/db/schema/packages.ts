@@ -15,7 +15,9 @@ export const packages = pgTable('packages', {
   // Signing: when set, all version publishes for this package must include
   // a valid signature over (manifest || readme || version) verifiable
   // against this key. NULL means anonymous / unsigned (back-compat).
-  publisherPubkey: varchar('publisher_pubkey', { length: 64 }),
+  // `text` so the column can hold the longer Sigstore identity JSON
+  // (`{ issuer, subject }`) alongside short Ed25519 base64 keys.
+  publisherPubkey: text('publisher_pubkey'),
   pubkeyKind: varchar('pubkey_kind', { length: 20 }).notNull().default('ed25519'),
   // Marketplace: tier governs whether install requires an entitlement.
   // 'free' (default) skips the entitlement check; 'paid' / 'subscription'
