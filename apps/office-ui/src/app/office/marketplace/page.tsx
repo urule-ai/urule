@@ -31,6 +31,7 @@ const PACKAGE_TYPES: Array<{ value: string; label: string }> = [
   { value: "skill", label: "Skill" },
   { value: "mcp_connector", label: "MCP Connector" },
   { value: "design", label: "Design" },
+  { value: "widget", label: "Widget" },
 ];
 
 const SORT_OPTIONS: Array<{ value: SortOption | "relevance"; label: string }> = [
