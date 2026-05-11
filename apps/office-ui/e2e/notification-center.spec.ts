@@ -2,15 +2,13 @@ import { test, expect } from './fixtures/auth';
 
 test.describe('Journey 10: Notification Center', () => {
   test.describe('10.1 Bell + panel', () => {
-    // TODO(#65): chromium spec broken since 2026-05-04; see issue for failure trace.
-    test.fixme('bell is present in the header', async ({ authenticatedPage: page }) => {
+    test('bell is present in the header', async ({ authenticatedPage: page }) => {
       await page.goto('/office');
       await page.waitForTimeout(800);
       await expect(page.getByTestId('notification-bell')).toBeVisible();
     });
 
-    // TODO(#65): chromium spec broken since 2026-05-04; see issue for failure trace.
-    test.fixme('clicking the bell toggles the notification panel', async ({ authenticatedPage: page }) => {
+    test('clicking the bell toggles the notification panel', async ({ authenticatedPage: page }) => {
       await page.goto('/office');
       await page.waitForTimeout(800);
       const bell = page.getByTestId('notification-bell');
@@ -20,8 +18,7 @@ test.describe('Journey 10: Notification Center', () => {
       await expect(page.getByTestId('notification-center')).not.toBeVisible();
     });
 
-    // TODO(#65): chromium spec broken since 2026-05-04; see issue for failure trace.
-    test.fixme('Escape closes the panel', async ({ authenticatedPage: page }) => {
+    test('Escape closes the panel', async ({ authenticatedPage: page }) => {
       await page.goto('/office');
       await page.waitForTimeout(800);
       await page.getByTestId('notification-bell').click();
@@ -30,8 +27,7 @@ test.describe('Journey 10: Notification Center', () => {
       await expect(page.getByTestId('notification-center')).not.toBeVisible();
     });
 
-    // TODO(#65): chromium spec broken since 2026-05-04; see issue for failure trace.
-    test.fixme('empty state surfaces when there are no notifications', async ({ authenticatedPage: page }) => {
+    test('empty state surfaces when there are no notifications', async ({ authenticatedPage: page }) => {
       await page.goto('/office');
       // Reset persisted state from prior test runs.
       await page.evaluate(() => {
@@ -49,8 +45,7 @@ test.describe('Journey 10: Notification Center', () => {
   });
 
   test.describe('10.2 Capture + read state', () => {
-    // TODO(#65): chromium spec broken since 2026-05-04; see issue for failure trace.
-    test.fixme('a programmatic toast surfaces in the notification list', async ({ authenticatedPage: page }) => {
+    test('a programmatic toast surfaces in the notification list', async ({ authenticatedPage: page }) => {
       await page.goto('/office');
       // Reset persisted state.
       await page.evaluate(() => {
@@ -96,8 +91,7 @@ test.describe('Journey 10: Notification Center', () => {
       await expect(page.getByTestId('notification-badge')).toBeVisible();
     });
 
-    // TODO(#65): chromium spec broken since 2026-05-04; see issue for failure trace.
-    test.fixme('clear all removes every entry', async ({ authenticatedPage: page }) => {
+    test('clear all removes every entry', async ({ authenticatedPage: page }) => {
       await page.goto('/office');
       // Seed a notification then clear it via the UI.
       await page.evaluate(() => {
