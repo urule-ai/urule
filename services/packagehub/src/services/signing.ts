@@ -1,4 +1,5 @@
 import { createHash, createPublicKey, verify } from 'node:crypto';
+import { getSigstoreVerifier, parseSigstoreIdentity } from './sigstore-verifier.js';
 
 /**
  * Active pubkey record — the subset of the `package_pubkeys` row a
@@ -58,21 +59,39 @@ export function verifyEd25519(pubkeyB64: string, signatureB64: string, digest: B
 
 /**
  * Verify a signature against any of a package's active pubkeys.
- * Returns the matching pubkey (b64) on success, or null on failure.
+ * Returns the matching pubkey (b64 for Ed25519, JSON identity for
+ * Sigstore) on success, or null on failure.
  *
  * Multiple active keys exist whenever a publisher has rotated mid-life
  * but kept the prior key around (e.g., a hardware-token primary and a
- * CI-pipeline secondary). Verification short-circuits on first match,
- * so the order of `keys` doesn't change correctness.
+ * CI-pipeline secondary, or an Ed25519 floor + a Sigstore CI-signed
+ * key). Verification short-circuits on first match, so the order of
+ * `keys` doesn't change correctness.
+ *
+ * Two `pubkey_kind` values are supported today:
+ *   - `ed25519`       — raw key + 64-byte signature (synchronous local crypto)
+ *   - `sigstore-oidc` — `{ issuer, subject }` identity + serialized cosign
+ *                       bundle (async; delegates to `@sigstore/verify` which
+ *                       checks Fulcio cert chain + Rekor inclusion proof)
  */
-export function verifyAgainstActiveKeys(
+export async function verifyAgainstActiveKeys(
   keys: readonly ActivePubkey[],
-  signatureB64: string,
+  signature: string,
   digest: Buffer,
-): string | null {
+): Promise<string | null> {
   for (const key of keys) {
-    if (key.pubkeyKind !== 'ed25519') continue; // only ed25519 today
-    if (verifyEd25519(key.pubkey, signatureB64, digest)) return key.pubkey;
+    if (key.pubkeyKind === 'ed25519') {
+      if (verifyEd25519(key.pubkey, signature, digest)) return key.pubkey;
+    } else if (key.pubkeyKind === 'sigstore-oidc') {
+      const identity = parseSigstoreIdentity(key.pubkey);
+      if (!identity) continue;
+      // For sigstore-oidc the `signature` field carries the JSON cosign
+      // bundle directly (the column is `text` so size isn't a concern).
+      const ok = await getSigstoreVerifier().verify(signature, digest, identity);
+      if (ok) return key.pubkey;
+    }
+    // Unknown kinds are skipped (forward-compat: a future `c2pa` etc. key
+    // can land alongside without breaking existing rows).
   }
   return null;
 }

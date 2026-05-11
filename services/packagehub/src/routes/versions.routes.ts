@@ -104,7 +104,7 @@ export function registerVersionRoutes(app: FastifyInstance, db: Database) {
           ? activeKeys
           : [{ pubkey: pkg.publisherPubkey, pubkeyKind: pkg.pubkeyKind ?? 'ed25519' }];
       const digest = canonicalDigest(manifest, readme ?? '', version);
-      const matched = verifyAgainstActiveKeys(keys, signature, digest);
+      const matched = await verifyAgainstActiveKeys(keys, signature, digest);
       if (!matched) {
         return reply.code(401).send({
           error: {
@@ -242,7 +242,7 @@ export function registerVersionRoutes(app: FastifyInstance, db: Database) {
         activeKeys.length > 0
           ? activeKeys
           : [{ pubkey: pkg.publisherPubkey, pubkeyKind: pkg.pubkeyKind ?? 'ed25519' }];
-      const matched = verifyAgainstActiveKeys(keys, ver.signature, digest);
+      const matched = await verifyAgainstActiveKeys(keys, ver.signature, digest);
       const ok = matched !== null;
       return {
         verified: ok,

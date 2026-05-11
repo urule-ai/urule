@@ -29,6 +29,7 @@
     "fastify": "^5.0.0",
     "fastify-type-provider-zod": "^6.1.0",
     "nats": "^2.28.0",
+    "sigstore": "^4.1.0",
     "postgres": "^3.4.0",
     "ulid": "^2.3.0",
     "zod": "^4.3.6"
