@@ -6,7 +6,7 @@ test.describe('Journey 3: Dashboard', () => {
   });
 
   test('should display stat cards', async ({ authenticatedPage: page }) => {
-    const statCards = page.locator('div.grid.grid-cols-2.xl\\:grid-cols-4.gap-4');
+    const statCards = page.getByTestId('dashboard-stats');
 
     await expect(statCards.getByText('Total Agents', { exact: true })).toBeVisible({ timeout: 15000 });
     await expect(statCards.getByText('Active Now', { exact: true })).toBeVisible();
