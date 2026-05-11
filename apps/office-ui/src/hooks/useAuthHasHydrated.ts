@@ -15,17 +15,24 @@ import { useAuthStore } from "@/store/useAuthStore";
  * devices.
  */
 export function useAuthHasHydrated(): boolean {
-  const [hydrated, setHydrated] = useState(() =>
-    useAuthStore.persist.hasHydrated(),
-  );
+  // On the server, the persist API isn't fully wired and there's no
+  // localStorage to rehydrate from anyway — return false so consumers
+  // render their "not yet hydrated" branch (typically `return null`).
+  // The client takes over after hydration and the effect below flips
+  // this to true once persist signals completion.
+  const [hydrated, setHydrated] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return useAuthStore.persist?.hasHydrated?.() ?? false;
+  });
 
   useEffect(() => {
-    const unsubFinish = useAuthStore.persist.onFinishHydration(() =>
-      setHydrated(true),
-    );
+    if (typeof window === "undefined") return;
+    const persist = useAuthStore.persist;
+    if (!persist) return;
+    const unsubFinish = persist.onFinishHydration(() => setHydrated(true));
     // hasHydrated() may have flipped to true between initial state read and
     // the effect running — re-check synchronously to avoid sticking on false.
-    setHydrated(useAuthStore.persist.hasHydrated());
+    setHydrated(persist.hasHydrated());
     return () => {
       unsubFinish();
     };
