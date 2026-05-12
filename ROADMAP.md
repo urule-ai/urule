@@ -6,6 +6,17 @@ This document tracks improvements, fixes, and features across the entire Urule e
 
 ---
 
+## Human Todo — needs a browser / interactive session
+
+Items here can't be resolved from CI logs or headless test runs — they need someone at a real browser with devtools (or `playwright --headed --debug`) to observe what's actually happening. AI-driven debugging got the symptom pinned down; the cause needs eyes on the live page.
+
+- [ ] **office-ui — `page.reload()` on `/office` redirects to `/login` despite valid auth in localStorage** (blocks 2 specs in #65). Symptom (confirmed locally with instrumentation): after the auth fixture demo-logs-in and lands on `/office`, a test that calls `page.reload()` ends up on `/login` — and at that exact moment `localStorage['urule-auth']` still contains `{"state":{...,"isAuthenticated":true},...}`. So the office layout's `useEffect` redirect (`apps/office-ui/src/app/office/layout.tsx:42-47`) is firing with `isAuthenticated === false` even though the persisted value is true, meaning #80's `authHydrated` gate isn't fully closing the zustand-persist hydration race. The non-reload notification specs all pass; only the reload path breaks.
+  - **Repro**: `cd apps/office-ui && (npm run dev &)` then `BASE_URL=http://localhost:<the-port-it-picked> npx playwright test notification-center.spec.ts --grep "clear all" --project=chromium --headed --debug` — first change `test.fixme` → `test` on lines ~51 and ~90 of `apps/office-ui/e2e/notification-center.spec.ts`. (If your backend services aren't running, set `NEXT_PUBLIC_REGISTRY_URL` etc. to dead ports so the API calls fail fast like CI — see the `SERVICE_URLS` map in `apps/office-ui/src/lib/api.ts`.)
+  - **What to look for**: step to `page.reload()`. Open React DevTools → find `OfficeLayout` → watch `useAuthStore`'s `isAuthenticated` and the `authHydrated` flag as the layout re-mounts. Is `isAuthenticated` false when the redirect-`useEffect` fires? Check the Network tab for the timing of the `/login?_rsc=...` request relative to the `/office` reload. Possible fixes if confirmed: have `useAuthHasHydrated` only return `true` once it has *observed* the post-hydration state (not just `persist.hasHydrated()`), or have the layout's redirect read `useAuthStore.getState().isAuthenticated` fresh inside the effect, or fall back to a direct `localStorage.getItem('urule-auth')` check.
+  - **When fixed**: un-fixme `notification-center.spec.ts:43` (`a programmatic toast surfaces in the notification list`) and `:90` (`clear all removes every entry`), confirm CI green, then delete this item. That closes #65.
+
+---
+
 ## 1. Security (Critical)
 
 These items must be addressed before any production deployment.
