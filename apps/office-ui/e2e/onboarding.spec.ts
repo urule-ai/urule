@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures/auth';
 
 test.describe('Journey 2: Onboarding', () => {
   test('should show setup wizard for new users', async ({ page }) => {
@@ -8,16 +8,16 @@ test.describe('Journey 2: Onboarding', () => {
     await page.waitForTimeout(1000);
   });
 
-  // TODO(#65): chromium spec broken since 2026-05-04; likely related to the
-  // /setup SSR ReferenceError tracked in #63. See #65 for failure trace.
-  test.fixme('should display provider options', async ({ page }) => {
+  test('should display provider options', async ({ authenticatedPage: page }) => {
+    // /setup renders the wizard only for an authenticated user; the
+    // unauthenticated path redirects to /login (no provider cards there),
+    // so this needs a real session via the auth fixture. Step 0 of the
+    // wizard is the provider selector — "Select AI Model" heading + cards
+    // for Claude / OpenAI / LM Studio. (#65)
     await page.goto('/setup');
-    await page.waitForTimeout(1000);
-    // Look for provider names
-    const content = await page.textContent('body');
-    if (content?.includes('Provider') || content?.includes('Claude') || content?.includes('OpenAI')) {
-      await expect(page.getByText(/claude|openai|provider/i).first()).toBeVisible();
-    }
+    await expect(page.getByRole('heading', { name: /select ai model/i })).toBeVisible({ timeout: 15000 });
+    await expect(page.getByText('Claude', { exact: true }).first()).toBeVisible();
+    await expect(page.getByText('OpenAI', { exact: true }).first()).toBeVisible();
   });
 
   test('should show agent templates in step 2', async ({ page }) => {
