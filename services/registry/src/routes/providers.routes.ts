@@ -168,15 +168,25 @@ export function registerProviderRoutes(app: FastifyInstance, db: Database) {
     return toUiProvider(row as Record<string, unknown>);
   });
 
-  // Get provider's real API key (internal use by adapter service)
+  // Get provider's real API key — internal-use, admin-gated (#5).
   app.get<{ Params: z.infer<typeof providerIdParamsSchema> }>('/api/v1/providers/:providerId/key', {
     schema: {
       tags: ['providers'],
-      summary: 'Get unmasked API key (internal)',
-      description: 'Returns `{ apiKey, provider, modelName }` with the real API key. Internal-use endpoint called by langgraph-adapter (and future orchestrator adapters) when picking an LlmProvider impl. Never expose this from the office-ui — UI consumes the masked endpoint instead.',
+      summary: 'Get unmasked API key (internal, admin-only)',
+      description: 'Returns `{ apiKey, provider, modelName }` with the real API key. **Admin-only** — never expose from the office-ui (the UI uses the masked `GET /:providerId`). Called by orchestrator adapters when picking an LlmProvider impl. TODO(#4): swap the admin gate for proper service-to-service auth once the authz layer can scope provider access to the caller; until then this requires an admin token.',
       params: providerIdParamsSchema,
     },
   }, async (request, reply) => {
+    // #5: this returns an UNMASKED LLM key — without the gate, any authenticated
+    // user could exfiltrate any provider's key. Until the authz layer (#4) can
+    // scope provider access to the caller's workspace, require the `admin` role.
+    // The office-ui never calls this; orchestrator adapters are the only
+    // legitimate callers and they run with an elevated/service identity.
+    const user = (request as any).uruleUser;
+    if (!user?.roles?.includes('admin')) {
+      reply.status(403).send({ error: { code: 'FORBIDDEN', message: 'Admin role required' } });
+      return;
+    }
     const { providerId } = request.params;
     const [row] = await db.select().from(providers).where(eq(providers.id, providerId));
     if (!row) {
