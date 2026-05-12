@@ -117,6 +117,10 @@ services:
     ports:
       - '${URULE_REGISTRY_PORT:-3001}:3000'
     environment:
+      # The dev stack ships no Keycloak. @urule/auth-middleware fails closed by
+      # default when it can't reach JWKS, so backend services skip auth
+      # explicitly here to stay usable in `make dev`. Production runs Keycloak.
+      SKIP_AUTH: 'true'
       PORT: '3000'
       HOST: '0.0.0.0'
       DATABASE_URL: postgres://urule:urule@postgres:5432/registry
@@ -150,6 +154,7 @@ services:
     ports:
       - '${URULE_ADAPTER_PORT:-3002}:3000'
     environment:
+      SKIP_AUTH: 'true' # dev stack has no Keycloak — see registry above
       PORT: '3000'
       NATS_URL: nats://nats:4222
       REGISTRY_URL: http://registry:3000
@@ -182,6 +187,7 @@ services:
     ports:
       - '${URULE_APPROVALS_PORT:-3003}:3000'
     environment:
+      SKIP_AUTH: 'true' # dev stack has no Keycloak — see registry above
       PORT: '3000'
       NATS_URL: nats://nats:4222
       TEMPORAL_ADDRESS: temporal:7233
@@ -211,6 +217,7 @@ services:
     ports:
       - '${URULE_STATE_PORT:-3007}:3000'
     environment:
+      SKIP_AUTH: 'true' # dev stack has no Keycloak — see registry above
       PORT: '3000'
       NATS_URL: nats://nats:4222
     depends_on:
@@ -237,6 +244,7 @@ services:
     ports:
       - '${URULE_CHANNEL_ROUTER_PORT:-3006}:3000'
     environment:
+      SKIP_AUTH: 'true' # dev stack has no Keycloak — see registry above
       PORT: '3000'
       NATS_URL: nats://nats:4222
       REGISTRY_URL: http://registry:3000
@@ -266,6 +274,7 @@ services:
     ports:
       - '${URULE_BROKER_PORT:-4500}:4500'
     environment:
+      SKIP_AUTH: 'true' # dev stack has no Keycloak — see registry above
       PORT: '4500'
       NATS_URL: nats://nats:4222
       REGISTRY_URL: http://registry:3000
@@ -308,6 +317,7 @@ services:
     ports:
       - '${URULE_MCP_GATEWAY_PORT:-3005}:3000'
     environment:
+      SKIP_AUTH: 'true' # dev stack has no Keycloak — see registry above
       PORT: '3000'
       DATABASE_URL: postgres://urule:urule@postgres:5432/mcp_gateway
       NATS_URL: nats://nats:4222
@@ -340,6 +350,7 @@ services:
     ports:
       - '${URULE_PACKAGEHUB_PORT:-3009}:3000'
     environment:
+      SKIP_AUTH: 'true' # dev stack has no Keycloak — see registry above
       PORT: '3000'
       DATABASE_URL: postgres://urule:urule@postgres:5432/packagehub
     depends_on:
@@ -368,6 +379,7 @@ services:
     ports:
       - '${URULE_PACKAGES_PORT:-3008}:3000'
     environment:
+      SKIP_AUTH: 'true' # dev stack has no Keycloak — see registry above
       PORT: '3000'
       HOST: '0.0.0.0'
       DATABASE_URL: postgres://urule:urule@postgres:5432/packages
