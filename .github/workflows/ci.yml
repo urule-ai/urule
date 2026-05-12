@@ -56,7 +56,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Validate Docker Compose
-        run: cd infra/compose && docker compose -f docker-compose.phase6.yaml config > /dev/null
+        # The compose files require credentials via `${VAR:?}`; seed the dev
+        # defaults from the committed template so `config` can interpolate.
+        run: cd infra/compose && cp .env.example .env && docker compose -f docker-compose.phase6.yaml config > /dev/null
 
   docker-publish:
     # Build + push container images to GHCR on git tag (v*).

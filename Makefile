@@ -25,13 +25,15 @@ lint:
 typecheck:
 	npm run typecheck:all
 
-# Start infrastructure (Docker Compose)
+# Start infrastructure (Docker Compose).
+# Seeds infra/compose/.env (gitignored) from the .env.example template the first
+# time — the compose files require credentials via `${VAR:?}`, no defaults.
 infra-up:
-	cd infra/compose && docker compose -f docker-compose.phase6.yaml up --build -d
+	cd infra/compose && { [ -f .env ] || cp .env.example .env; } && docker compose -f docker-compose.phase6.yaml up --build -d
 
 # Stop infrastructure
 infra-down:
-	cd infra/compose && docker compose -f docker-compose.phase6.yaml down
+	cd infra/compose && { [ -f .env ] || cp .env.example .env; } && docker compose -f docker-compose.phase6.yaml down
 
 # Run backend E2E tests (Phase 1 API tests)
 e2e:

@@ -42,7 +42,7 @@ services:
       target: migrator
     logging: *default-logging
     environment:
-      DATABASE_URL: postgres://urule:urule@postgres:5432/registry
+      DATABASE_URL: postgres://urule:${POSTGRES_PASSWORD:?}@postgres:5432/registry
     depends_on:
       postgres:
         condition: service_healthy
@@ -55,7 +55,7 @@ services:
       target: migrator
     logging: *default-logging
     environment:
-      DATABASE_URL: postgres://urule:urule@postgres:5432/packagehub
+      DATABASE_URL: postgres://urule:${POSTGRES_PASSWORD:?}@postgres:5432/packagehub
     depends_on:
       postgres:
         condition: service_healthy
@@ -68,7 +68,7 @@ services:
       target: migrator
     logging: *default-logging
     environment:
-      DATABASE_URL: postgres://urule:urule@postgres:5432/packages
+      DATABASE_URL: postgres://urule:${POSTGRES_PASSWORD:?}@postgres:5432/packages
     depends_on:
       postgres:
         condition: service_healthy
@@ -83,7 +83,7 @@ services:
     volumes:
       - ./seed-registry.sql:/seed.sql:ro
     environment:
-      PGPASSWORD: urule
+      PGPASSWORD: ${POSTGRES_PASSWORD:?}
     entrypoint: ['psql', '-h', 'postgres', '-U', 'urule', '-d', 'registry', '-v', 'ON_ERROR_STOP=1', '-f', '/seed.sql']
     depends_on:
       registry-migrate:
@@ -96,7 +96,7 @@ services:
     volumes:
       - ./seed-packagehub.sql:/seed.sql:ro
     environment:
-      PGPASSWORD: urule
+      PGPASSWORD: ${POSTGRES_PASSWORD:?}
     entrypoint: ['psql', '-h', 'postgres', '-U', 'urule', '-d', 'packagehub', '-v', 'ON_ERROR_STOP=1', '-f', '/seed.sql']
     depends_on:
       packagehub-migrate:
@@ -117,13 +117,13 @@ services:
     ports:
       - '${URULE_REGISTRY_PORT:-3001}:3000'
     environment:
-      # The dev stack ships no Keycloak. @urule/auth-middleware fails closed by
-      # default when it can't reach JWKS, so backend services skip auth
-      # explicitly here to stay usable in `make dev`. Production runs Keycloak.
+      # The bundled Keycloak (infra.yaml) isn't wired to these services — none
+      # set KEYCLOAK_REALM_URL pointing at it — so JWKS is unreachable and the
+      # middleware fails closed. Skip auth explicitly to keep `make dev` usable.
       SKIP_AUTH: 'true'
       PORT: '3000'
       HOST: '0.0.0.0'
-      DATABASE_URL: postgres://urule:urule@postgres:5432/registry
+      DATABASE_URL: postgres://urule:${POSTGRES_PASSWORD:?}@postgres:5432/registry
       NATS_URL: nats://nats:4222
       ADAPTER_URL: http://adapter:3000
     depends_on:
@@ -297,7 +297,7 @@ services:
       target: migrator
     logging: *default-logging
     environment:
-      DATABASE_URL: postgres://urule:urule@postgres:5432/mcp_gateway
+      DATABASE_URL: postgres://urule:${POSTGRES_PASSWORD:?}@postgres:5432/mcp_gateway
     depends_on:
       postgres:
         condition: service_healthy
@@ -319,7 +319,7 @@ services:
     environment:
       SKIP_AUTH: 'true' # dev stack has no Keycloak — see registry above
       PORT: '3000'
-      DATABASE_URL: postgres://urule:urule@postgres:5432/mcp_gateway
+      DATABASE_URL: postgres://urule:${POSTGRES_PASSWORD:?}@postgres:5432/mcp_gateway
       NATS_URL: nats://nats:4222
       REGISTRY_URL: http://registry:3000
     depends_on:
@@ -352,7 +352,7 @@ services:
     environment:
       SKIP_AUTH: 'true' # dev stack has no Keycloak — see registry above
       PORT: '3000'
-      DATABASE_URL: postgres://urule:urule@postgres:5432/packagehub
+      DATABASE_URL: postgres://urule:${POSTGRES_PASSWORD:?}@postgres:5432/packagehub
     depends_on:
       packagehub-migrate:
         condition: service_completed_successfully
@@ -382,7 +382,7 @@ services:
       SKIP_AUTH: 'true' # dev stack has no Keycloak — see registry above
       PORT: '3000'
       HOST: '0.0.0.0'
-      DATABASE_URL: postgres://urule:urule@postgres:5432/packages
+      DATABASE_URL: postgres://urule:${POSTGRES_PASSWORD:?}@postgres:5432/packages
       PACKAGEHUB_URL: http://packagehub:3000
       NATS_URL: nats://nats:4222
     depends_on:
