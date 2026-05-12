@@ -66,7 +66,12 @@ test.describe('Journey 10: Notification Center', () => {
         );
       });
       await page.reload();
-      await expect(page.getByTestId('notification-bell')).toBeVisible({ timeout: 15000 });
+      // After a hard reload the office shell re-commits asynchronously
+      // (auth hydration → setup-status → AppHeader). Wait for the dashboard
+      // stat grid (the layout-stable marker) so the header has finished
+      // settling before we click the bell — otherwise Playwright reports the
+      // bell as "not stable" mid-render.
+      await page.getByTestId('dashboard-stats').waitFor({ state: 'visible', timeout: 15000 });
       await page.getByTestId('notification-bell').click();
       const panel = page.getByTestId('notification-center');
       await expect(panel.getByText('E2E test notification')).toBeVisible();
@@ -94,7 +99,7 @@ test.describe('Journey 10: Notification Center', () => {
         );
       });
       await page.reload();
-      await expect(page.getByTestId('notification-bell')).toBeVisible({ timeout: 15000 });
+      await page.getByTestId('dashboard-stats').waitFor({ state: 'visible', timeout: 15000 });
       await page.getByTestId('notification-bell').click();
       await page.getByTestId('notification-clear-all').click();
       await expect(
