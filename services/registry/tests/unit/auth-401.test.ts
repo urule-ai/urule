@@ -10,7 +10,9 @@ const PUBLIC_ROUTES = ['/healthz', '/api/v1/infrastructure', '/auth/login', '/do
 async function buildAuthClosedApp() {
   const app = Fastify({ logger: false });
   await app.register(authMiddleware, {
-    failClosed: true,
+    // Pin skipAuth:false so the package-level SKIP_AUTH=true (vitest.config) is
+    // overridden — JWKS is unreachable, so the middleware fails closed.
+    skipAuth: false,
     jwksUrl: 'http://localhost:99999/nonexistent',
     publicRoutes: PUBLIC_ROUTES,
   });
