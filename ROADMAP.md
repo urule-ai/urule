@@ -21,6 +21,8 @@ Items here can't be resolved from CI logs or headless test runs — they need so
 
 These items must be addressed before any production deployment.
 
+> ⚠️ **§1.1–§1.6 below reflect an earlier internal hardening pass.** The **2026-05-08 external penetration test** (tracking issue [#20](https://github.com/urule-ai/urule/issues/20) — 12 critical / 14 high / 9 medium / 3 low) surfaced findings those subsections do **not** cover; remediation is tracked in **§1.7** and is largely **not yet complete**. Do not read "§1.1 ✅" as "security is done".
+
 ### 1.1 Authentication Middleware ✅
 Add JWT validation middleware to all service routes.
 
@@ -79,6 +81,42 @@ Track who did what and when for compliance.
 - [x] **governance** — Log policy evaluations and authz check denials
 - [x] **mcp-gateway** — Log MCP server registration and deletion
 - [x] **Shared**: `AuditLogger` class + `AuditEvent` type + `AUDIT_TOPICS` in `@urule/events`
+
+### 1.7 External pen-test remediation (2026-05-08)
+The 2026-05-08 external security audit (tracking [#20](https://github.com/urule-ai/urule/issues/20)) filed its findings as GitHub issues #1–#19 (with #22–#26 cross-listed from the quality audit). §1.1–§1.6 above predate it. Remediation is sequenced: **Tier 0** (dependency CVEs + CI gating) → **Tier 1** (surgical critical/high fixes, one PR each) → **Tier 2** (architectural, each its own design + PR).
+
+**Tier 0 — done:**
+- [x] [#2](https://github.com/urule-ai/urule/issues/2) — `@fastify/jwt` ^9→^10 (pulls `fast-jwt` 6.2.4) — clears the critical `crit`-header advisory
+- [x] [#3](https://github.com/urule-ai/urule/issues/3) — `next` 14.2.5→14.2.35 — clears CVE-2025-29927 (middleware auth bypass, CVSS 9.1) + the middleware-redirect SSRF/cache-poisoning advisories; residual App Router advisories → [#88](https://github.com/urule-ai/urule/issues/88)
+- [x] [#22](https://github.com/urule-ai/urule/issues/22) — npm-audit CVE sweep: 23→17 findings, **2 critical → 0**; residuals (need major bumps) → [#88](https://github.com/urule-ai/urule/issues/88), [#89](https://github.com/urule-ai/urule/issues/89)
+- [x] [#19](https://github.com/urule-ai/urule/issues/19) — CI no longer swallows `npm audit` / typecheck / build failures (gates on `--audit-level=critical`; tighten to `high` once #88/#89 land)
+- [x] [#42](https://github.com/urule-ai/urule/issues/42) — CI uses `npm ci`, not `npm install`
+
+**Tier 1 — surgical critical/high (one PR each):**
+- [ ] [#1](https://github.com/urule-ai/urule/issues/1) — auth-middleware: fail closed by default (JWKS-fetch failure must not fall back to the mock-admin user)
+- [ ] [#13](https://github.com/urule-ai/urule/issues/13) — auth-middleware: drop the hardcoded `'account'` audience acceptance
+- [ ] [#5](https://github.com/urule-ai/urule/issues/5) — `GET /api/v1/providers/:id/key` must not be reachable by a normal user token
+- [ ] [#12](https://github.com/urule-ai/urule/issues/12) (+ [#46](https://github.com/urule-ai/urule/issues/46)) — remove hardcoded `POSTGRES_PASSWORD` / infra creds from docker-compose
+- [ ] [#25](https://github.com/urule-ai/urule/issues/25) — `GET /api/v1/agents` (+ sibling list routes) must scope to the caller's workspace
+- [ ] [#24](https://github.com/urule-ai/urule/issues/24) (+ [#45](https://github.com/urule-ai/urule/issues/45)) — pin auth-critical infra images (Keycloak/OpenFGA/OPA/Temporal/OTel/Jaeger) off `:latest`
+- [ ] [#18](https://github.com/urule-ai/urule/issues/18) (+ [#40](https://github.com/urule-ai/urule/issues/40)) — route the audit logger through Pino (redaction); stop swallowing emit errors in `.catch(() => {})`
+- [ ] [#16](https://github.com/urule-ai/urule/issues/16) — fix `canonicalDigest` to recursively sort nested keys (broken signature canonicalization)
+- [ ] [#23](https://github.com/urule-ai/urule/issues/23) — non-root `USER` in every Dockerfile + `runAsNonRoot` in the Helm chart
+
+**Tier 2 — architectural (each its own design + PR):**
+- [ ] [#4](https://github.com/urule-ai/urule/issues/4) — system-wide authorization (currently only authn is enforced; no resource-level authz)
+- [ ] [#9](https://github.com/urule-ai/urule/issues/9) — packagehub: require auth + publisher-ownership on publish routes
+- [ ] [#10](https://github.com/urule-ai/urule/issues/10) — sandbox the package installer (SSRF / arbitrary file read / arbitrary git clone)
+- [ ] [#6](https://github.com/urule-ai/urule/issues/6) — validate provider `PATCH` `baseUrl` (no localhost / metadata IP / private ranges)
+- [ ] [#7](https://github.com/urule-ai/urule/issues/7) — agent prompt-injection / system-prompt takeover
+- [ ] [#8](https://github.com/urule-ai/urule/issues/8) — conversation message spoofing + LLM cost amplification
+- [ ] [#11](https://github.com/urule-ai/urule/issues/11) — entitlement bypass (gate minting behind the verified Stripe webhook / admin-only)
+- [ ] [#14](https://github.com/urule-ai/urule/issues/14) — office-ui tokens in localStorage → httpOnly cookies + CSRF token
+- [ ] [#15](https://github.com/urule-ai/urule/issues/15) — `WidgetFrame` `postMessage('*')` + sandbox conflict + missing origin check
+- [ ] [#17](https://github.com/urule-ai/urule/issues/17) — Stripe webhook trusts publisher-controlled `metadata.kind` (derive it server-side)
+- [ ] [#26](https://github.com/urule-ai/urule/issues/26) — `@urule/llm-providers`: add retry / timeout / abort signal / usage tracking
+
+**Dependency follow-ups:** [#88](https://github.com/urule-ai/urule/issues/88) (office-ui → Next 15+ — ~13 residual App Router GHSA advisories), [#89](https://github.com/urule-ai/urule/issues/89) (`@opentelemetry/*` sdk-node 0.55→0.217 + `vitest` 2→4, dev-tree).
 
 ---
 
