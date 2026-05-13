@@ -12,7 +12,10 @@
 
 global:
   imageRegistry: ghcr.io/urule-ai
-  imageTag: latest
+  # Pin to a released version — never `latest` in production. Matches the chart
+  # appVersion / the workspace package versions; a `v0.1.0` git tag publishes
+  # `<registry>/<service>:0.1.0`. Override per-deploy: --set global.imageTag=...
+  imageTag: "0.1.0"
   imagePullPolicy: IfNotPresent
   imagePullSecrets: []
   # Connection strings shared across services. Per-service overrides
