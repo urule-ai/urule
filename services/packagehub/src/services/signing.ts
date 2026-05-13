@@ -12,19 +12,39 @@ export interface ActivePubkey {
 }
 
 /**
+ * Recursively canonicalize a JSON-shaped value: object keys are sorted at
+ * every level, array element order is preserved, primitives pass through.
+ * Used by `canonicalDigest` so two semantically-equal manifests serialize
+ * identically regardless of property insertion order.
+ */
+function canonicalize(value: unknown): unknown {
+  if (value === null || typeof value !== 'object') return value;
+  if (Array.isArray(value)) return value.map(canonicalize);
+  return Object.keys(value as Record<string, unknown>)
+    .sort()
+    .reduce<Record<string, unknown>>((acc, key) => {
+      acc[key] = canonicalize((value as Record<string, unknown>)[key]);
+      return acc;
+    }, {});
+}
+
+/**
  * Compute a deterministic SHA-256 digest over the canonical form of a
  * version's signed material. Both publisher and verifier use this same
  * function, so any layout change breaks all in-flight signatures — keep
  * stable.
  *
  * The canonical form is:
- *   sha256( JSON.stringify(manifest, sortedKeys) || readme || version )
+ *   sha256( JSON.stringify(canonicalize(manifest)) || readme || version )
  *
- * `JSON.stringify` with a sorted-keys reviver (passed as the 2nd arg to
- * stringify here) produces stable output across Node versions and platforms.
+ * Where `canonicalize` recursively sorts object keys at every level (#16);
+ * earlier the function passed `Object.keys(manifest).sort()` as `JSON.stringify`'s
+ * replacer-array, which only sorts top-level keys AND silently DROPS every
+ * nested key that doesn't happen to match a top-level name — defeating the
+ * whole point of binding the digest to manifest content.
  */
 export function canonicalDigest(manifest: unknown, readme: string, version: string): Buffer {
-  const json = JSON.stringify(manifest, Object.keys(manifest as object).sort());
+  const json = JSON.stringify(canonicalize(manifest));
   return createHash('sha256').update(json).update(readme).update(version).digest();
 }
 
