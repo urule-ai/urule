@@ -42,8 +42,11 @@ services:
       timeout: 5s
       retries: 5
 
+  # Infra images are pinned to specific tags (no `:latest`) for reproducibility —
+  # see #24. Bump these as upstream releases; the requirement is "not latest",
+  # not "the newest" — older battle-tested tags are fine.
   temporal:
-    image: temporalio/auto-setup:latest
+    image: temporalio/auto-setup:1.25.0
     environment:
       DB: postgres12
       DB_PORT: 5432
@@ -66,7 +69,7 @@ services:
       start_period: 30s
 
   temporal-ui:
-    image: temporalio/ui:latest
+    image: temporalio/ui:2.30.0
     environment:
       TEMPORAL_ADDRESS: temporal:7233
       TEMPORAL_CORS_ORIGINS: http://localhost:3000
@@ -77,7 +80,7 @@ services:
     logging: *default-logging
 
   keycloak:
-    image: quay.io/keycloak/keycloak:latest
+    image: quay.io/keycloak/keycloak:26.1
     command: start-dev
     environment:
       KEYCLOAK_ADMIN: admin
@@ -103,7 +106,7 @@ services:
       start_period: 30s
 
   openfga:
-    image: openfga/openfga:latest
+    image: openfga/openfga:v1.8.0
     command: run
     environment:
       OPENFGA_DATASTORE_ENGINE: postgres
@@ -123,7 +126,7 @@ services:
       start_period: 10s
 
   opa:
-    image: openpolicyagent/opa:latest
+    image: openpolicyagent/opa:1.0.0
     command: run --server --addr :8181
     ports:
       - '${URULE_OPA_PORT:-8284}:8181'
@@ -136,7 +139,7 @@ services:
       start_period: 5s
 
   otel-collector:
-    image: otel/opentelemetry-collector-contrib:latest
+    image: otel/opentelemetry-collector-contrib:0.116.0
     command: ['--config=/etc/otel-collector-config.yaml']
     volumes:
       - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml
@@ -146,7 +149,7 @@ services:
     logging: *default-logging
 
   jaeger:
-    image: jaegertracing/all-in-one:latest
+    image: jaegertracing/all-in-one:1.62.0
     environment:
       COLLECTOR_OTLP_ENABLED: 'true'
     ports:
