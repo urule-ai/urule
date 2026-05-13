@@ -15,4 +15,7 @@ COPY --from=builder /app/dist ./dist
 EXPOSE 3000
 HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=3 \
   CMD node -e "fetch('http://localhost:3000/healthz').then(r=>{if(!r.ok)throw 1}).catch(()=>process.exit(1))"
+# #23: drop root before exec. node:20-slim ships a `node` user (uid 1000).
+RUN chown -R node:node /app
+USER node
 CMD ["node", "dist/index.js"]

@@ -42,6 +42,10 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      {{- with $.Values.global.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       containers:
         - name: migrator
           image: {{ include "urule.image" (dict "image" (printf "%s-migrator" $svc.image) "ctx" $) }}

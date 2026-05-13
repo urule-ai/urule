@@ -41,4 +41,8 @@ COPY --from=builder /app/apps/office-ui/public ./public
 EXPOSE 3000
 HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=3 \
   CMD node -e "fetch('http://localhost:3000/healthz').then(r=>{if(!r.ok)throw 1}).catch(()=>process.exit(1))"
+# #23: drop root before exec. node:20-slim ships a `node` user (uid 1000).
+# Next standalone writes its runtime cache under .next/, so chown /app.
+RUN chown -R node:node /app
+USER node
 CMD ["node", "server.js"]
