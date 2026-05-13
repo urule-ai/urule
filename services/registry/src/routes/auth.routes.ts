@@ -3,10 +3,6 @@ import { z } from 'zod';
 import type { UruleUser } from '@urule/auth-middleware';
 import { AuditLogger } from '@urule/events';
 
-const audit = new AuditLogger('registry', (topic, data) => {
-  console.log(JSON.stringify({ audit: true, topic, ...data as Record<string, unknown> }));
-});
-
 const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(1),
@@ -19,6 +15,12 @@ const loginSchema = z.object({
  * GET  /auth/me     — Return the current user from the JWT
  */
 export function registerAuthRoutes(app: FastifyInstance) {
+  // Audit events go through the Fastify Pino logger so they pick up the app's
+  // redaction config instead of console.log, which bypasses it (#18).
+  const audit = new AuditLogger('registry', (topic, data) => {
+    app.log.info({ audit: true, topic, ...(data as Record<string, unknown>) }, 'audit');
+  });
+
   const keycloakUrl = process.env['KEYCLOAK_URL'] ?? 'http://localhost:8281';
   const realm = process.env['KEYCLOAK_REALM'] ?? 'urule';
   const clientId = process.env['KEYCLOAK_CLIENT_ID'] ?? 'urule-office';
@@ -71,7 +73,9 @@ export function registerAuthRoutes(app: FastifyInstance) {
       audit.authLogin(
         { id: email, username: email },
         `User "${email}" logged in`,
-      ).catch(() => {});
+      ).catch((err: unknown) => {
+        request.log.warn({ err, route: '/auth/login' }, 'audit emit failed');
+      });
 
       return {
         access_token: tokens.access_token,

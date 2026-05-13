@@ -10,11 +10,6 @@ import { providers } from '../db/schema/providers.js';
 import { workspaces } from '../db/schema/workspaces.js';
 import { AuditLogger } from '@urule/events';
 
-// Simple audit logger that logs to stdout (NATS integration can be added later)
-const audit = new AuditLogger('registry', (topic, data) => {
-  console.log(JSON.stringify({ audit: true, topic, ...data as Record<string, unknown> }));
-});
-
 const createAgentSchema = z.object({
   workspaceId: z.string().optional(),
   name: z.string().min(1).max(100),
@@ -89,6 +84,12 @@ function toUiAgent(row: Record<string, unknown>, provider?: Record<string, unkno
 }
 
 export function registerAgentRoutes(app: FastifyInstance, db: Database) {
+  // Audit events go through the Fastify Pino logger so they pick up the app's
+  // redaction config instead of console.log, which bypasses it (#18).
+  const audit = new AuditLogger('registry', (topic, data) => {
+    app.log.info({ audit: true, topic, ...(data as Record<string, unknown>) }, 'audit');
+  });
+
   // List all agents (across all workspaces) — admin only (#25).
   app.get<{ Querystring: z.infer<typeof paginationQuerySchema> }>('/api/v1/agents', {
     schema: {
@@ -183,7 +184,7 @@ export function registerAgentRoutes(app: FastifyInstance, db: Database) {
       { id: user?.id ?? 'anonymous', username: user?.username ?? 'anonymous' },
       'agent', id, `Agent "${name}" created`,
       { workspaceId },
-    ).catch(() => {});
+    ).catch((err: unknown) => request.log.warn({ err }, 'audit emit failed'));
 
     reply.status(201).send(toUiAgent(agent as Record<string, unknown>));
   });
@@ -427,7 +428,7 @@ export function registerAgentRoutes(app: FastifyInstance, db: Database) {
         { id: user?.id ?? 'anonymous', username: user?.username ?? 'anonymous' },
         'agent', agentId, `Agent status changed to "${status}"`,
         { changes: { status: { after: status } } },
-      ).catch(() => {});
+      ).catch((err: unknown) => request.log.warn({ err }, 'audit emit failed'));
 
       return toUiAgent(agent as Record<string, unknown>);
     },
@@ -465,7 +466,7 @@ export function registerAgentRoutes(app: FastifyInstance, db: Database) {
         { id: user?.id ?? 'anonymous', username: user?.username ?? 'anonymous' },
         'agent', agentId, `Agent "${agent.name}" updated`,
         { metadata: { fields: Object.keys(updates) } },
-      ).catch(() => {});
+      ).catch((err: unknown) => request.log.warn({ err }, 'audit emit failed'));
 
       return toUiAgent(agent as Record<string, unknown>);
     },
