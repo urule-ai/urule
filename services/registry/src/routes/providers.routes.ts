@@ -7,10 +7,6 @@ import { providers } from '../db/schema/providers.js';
 import { workspaces } from '../db/schema/workspaces.js';
 import { AuditLogger } from '@urule/events';
 
-const audit = new AuditLogger('registry', (topic, data) => {
-  console.log(JSON.stringify({ audit: true, topic, ...data as Record<string, unknown> }));
-});
-
 const createProviderSchema = z.object({
   workspaceId: z.string().optional(),
   workspace_id: z.string().optional(),
@@ -70,6 +66,12 @@ function toUiProvider(row: Record<string, unknown>, mask = true) {
 }
 
 export function registerProviderRoutes(app: FastifyInstance, db: Database) {
+  // Audit events go through the Fastify Pino logger so they pick up the app's
+  // redaction config instead of console.log, which bypasses it (#18).
+  const audit = new AuditLogger('registry', (topic, data) => {
+    app.log.info({ audit: true, topic, ...(data as Record<string, unknown>) }, 'audit');
+  });
+
   // List providers (optionally filtered by workspaceId query param)
   app.get<{ Querystring: z.infer<typeof listProvidersQuerySchema> }>('/api/v1/providers', {
     schema: {
@@ -145,7 +147,7 @@ export function registerProviderRoutes(app: FastifyInstance, db: Database) {
       { id: user?.id ?? 'anonymous', username: user?.username ?? 'anonymous' },
       'provider', id, `Provider "${name}" (${provider}) created`,
       { workspaceId },
-    ).catch(() => {});
+    ).catch((err: unknown) => request.log.warn({ err }, 'audit emit failed'));
 
     reply.status(201).send(toUiProvider(row as Record<string, unknown>));
   });
@@ -238,7 +240,7 @@ export function registerProviderRoutes(app: FastifyInstance, db: Database) {
         { id: user?.id ?? 'anonymous', username: user?.username ?? 'anonymous' },
         'provider', providerId, `Provider "${row.name}" updated`,
         { metadata: { fields: Object.keys(b) } },
-      ).catch(() => {});
+      ).catch((err: unknown) => request.log.warn({ err }, 'audit emit failed'));
 
       return toUiProvider(row as Record<string, unknown>);
     },
@@ -264,7 +266,7 @@ export function registerProviderRoutes(app: FastifyInstance, db: Database) {
     audit.entityDeleted(
       { id: user?.id ?? 'anonymous', username: user?.username ?? 'anonymous' },
       'provider', providerId, `Provider "${row.name}" deleted`,
-    ).catch(() => {});
+    ).catch((err: unknown) => request.log.warn({ err }, 'audit emit failed'));
 
     reply.status(204).send();
   });

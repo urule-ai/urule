@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import Fastify, { type FastifyInstance } from 'fastify';
 import {
   serializerCompiler,
@@ -16,13 +16,14 @@ import { InMemoryAuthzEngine } from '../src/services/authz-engine.js';
 // Complements `governance.test.ts` (unit tests on `GovernanceService`) by
 // exercising the Fastify wiring — Zod type-provider validation, the
 // `{ error: 'Validation failed', details }` envelope from `errorHandler`,
-// and audit emission via `console.log`. We don't go through `buildServer()`
-// because (a) we need access to the in-memory engines to seed allow/deny
-// outcomes, and (b) the `cors`/`rate-limit`/`swagger` plugins are tested
-// elsewhere. We do mirror the *minimal* subset of `buildServer` plumbing
-// that affects route behaviour: validator/serializer compilers, the error
-// handler, and the auth middleware (in its permissive default mode so
-// `request.uruleUser` is decorated as `null`).
+// and audit emission via `app.log.info` (`buildTestApp` spies on it, and
+// `auditEvents(app)` reads the captured calls). We don't go through
+// `buildServer()` because (a) we need access to the in-memory engines to
+// seed allow/deny outcomes, and (b) the `cors`/`rate-limit`/`swagger`
+// plugins are tested elsewhere. We do mirror the *minimal* subset of
+// `buildServer` plumbing that affects route behaviour: validator/serializer
+// compilers, the error handler, and the auth middleware (in its permissive
+// default mode so `request.uruleUser` is decorated as `null`).
 
 interface AuditEnvelope {
   audit: true;
@@ -43,17 +44,14 @@ interface AuditEnvelope {
   [k: string]: unknown;
 }
 
-function auditEvents(spy: ReturnType<typeof vi.spyOn>): AuditEnvelope[] {
-  return spy.mock.calls
+function auditEvents(app: FastifyInstance): AuditEnvelope[] {
+  // `buildTestApp` calls `vi.spyOn(app.log, 'info')` so each audit emit
+  // (which goes through `app.log.info({audit: true, ...}, 'audit')`) shows up
+  // here as a mock-call whose first arg is the audit envelope object.
+  const info = app.log.info as unknown as { mock?: { calls: unknown[][] } };
+  const calls = info.mock?.calls ?? [];
+  return calls
     .map((call) => call[0])
-    .filter((arg): arg is string => typeof arg === 'string')
-    .map((s) => {
-      try {
-        return JSON.parse(s) as unknown;
-      } catch {
-        return null;
-      }
-    })
     .filter(
       (o): o is AuditEnvelope =>
         !!o &&
@@ -74,6 +72,11 @@ async function buildTestApp(opts: BuildOpts = {}): Promise<FastifyInstance> {
   app.setErrorHandler(errorHandler);
   await app.register(authMiddleware, { publicRoutes: ['/healthz'] });
 
+  // Spy on app.log.info before governanceRoutes runs so the audit sink's
+  // closure picks up the spy (the sink looks up `app.log.info` on each call).
+  // Tests then read captured emits via `auditEvents(app)`.
+  vi.spyOn(app.log, 'info');
+
   const policy = new InMemoryPolicyEngine();
   const authz = new InMemoryAuthzEngine();
   opts.seedPolicy?.(policy);
@@ -87,7 +90,7 @@ async function buildTestApp(opts: BuildOpts = {}): Promise<FastifyInstance> {
 
 // `audit.configChanged(...).catch(...)` is fire-and-forget. Even though the
 // publish sink is synchronous, the chain still goes through one microtask
-// before `console.log` fires. Wait one macrotask after each inject so the
+// before `app.log.info` fires. Wait one macrotask after each inject so the
 // audit microtasks have flushed before assertions run.
 async function flushAudit(): Promise<void> {
   await new Promise<void>((r) => setImmediate(r));
@@ -97,16 +100,6 @@ const validSubject = { type: 'user', id: 'alice' };
 const validResource = { type: 'document', id: 'doc-1' };
 
 describe('governance routes — HTTP integration', () => {
-  let consoleSpy: ReturnType<typeof vi.spyOn>;
-
-  beforeEach(() => {
-    consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-  });
-
-  afterEach(() => {
-    consoleSpy.mockRestore();
-  });
-
   describe('POST /api/v1/governance/decide', () => {
     it('returns 400 with Validation failed envelope on missing body', async () => {
       const app = await buildTestApp();
@@ -148,7 +141,7 @@ describe('governance routes — HTTP integration', () => {
       expect(body.requiresApproval).toBe(false);
 
       await flushAudit();
-      const events = auditEvents(consoleSpy);
+      const events = auditEvents(app);
       expect(events).toHaveLength(1);
       const evt = events[0]!;
       expect(evt.topic).toBe('urule.audit.config.changed');
@@ -181,7 +174,7 @@ describe('governance routes — HTTP integration', () => {
       expect(body.authzResult.allowed).toBe(false);
 
       await flushAudit();
-      const events = auditEvents(consoleSpy);
+      const events = auditEvents(app);
       expect(events).toHaveLength(1);
       expect(events[0]!.data.description).toContain('denied');
     });
@@ -224,7 +217,7 @@ describe('governance routes — HTTP integration', () => {
       expect(body.reasons).toContain('Read allowed by policy');
 
       await flushAudit();
-      const events = auditEvents(consoleSpy);
+      const events = auditEvents(app);
       expect(events).toHaveLength(1);
       const evt = events[0]!;
       expect(evt.topic).toBe('urule.audit.config.changed');
@@ -269,7 +262,7 @@ describe('governance routes — HTTP integration', () => {
 
       await flushAudit();
       // Allows are intentionally not audited (would be too noisy).
-      expect(auditEvents(consoleSpy)).toHaveLength(0);
+      expect(auditEvents(app)).toHaveLength(0);
     });
 
     it('returns 200 with allowed=false and emits an access.denied audit event on deny', async () => {
@@ -287,7 +280,7 @@ describe('governance routes — HTTP integration', () => {
       expect(res.json()).toEqual({ allowed: false });
 
       await flushAudit();
-      const events = auditEvents(consoleSpy);
+      const events = auditEvents(app);
       expect(events).toHaveLength(1);
       const evt = events[0]!;
       expect(evt.topic).toBe('urule.audit.access.denied');
@@ -364,7 +357,7 @@ describe('governance routes — HTTP integration', () => {
       await flushAudit();
       // batch-check is intentionally silent — caller is expected to log
       // denials at its own layer (see the route's `description`).
-      expect(auditEvents(consoleSpy)).toHaveLength(0);
+      expect(auditEvents(app)).toHaveLength(0);
     });
   });
 });

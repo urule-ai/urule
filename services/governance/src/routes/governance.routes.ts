@@ -11,10 +11,6 @@ import type {
 } from "../types.js";
 import { AuditLogger } from "@urule/events";
 
-const audit = new AuditLogger("governance", (topic, data) => {
-  console.log(JSON.stringify({ audit: true, topic, ...data as Record<string, unknown> }));
-});
-
 interface Dependencies {
   governance: GovernanceService;
   policy: PolicyEngine;
@@ -56,6 +52,12 @@ export async function governanceRoutes(
   app: FastifyInstance,
   deps: Dependencies,
 ): Promise<void> {
+  // Audit events go through the Fastify Pino logger so they pick up the app's
+  // redaction config instead of console.log, which bypasses it (#18).
+  const audit = new AuditLogger("governance", (topic, data) => {
+    app.log.info({ audit: true, topic, ...(data as Record<string, unknown>) }, "audit");
+  });
+
   app.post(
     "/api/v1/governance/decide",
     {
