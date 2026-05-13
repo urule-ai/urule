@@ -92,16 +92,15 @@ The 2026-05-08 external security audit (tracking [#20](https://github.com/urule-
 - [x] [#19](https://github.com/urule-ai/urule/issues/19) — CI no longer swallows `npm audit` / typecheck / build failures (gates on `--audit-level=critical`; tighten to `high` once #88/#89 land)
 - [x] [#42](https://github.com/urule-ai/urule/issues/42) — CI uses `npm ci`, not `npm install`
 
-**Tier 1 — surgical critical/high (one PR each):**
-- [ ] [#1](https://github.com/urule-ai/urule/issues/1) — auth-middleware: fail closed by default (JWKS-fetch failure must not fall back to the mock-admin user)
-- [ ] [#13](https://github.com/urule-ai/urule/issues/13) — auth-middleware: drop the hardcoded `'account'` audience acceptance
-- [ ] [#5](https://github.com/urule-ai/urule/issues/5) — `GET /api/v1/providers/:id/key` must not be reachable by a normal user token
-- [ ] [#12](https://github.com/urule-ai/urule/issues/12) (+ [#46](https://github.com/urule-ai/urule/issues/46)) — remove hardcoded `POSTGRES_PASSWORD` / infra creds from docker-compose
-- [ ] [#25](https://github.com/urule-ai/urule/issues/25) — `GET /api/v1/agents` (+ sibling list routes) must scope to the caller's workspace
-- [ ] [#24](https://github.com/urule-ai/urule/issues/24) (+ [#45](https://github.com/urule-ai/urule/issues/45)) — pin auth-critical infra images (Keycloak/OpenFGA/OPA/Temporal/OTel/Jaeger) off `:latest`
-- [ ] [#18](https://github.com/urule-ai/urule/issues/18) (+ [#40](https://github.com/urule-ai/urule/issues/40)) — route the audit logger through Pino (redaction); stop swallowing emit errors in `.catch(() => {})`
-- [ ] [#16](https://github.com/urule-ai/urule/issues/16) — fix `canonicalDigest` to recursively sort nested keys (broken signature canonicalization)
-- [ ] [#23](https://github.com/urule-ai/urule/issues/23) — non-root `USER` in every Dockerfile + `runAsNonRoot` in the Helm chart
+**Tier 1 — done (surgical critical/high, one PR each):**
+- [x] [#1](https://github.com/urule-ai/urule/issues/1), [#13](https://github.com/urule-ai/urule/issues/13) (PR [#92](https://github.com/urule-ai/urule/pull/92)) — auth-middleware fails closed by default on JWKS error; dropped the hardcoded `'account'` audience acceptance
+- [x] [#5](https://github.com/urule-ai/urule/issues/5) (PR [#93](https://github.com/urule-ai/urule/pull/93)) — `GET /api/v1/providers/:id/key` is now `admin`-only; non-admin / anonymous → 403
+- [x] [#12](https://github.com/urule-ai/urule/issues/12), [#46](https://github.com/urule-ai/urule/issues/46) (PR [#94](https://github.com/urule-ai/urule/pull/94)) — docker-compose credentials required via `${VAR:?}`; insecure dev defaults moved to `infra/compose/.env.example`
+- [x] [#25](https://github.com/urule-ai/urule/issues/25) (PR [#96](https://github.com/urule-ai/urule/pull/96)) — `GET /api/v1/agents` (cross-workspace list) is `admin`-only; sibling routes + office-ui callers tracked in [#95](https://github.com/urule-ai/urule/issues/95)
+- [x] [#24](https://github.com/urule-ai/urule/issues/24), [#45](https://github.com/urule-ai/urule/issues/45) (PR [#97](https://github.com/urule-ai/urule/pull/97)) — pinned the 7 `:latest` infra images (Temporal × 2, Keycloak, OpenFGA, OPA, OTel, Jaeger); Helm `imageTag` default → `"0.1.0"`
+- [x] [#18](https://github.com/urule-ai/urule/issues/18), [#40](https://github.com/urule-ai/urule/issues/40) (PR [#98](https://github.com/urule-ai/urule/pull/98)) — audit logger routes through Fastify's Pino logger (redaction); `.catch(() => {})` swallows replaced with `request.log.warn`
+- [x] [#16](https://github.com/urule-ai/urule/issues/16) (PR [#99](https://github.com/urule-ai/urule/pull/99)) — `canonicalDigest` recursively sorts object keys at every level (the old replacer-array form silently dropped nested keys, defeating signature binding)
+- [x] [#23](https://github.com/urule-ai/urule/issues/23) (PR [#100](https://github.com/urule-ai/urule/pull/100)) — non-root `USER` in all 7 in-repo Dockerfiles; Helm `global.podSecurityContext: { runAsNonRoot: true, runAsUser: 1000, fsGroup: 1000 }` default. Standalones (separate repos) still need their own Dockerfile `USER` fix.
 
 **Tier 2 — architectural (each its own design + PR):**
 - [ ] [#4](https://github.com/urule-ai/urule/issues/4) — system-wide authorization (currently only authn is enforced; no resource-level authz)
