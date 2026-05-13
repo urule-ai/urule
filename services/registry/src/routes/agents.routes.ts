@@ -89,15 +89,29 @@ function toUiAgent(row: Record<string, unknown>, provider?: Record<string, unkno
 }
 
 export function registerAgentRoutes(app: FastifyInstance, db: Database) {
-  // List all agents (across all workspaces)
+  // List all agents (across all workspaces) — admin only (#25).
   app.get<{ Querystring: z.infer<typeof paginationQuerySchema> }>('/api/v1/agents', {
     schema: {
       tags: ['agents'],
-      summary: 'List all agents',
-      description: 'Pagination via `?limit` (capped 100) + `?offset`. Each row is decorated with its associated provider record (joined on `agent.config.provider_id`). Admin-shaped — most callers should use `/workspaces/:wsId/agents` instead.',
+      summary: 'List all agents (admin only)',
+      description: 'Cross-workspace list — **admin only**. Regular callers should use `/api/v1/workspaces/:wsId/agents` to list a workspace\'s agents. Pagination via `?limit` (capped 100) + `?offset`. Each row is decorated with its associated provider record (joined on `agent.config.provider_id`).',
       querystring: paginationQuerySchema,
     },
-  }, async (request) => {
+  }, async (request, reply) => {
+    // #25: without a guard, any authenticated user sees every workspace's
+    // agents. Require the `admin` role. TODO(#4): once the authz layer can
+    // scope to the caller's workspaces, prefer that over a blanket admin gate
+    // (and switch the office-ui's agent-list queries to /workspaces/:wsId/agents).
+    const user = (request as any).uruleUser;
+    if (!user?.roles?.includes('admin')) {
+      reply.status(403).send({
+        error: {
+          code: 'FORBIDDEN',
+          message: 'Admin role required — use /api/v1/workspaces/:wsId/agents to list a workspace’s agents',
+        },
+      });
+      return;
+    }
     const limit = Math.min(parseInt(request.query.limit ?? '50', 10), 100);
     const offset = parseInt(request.query.offset ?? '0', 10);
     const rows = await db.select().from(agents).limit(limit).offset(offset);
