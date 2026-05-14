@@ -1,0 +1,42 @@
+{
+  "name": "@urule/authz-middleware",
+  "version": "0.1.0",
+  "description": "Fastify authorization middleware for Urule services — preHandler factories that gate routes on OpenFGA workspace/role membership (#4)",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "clean:peers": "rimraf node_modules/fastify"
+  },
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/urule-ai/urule.git",
+    "directory": "packages/authz-middleware"
+  },
+  "dependencies": {
+    "@urule/authz": "*",
+    "fastify-plugin": "^5.0.0"
+  },
+  "peerDependencies": {
+    "fastify": "^5.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "fastify": "^5.0.0",
+    "rimraf": "^5.0.0",
+    "typescript": "^5.5.0",
+    "vitest": "^2.0.0"
+  }
+}
