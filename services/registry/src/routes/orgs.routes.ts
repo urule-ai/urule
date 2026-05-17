@@ -2,6 +2,8 @@ import type { FastifyInstance } from 'fastify';
 import { ulid } from 'ulid';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
+import { orgTuple } from '@urule/authz';
+import { AuditLogger } from '@urule/events';
 import type { Database } from '../db/connection.js';
 import { orgs } from '../db/schema/orgs.js';
 
@@ -18,6 +20,10 @@ const listOrgsQuerySchema = z.object({
 });
 
 export function registerOrgRoutes(app: FastifyInstance, db: Database) {
+  const audit = new AuditLogger('registry', (topic, data) => {
+    app.log.info({ audit: true, topic, ...(data as Record<string, unknown>) }, 'audit');
+  });
+
   // List orgs
   app.get<{ Querystring: z.infer<typeof listOrgsQuerySchema> }>('/api/v1/orgs', {
     schema: {
@@ -42,6 +48,7 @@ export function registerOrgRoutes(app: FastifyInstance, db: Database) {
     },
   }, async (request, reply) => {
     const { name, slug } = request.body;
+    const user = (request as { uruleUser?: { id?: string; username?: string } }).uruleUser;
     const id = ulid();
     const now = new Date();
 
@@ -53,6 +60,24 @@ export function registerOrgRoutes(app: FastifyInstance, db: Database) {
       createdAt: now,
       updatedAt: now,
     }).returning();
+
+    // Record the creator as the org's owner in OpenFGA. Owner ⊆ admin ⊆ member,
+    // and workspace.member inherits org members via the `parent` userset — so
+    // this single tuple seeds the whole authz tree for the new tenant.
+    // Non-fatal: an orphaned org is admin-recoverable, and registry availability
+    // must not depend on OpenFGA being reachable.
+    if (user?.id) {
+      try {
+        await request.authz.writeTuples([orgTuple(user.id, 'owner', id)]);
+      } catch (err) {
+        request.log.warn({ err, orgId: id }, 'authz: failed to write org owner tuple');
+      }
+    }
+
+    audit.entityCreated(
+      { id: user?.id ?? 'anonymous', username: user?.username ?? 'anonymous' },
+      'org', id, `Org "${name}" created`,
+    ).catch((err: unknown) => request.log.warn({ err }, 'audit emit failed'));
 
     reply.status(201).send(org);
   });

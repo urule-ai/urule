@@ -10,8 +10,11 @@ import {
   type ZodTypeProvider,
 } from 'fastify-type-provider-zod';
 import { authMiddleware } from '@urule/auth-middleware';
+import { authzMiddleware } from '@urule/authz-middleware';
 import { correlationIdPlugin } from '@urule/correlation-id';
 import { metricsPlugin } from '@urule/observability';
+import { buildAuthzClient } from './authz.js';
+import { backfillAuthzTuples } from './authz-backfill.js';
 import { createDb } from './db/connection.js';
 import { registerOrgRoutes } from './routes/orgs.routes.js';
 import { registerWorkspaceRoutes } from './routes/workspaces.routes.js';
@@ -66,6 +69,11 @@ export async function buildServer(config: Config) {
   await app.register(authMiddleware, {
     publicRoutes: ['/healthz', '/metrics', '/api/v1/infrastructure', '/auth/login', '/docs'],
   });
+
+  // Resource-level authz — decorates request.authz with an OpenFGA-backed
+  // AuthzClient. Must come AFTER authMiddleware so request.uruleUser exists.
+  const authzClient = await buildAuthzClient(config, app.log);
+  await app.register(authzMiddleware, { authzClient });
 
   // OpenAPI documentation. Tag descriptions surface in swagger-ui as
   // section headers; per-route tags / summaries / descriptions live in
@@ -124,6 +132,15 @@ export async function buildServer(config: Config) {
 
   // Database
   const db = createDb(config.databaseUrl);
+
+  // Backfill OpenFGA ownership tuples for orgs/workspaces created before authz
+  // existed (the seeded demo tenant). Idempotent; fire-and-forget so it never
+  // blocks startup; skipped entirely when authz runs in in-memory mock mode.
+  if (config.openfgaUrl) {
+    backfillAuthzTuples({ db, authz: authzClient, log: app.log }).catch((err: unknown) => {
+      app.log.warn({ err }, 'authz-backfill: startup backfill failed');
+    });
+  }
 
   // Routes
   registerOrgRoutes(app, db);

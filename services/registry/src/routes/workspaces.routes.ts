@@ -2,6 +2,8 @@ import type { FastifyInstance } from 'fastify';
 import { ulid } from 'ulid';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
+import { parentTuple, workspaceTuple } from '@urule/authz';
+import { AuditLogger } from '@urule/events';
 import type { Database } from '../db/connection.js';
 import { workspaces } from '../db/schema/workspaces.js';
 
@@ -46,6 +48,10 @@ function toUiWorkspace(row: Record<string, unknown>) {
 }
 
 export function registerWorkspaceRoutes(app: FastifyInstance, db: Database) {
+  const audit = new AuditLogger('registry', (topic, data) => {
+    app.log.info({ audit: true, topic, ...(data as Record<string, unknown>) }, 'audit');
+  });
+
   // List all workspaces
   app.get('/api/v1/workspaces', {
     schema: {
@@ -146,6 +152,7 @@ export function registerWorkspaceRoutes(app: FastifyInstance, db: Database) {
     },
     async (request, reply) => {
       const { orgId, name, slug, description } = request.body;
+      const user = (request as { uruleUser?: { id?: string; username?: string } }).uruleUser;
       const id = ulid();
       const now = new Date();
 
@@ -159,6 +166,23 @@ export function registerWorkspaceRoutes(app: FastifyInstance, db: Database) {
         createdAt: now,
         updatedAt: now,
       }).returning();
+
+      // Seed OpenFGA: the creator owns the workspace, and the workspace links to
+      // its parent org so org members inherit `member` via the `parent` userset.
+      // Non-fatal — registry availability must not depend on OpenFGA.
+      try {
+        const tuples = [parentTuple('workspace', id, 'org', orgId)];
+        if (user?.id) tuples.push(workspaceTuple(user.id, 'owner', id));
+        await request.authz.writeTuples(tuples);
+      } catch (err) {
+        request.log.warn({ err, workspaceId: id }, 'authz: failed to write workspace tuples');
+      }
+
+      audit.entityCreated(
+        { id: user?.id ?? 'anonymous', username: user?.username ?? 'anonymous' },
+        'workspace', id, `Workspace "${name}" created`,
+        { workspaceId: id },
+      ).catch((err: unknown) => request.log.warn({ err }, 'audit emit failed'));
 
       reply.status(201).send(toUiWorkspace(workspace as Record<string, unknown>));
     },
