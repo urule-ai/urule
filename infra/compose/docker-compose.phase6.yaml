@@ -90,6 +90,26 @@ services:
         condition: service_completed_successfully
     restart: 'no'
 
+  # Backfills OpenFGA ownership tuples for the seeded demo org/workspace so
+  # resource-level authz works from first boot. Idempotent — the registry also
+  # runs this backfill on its own startup; this one-shot makes it explicit.
+  registry-authz-seed:
+    build:
+      context: ../..
+      dockerfile: services/registry/Dockerfile
+    logging: *default-logging
+    entrypoint: ['node', 'dist/authz-backfill.js']
+    environment:
+      DATABASE_URL: postgres://urule:${POSTGRES_PASSWORD:?}@postgres:5432/registry
+      OPENFGA_URL: http://openfga:8080
+      NATS_URL: nats://nats:4222
+    depends_on:
+      registry-seed:
+        condition: service_completed_successfully
+      openfga:
+        condition: service_healthy
+    restart: 'no'
+
   packagehub-seed:
     image: postgres:16-alpine
     logging: *default-logging
@@ -126,12 +146,17 @@ services:
       DATABASE_URL: postgres://urule:${POSTGRES_PASSWORD:?}@postgres:5432/registry
       NATS_URL: nats://nats:4222
       ADAPTER_URL: http://adapter:3000
+      # Resource-level authz (OpenFGA). The registry self-bootstraps the store +
+      # model on startup; unset this to fall back to in-memory mock authz.
+      OPENFGA_URL: http://openfga:8080
     depends_on:
       registry-migrate:
         condition: service_completed_successfully
       registry-seed:
         condition: service_completed_successfully
       nats:
+        condition: service_healthy
+      openfga:
         condition: service_healthy
     healthcheck:
       test: ['CMD-SHELL', "node -e \"fetch('http://localhost:3000/healthz').then(r=>{if(!r.ok)throw 1}).catch(()=>process.exit(1))\""]
