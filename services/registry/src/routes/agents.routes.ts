@@ -9,6 +9,8 @@ import { conversationAgents, messages } from '../db/schema/conversations.js';
 import { providers } from '../db/schema/providers.js';
 import { workspaces } from '../db/schema/workspaces.js';
 import { AuditLogger } from '@urule/events';
+import { requireMembership } from '@urule/authz-middleware';
+import { agentWorkspaceResolver, bodyWorkspaceResolver } from '../authz.js';
 
 const createAgentSchema = z.object({
   workspaceId: z.string().optional(),
@@ -90,6 +92,11 @@ export function registerAgentRoutes(app: FastifyInstance, db: Database) {
     app.log.info({ audit: true, topic, ...(data as Record<string, unknown>) }, 'audit');
   });
 
+  // Resource-level authz: write routes require membership of the agent's
+  // workspace (resolved via :agentId), or of the workspace named in the body.
+  const requireAgentMembership = requireMembership(agentWorkspaceResolver(db));
+  const requireBodyMembership = requireMembership(bodyWorkspaceResolver(db));
+
   // List all agents (across all workspaces) — admin only (#25).
   app.get<{ Querystring: z.infer<typeof paginationQuerySchema> }>('/api/v1/agents', {
     schema: {
@@ -149,6 +156,7 @@ export function registerAgentRoutes(app: FastifyInstance, db: Database) {
   app.post<{
     Body: z.infer<typeof createAgentSchema>;
   }>('/api/v1/agents', {
+    preHandler: requireBodyMembership,
     schema: {
       tags: ['agents'],
       summary: 'Register an agent',
@@ -350,6 +358,7 @@ export function registerAgentRoutes(app: FastifyInstance, db: Database) {
   app.post<{ Params: z.infer<typeof agentIdParamsSchema>; Body: z.infer<typeof memoryCreateSchema> }>(
     '/api/v1/agents/:agentId/memories',
     {
+      preHandler: requireAgentMembership,
       schema: {
         tags: ['agents'],
         summary: 'Add an agent memory',
@@ -378,6 +387,7 @@ export function registerAgentRoutes(app: FastifyInstance, db: Database) {
   app.delete<{ Params: z.infer<typeof agentMemoryParamsSchema> }>(
     '/api/v1/agents/:agentId/memories/:memoryId',
     {
+      preHandler: requireAgentMembership,
       schema: {
         tags: ['agents'],
         summary: 'Delete an agent memory',
@@ -402,6 +412,7 @@ export function registerAgentRoutes(app: FastifyInstance, db: Database) {
   app.post<{ Params: z.infer<typeof agentIdParamsSchema>; Body: z.infer<typeof agentStatusSchema> }>(
     '/api/v1/agents/:agentId/status',
     {
+      preHandler: requireAgentMembership,
       schema: {
         tags: ['agents'],
         summary: "Update agent status",
@@ -438,6 +449,7 @@ export function registerAgentRoutes(app: FastifyInstance, db: Database) {
   app.patch<{ Params: z.infer<typeof agentIdParamsSchema>; Body: z.infer<typeof updateAgentSchema> }>(
     '/api/v1/agents/:agentId',
     {
+      preHandler: requireAgentMembership,
       schema: {
         tags: ['agents'],
         summary: 'Update an agent',

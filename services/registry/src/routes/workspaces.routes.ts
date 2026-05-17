@@ -3,9 +3,11 @@ import { ulid } from 'ulid';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { parentTuple, workspaceTuple } from '@urule/authz';
+import { requireMembership } from '@urule/authz-middleware';
 import { AuditLogger } from '@urule/events';
 import type { Database } from '../db/connection.js';
 import { workspaces } from '../db/schema/workspaces.js';
+import { firstWorkspaceId } from '../authz.js';
 
 const createWorkspaceSchema = z.object({
   orgId: z.string().min(1),
@@ -52,6 +54,9 @@ export function registerWorkspaceRoutes(app: FastifyInstance, db: Database) {
     app.log.info({ audit: true, topic, ...(data as Record<string, unknown>) }, 'audit');
   });
 
+  // Mutating the demo-mode "current" workspace requires membership of it.
+  const requireCurrentWorkspace = requireMembership(() => firstWorkspaceId(db));
+
   // List all workspaces
   app.get('/api/v1/workspaces', {
     schema: {
@@ -93,6 +98,7 @@ export function registerWorkspaceRoutes(app: FastifyInstance, db: Database) {
 
   // Update current workspace (for settings page)
   app.patch<{ Body: z.infer<typeof updateWorkspaceSchema> }>('/api/v1/workspaces/current', {
+    preHandler: requireCurrentWorkspace,
     schema: {
       tags: ['workspaces'],
       summary: 'Update the current workspace',
@@ -115,6 +121,7 @@ export function registerWorkspaceRoutes(app: FastifyInstance, db: Database) {
 
   // Update current workspace guardrails
   app.patch('/api/v1/workspaces/current/guardrails', {
+    preHandler: requireCurrentWorkspace,
     schema: {
       tags: ['workspaces'],
       summary: 'Update workspace guardrails (stub)',
@@ -143,10 +150,15 @@ export function registerWorkspaceRoutes(app: FastifyInstance, db: Database) {
   app.post<{ Body: z.infer<typeof createWorkspaceSchema> }>(
     '/api/v1/workspaces',
     {
+      // A workspace is created inside an org — gate on org membership.
+      preHandler: requireMembership(
+        (req) => (req.body as { orgId?: string } | null)?.orgId ?? null,
+        { objectType: 'org' },
+      ),
       schema: {
         tags: ['workspaces'],
         summary: 'Create a workspace',
-        description: 'Body `{ orgId, name, slug, description? }`. Slug must be unique within the org. New workspaces land in `status: active`.',
+        description: 'Body `{ orgId, name, slug, description? }`. Slug must be unique within the org. New workspaces land in `status: active`. Requires membership of the parent org.',
         body: createWorkspaceSchema,
       },
     },

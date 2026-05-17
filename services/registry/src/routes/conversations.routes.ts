@@ -3,10 +3,12 @@ import { ulid } from 'ulid';
 import { eq, desc, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { fetchWithCorrelation } from '@urule/correlation-id';
+import { requireMembership } from '@urule/authz-middleware';
 import type { Database } from '../db/connection.js';
 import { conversations, conversationAgents, messages } from '../db/schema/conversations.js';
 import { agents } from '../db/schema/agents.js';
 import { workspaces } from '../db/schema/workspaces.js';
+import { bodyWorkspaceResolver, conversationWorkspaceResolver } from '../authz.js';
 
 const createConversationSchema = z.object({
   workspaceId: z.string().min(1),
@@ -85,10 +87,15 @@ function toUiAgentSummary(row: Record<string, unknown>) {
 }
 
 export function registerConversationRoutes(app: FastifyInstance, db: Database) {
+  // Resource-level authz for the write routes.
+  const requireConversationMembership = requireMembership(conversationWorkspaceResolver(db));
+  const requireBodyMembership = requireMembership(bodyWorkspaceResolver(db));
+
   // Create conversation
   app.post<{
     Body: z.infer<typeof createConversationSchema>;
   }>('/api/v1/conversations', {
+    preHandler: requireBodyMembership,
     schema: {
       tags: ['conversations'],
       summary: 'Create a conversation',
@@ -223,6 +230,7 @@ export function registerConversationRoutes(app: FastifyInstance, db: Database) {
 
   // Delete conversation (cascades to messages and conversation_agents)
   app.delete<{ Params: z.infer<typeof conversationIdParamsSchema> }>('/api/v1/conversations/:conversationId', {
+    preHandler: requireConversationMembership,
     schema: {
       tags: ['conversations'],
       summary: 'Delete a conversation',
@@ -244,6 +252,7 @@ export function registerConversationRoutes(app: FastifyInstance, db: Database) {
     Params: z.infer<typeof conversationIdParamsSchema>;
     Body: z.infer<typeof createMessageSchema>;
   }>('/api/v1/conversations/:conversationId/messages', {
+    preHandler: requireConversationMembership,
     schema: {
       tags: ['conversations'],
       summary: 'Append a message to a conversation',
@@ -359,6 +368,7 @@ export function registerConversationRoutes(app: FastifyInstance, db: Database) {
     Params: z.infer<typeof conversationIdParamsSchema>;
     Body: z.infer<typeof branchConversationSchema>;
   }>('/api/v1/conversations/:conversationId/branch', {
+    preHandler: requireConversationMembership,
     schema: {
       tags: ['conversations'],
       summary: 'Fork a conversation at a message',

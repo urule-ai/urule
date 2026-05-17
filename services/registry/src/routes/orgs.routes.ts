@@ -3,6 +3,7 @@ import { ulid } from 'ulid';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { orgTuple } from '@urule/authz';
+import { requireRole } from '@urule/authz-middleware';
 import { AuditLogger } from '@urule/events';
 import type { Database } from '../db/connection.js';
 import { orgs } from '../db/schema/orgs.js';
@@ -38,12 +39,16 @@ export function registerOrgRoutes(app: FastifyInstance, db: Database) {
     return db.select().from(orgs).limit(limit).offset(offset);
   });
 
-  // Create org
+  // Create org — admin-gated. Orgs are the top-level tenant boundary with no
+  // parent resource to scope membership against, so creation requires the
+  // `admin` realm role (conservative; relax to authenticated-only if org
+  // self-signup is wanted — the creator is recorded as owner either way).
   app.post<{ Body: z.infer<typeof createOrgSchema> }>('/api/v1/orgs', {
+    preHandler: requireRole('admin'),
     schema: {
       tags: ['orgs'],
       summary: 'Create an org',
-      description: 'Body `{ name, slug }`. Slug must be unique across the system — if collision is a real risk in your deployment, prefix it with a tenant prefix at the caller. New orgs land in `status: active`.',
+      description: 'Body `{ name, slug }`. Slug must be unique across the system — if collision is a real risk in your deployment, prefix it with a tenant prefix at the caller. New orgs land in `status: active`. Admin-only.',
       body: createOrgSchema,
     },
   }, async (request, reply) => {

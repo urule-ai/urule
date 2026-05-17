@@ -6,6 +6,8 @@ import type { Database } from '../db/connection.js';
 import { providers } from '../db/schema/providers.js';
 import { workspaces } from '../db/schema/workspaces.js';
 import { AuditLogger } from '@urule/events';
+import { requireMembership } from '@urule/authz-middleware';
+import { bodyWorkspaceResolver, providerWorkspaceResolver } from '../authz.js';
 
 const createProviderSchema = z.object({
   workspaceId: z.string().optional(),
@@ -72,6 +74,10 @@ export function registerProviderRoutes(app: FastifyInstance, db: Database) {
     app.log.info({ audit: true, topic, ...(data as Record<string, unknown>) }, 'audit');
   });
 
+  // Resource-level authz for the write routes.
+  const requireProviderMembership = requireMembership(providerWorkspaceResolver(db));
+  const requireBodyMembership = requireMembership(bodyWorkspaceResolver(db));
+
   // List providers (optionally filtered by workspaceId query param)
   app.get<{ Querystring: z.infer<typeof listProvidersQuerySchema> }>('/api/v1/providers', {
     schema: {
@@ -92,6 +98,7 @@ export function registerProviderRoutes(app: FastifyInstance, db: Database) {
   app.post<{
     Body: z.infer<typeof createProviderSchema>;
   }>('/api/v1/providers', {
+    preHandler: requireBodyMembership,
     schema: {
       tags: ['providers'],
       summary: 'Register an LLM provider key',
@@ -202,6 +209,7 @@ export function registerProviderRoutes(app: FastifyInstance, db: Database) {
   app.patch<{ Params: z.infer<typeof providerIdParamsSchema>; Body: z.infer<typeof updateProviderSchema> }>(
     '/api/v1/providers/:providerId',
     {
+      preHandler: requireProviderMembership,
       schema: {
         tags: ['providers'],
         summary: 'Update provider',
@@ -248,6 +256,7 @@ export function registerProviderRoutes(app: FastifyInstance, db: Database) {
 
   // Delete provider
   app.delete<{ Params: z.infer<typeof providerIdParamsSchema> }>('/api/v1/providers/:providerId', {
+    preHandler: requireProviderMembership,
     schema: {
       tags: ['providers'],
       summary: 'Delete a provider',
