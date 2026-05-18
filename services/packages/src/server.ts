@@ -11,6 +11,8 @@ import {
   type ZodTypeProvider,
 } from 'fastify-type-provider-zod';
 import { authMiddleware } from '@urule/auth-middleware';
+import { bootstrapAuthzClient } from '@urule/authz';
+import { authzMiddleware } from '@urule/authz-middleware';
 import { correlationIdPlugin } from '@urule/correlation-id';
 import { EventBus } from '@urule/events';
 import { metricsPlugin } from '@urule/observability';
@@ -76,6 +78,11 @@ export async function buildServer(config: Config) {
   // Auth middleware
   await app.register(authMiddleware, { publicRoutes: ['/healthz', '/metrics', '/docs'] });
 
+  // Resource-level authz — decorates request.authz with an OpenFGA-backed
+  // AuthzClient. Must come AFTER authMiddleware so request.uruleUser exists.
+  const authzClient = await bootstrapAuthzClient(config, app.log);
+  await app.register(authzMiddleware, { authzClient });
+
   // OpenAPI documentation. Tag descriptions surface in swagger-ui as
   // section headers; per-route tags / summaries / descriptions live in
   // each route's `schema:` field.
@@ -124,8 +131,8 @@ export async function buildServer(config: Config) {
   }
 
   // Routes
-  registerInstallationRoutes(app, manager, { eventBus });
-  registerPackageRoutes(app, manager);
+  registerInstallationRoutes(app, manager, repo, { eventBus });
+  registerPackageRoutes(app, manager, repo);
 
   return app;
 }
