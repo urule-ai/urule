@@ -100,10 +100,15 @@ export function registerPackageRoutes(app: FastifyInstance, db: Database) {
       tags: ['packages'],
       summary: 'Register a new package',
       description:
-        'Creates a package record. Optional `publisherPubkey` (base64 Ed25519) opts the package into mandatory signed-version publishes. License tier defaults to `free`; `paid` / `subscription` tiers must include `priceCents` + a `paymentLink` for the marketplace flow.',
+        'Creates a package record owned by the authenticated user (its `publisherId`) — only that account may publish new versions. Optional `publisherPubkey` (base64 Ed25519) opts the package into mandatory signed-version publishes. License tier defaults to `free`; `paid` / `subscription` tiers must include `priceCents` + a `paymentLink` for the marketplace flow.',
       body: publishPackageSchema,
     },
   }, async (request, reply) => {
+    const user = (request as { uruleUser?: { id?: string } }).uruleUser;
+    if (!user?.id) {
+      reply.code(401).send({ error: { code: 'UNAUTHENTICATED', message: 'Authentication required' } });
+      return;
+    }
     const {
       name, type, description, author, repository, homepage, license, tags,
       publisherPubkey, pubkeyKind, licenseTier, priceCents, paymentProvider, paymentLink,
@@ -117,6 +122,7 @@ export function registerPackageRoutes(app: FastifyInstance, db: Database) {
       type,
       description: description ?? '',
       author,
+      publisherId: user.id,
       repository: repository ?? null,
       homepage: homepage ?? null,
       license: license ?? null,

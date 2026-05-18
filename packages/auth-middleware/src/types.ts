@@ -78,7 +78,10 @@ export interface AuthMiddlewareOptions {
   audience?: string;
 
   /**
-   * Route prefixes that do NOT require authentication.
+   * Route prefixes that do NOT require authentication. Each entry is either a
+   * bare path (`/api/v1/packages` — public for every method) or method-qualified
+   * (`GET /api/v1/packages` — public for GET only, so a POST to the same path
+   * still authenticates). Matching is exact or path-prefix.
    * Healthz is always public.
    * @default ['/healthz']
    */

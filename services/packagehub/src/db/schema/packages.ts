@@ -6,6 +6,11 @@ export const packages = pgTable('packages', {
   type: varchar('type', { length: 50 }).notNull(), // personality, skill, mcp_connector, etc.
   description: text('description').notNull().default(''),
   author: varchar('author', { length: 255 }).notNull(),
+  // The Urule user id (JWT subject) of the account that first published this
+  // package — its owner. Only the owner may publish new versions. NULL for
+  // packages registered before ownership tracking (legacy / seed data), which
+  // fall back to signature-gated (or open) version publishing.
+  publisherId: varchar('publisher_id', { length: 255 }),
   repository: varchar('repository', { length: 500 }),
   homepage: varchar('homepage', { length: 500 }),
   license: varchar('license', { length: 50 }),

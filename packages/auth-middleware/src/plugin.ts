@@ -83,9 +83,23 @@ async function uruleAuthPlugin(app: FastifyInstance, opts: AuthMiddlewareOptions
   const skipAuth = opts.skipAuth ?? (process.env['SKIP_AUTH'] === 'true');
   const publicRoutes = [...DEFAULT_PUBLIC_ROUTES, ...(opts.publicRoutes ?? [])];
 
-  function isPublicRoute(url: string): boolean {
+  /**
+   * Whether `method url` is public. A `publicRoutes` entry is either a bare
+   * path (`/api/v1/packages` — public for every method) or a method-qualified
+   * entry (`GET /api/v1/packages` — public for GET only, so a POST to the same
+   * path still authenticates). Matching is exact or prefix (`route + '/'`).
+   */
+  function isPublicRoute(method: string, url: string): boolean {
     const path = url.split('?')[0] ?? '';
-    return publicRoutes.some((route) => path === route || path.startsWith(route + '/'));
+    const pathMatches = (p: string) => path === p || path.startsWith(p + '/');
+    return publicRoutes.some((route) => {
+      const sep = route.indexOf(' ');
+      if (sep > 0) {
+        return route.slice(0, sep).toUpperCase() === method.toUpperCase()
+          && pathMatches(route.slice(sep + 1));
+      }
+      return pathMatches(route);
+    });
   }
 
   // Decorate requests with uruleUser
@@ -114,7 +128,7 @@ async function uruleAuthPlugin(app: FastifyInstance, opts: AuthMiddlewareOptions
       `Auth middleware: JWKS fetch from ${jwksUrl} failed (${err}); failing closed — all non-public requests will return 401`,
     );
     app.addHook('onRequest', async (request: FastifyRequest, reply: FastifyReply) => {
-      if (isPublicRoute(request.url)) return;
+      if (isPublicRoute(request.method, request.url)) return;
       reply.code(401).send({ error: 'Unauthorized', message: 'Authentication is not available' });
     });
     return;
@@ -134,7 +148,7 @@ async function uruleAuthPlugin(app: FastifyInstance, opts: AuthMiddlewareOptions
   // Auth hook — validate JWT on every request except public routes
   app.addHook('onRequest', async (request: FastifyRequest, reply: FastifyReply) => {
     // Skip auth for public routes
-    if (isPublicRoute(request.url)) {
+    if (isPublicRoute(request.method, request.url)) {
       return;
     }
 

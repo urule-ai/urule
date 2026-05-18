@@ -60,7 +60,7 @@ export function registerVersionRoutes(app: FastifyInstance, db: Database) {
       tags: ['versions'],
       summary: 'Publish a new version',
       description:
-        'Creates a new version row. If the parent package was registered with a `publisherPubkey`, the request body MUST include a base64 Ed25519 `signature` over `sha256(canonicalJson(manifest) || readme || version)` — verified against any active key in `package_pubkeys`. 400 SIGNATURE_REQUIRED on missing sig, 401 SIGNATURE_INVALID on mismatch.',
+        'Creates a new version row. Only the package\'s `publisherId` (the account that registered it) may publish versions — 403 NOT_PACKAGE_OWNER otherwise. If the parent package was registered with a `publisherPubkey`, the request body MUST also include a base64 Ed25519 `signature` over `sha256(canonicalJson(manifest) || readme || version)` — verified against any active key in `package_pubkeys`. 400 SIGNATURE_REQUIRED on missing sig, 401 SIGNATURE_INVALID on mismatch.',
       params: nameParamsSchema,
       body: publishVersionSchema,
     },
@@ -74,6 +74,19 @@ export function registerVersionRoutes(app: FastifyInstance, db: Database) {
         error: { code: 'PACKAGE_NOT_FOUND', message: `Package "${name}" not found` },
       });
       return;
+    }
+
+    // Ownership: when the package records a publisher, only that account may
+    // publish versions. Legacy packages (publisherId null — registered before
+    // ownership tracking) fall back to the signature gate below.
+    const user = (request as { uruleUser?: { id?: string } }).uruleUser;
+    if (pkg.publisherId && pkg.publisherId !== user?.id) {
+      return reply.code(403).send({
+        error: {
+          code: 'NOT_PACKAGE_OWNER',
+          message: `Only the publisher of "${name}" may publish new versions`,
+        },
+      });
     }
 
     // Signing: if the parent package has any registered pubkey (the
