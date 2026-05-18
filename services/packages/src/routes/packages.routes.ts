@@ -1,7 +1,10 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { requireMembership } from '@urule/authz-middleware';
 import { EntitlementRequiredError } from '../services/package-manager.js';
 import type { PackageManager } from '../services/package-manager.js';
+import type { InstallationRepo } from '../services/installation-repo.js';
+import { bodyWorkspaceResolver, installationWorkspaceResolver } from '../authz.js';
 import type { PackageInstallRequest } from '../types.js';
 
 const installPackageSchema = z.object({
@@ -19,10 +22,20 @@ const installIdParamsSchema = z.object({
   installId: z.string(),
 });
 
-export function registerPackageRoutes(app: FastifyInstance, manager: PackageManager): void {
+export function registerPackageRoutes(
+  app: FastifyInstance,
+  manager: PackageManager,
+  repo: InstallationRepo,
+): void {
+  // Install gates on the body's workspace; upgrade/rollback/remove resolve the
+  // installation to its workspace first (unknown install id → 404).
+  const requireBodyMembership = requireMembership(bodyWorkspaceResolver);
+  const requireInstallationMembership = requireMembership(installationWorkspaceResolver(repo));
+
   app.post<{
     Body: PackageInstallRequest;
   }>('/api/v1/packages/install', {
+    preHandler: requireBodyMembership,
     schema: {
       tags: ['packages'],
       summary: 'Install a package into a workspace',
@@ -50,6 +63,7 @@ export function registerPackageRoutes(app: FastifyInstance, manager: PackageMana
   app.post<{ Params: { installId: string } }>(
     '/api/v1/packages/:installId/rollback',
     {
+      preHandler: requireInstallationMembership,
       schema: {
         tags: ['packages'],
         summary: 'Roll back to the previous version',
@@ -80,6 +94,7 @@ export function registerPackageRoutes(app: FastifyInstance, manager: PackageMana
     Params: { installId: string };
     Body: { version?: string };
   }>('/api/v1/packages/:installId/upgrade', {
+    preHandler: requireInstallationMembership,
     schema: {
       tags: ['packages'],
       summary: 'Upgrade an installation to a newer version',
@@ -107,6 +122,7 @@ export function registerPackageRoutes(app: FastifyInstance, manager: PackageMana
   app.delete<{
     Params: { installId: string };
   }>('/api/v1/packages/:installId', {
+    preHandler: requireInstallationMembership,
     schema: {
       tags: ['packages'],
       summary: 'Uninstall a package from a workspace',

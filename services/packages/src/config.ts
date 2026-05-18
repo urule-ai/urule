@@ -7,6 +7,12 @@ export interface Config {
   databaseUrl: string;
   workDir: string;
   serviceName: string;
+  /** OpenFGA API URL — when empty, authz runs in in-memory mock mode (dev / no-authz stacks). */
+  openfgaUrl: string;
+  /** OpenFGA store ID — when empty, the `urule` store is reused/created. */
+  openfgaStoreId: string;
+  /** Optional OpenFGA model ID — when empty, the latest model in the store is used. */
+  openfgaModelId?: string;
 }
 
 export function loadConfig(): Config {
@@ -19,5 +25,8 @@ export function loadConfig(): Config {
     databaseUrl: process.env['DATABASE_URL'] ?? 'postgres://urule:urule@localhost:5500/packages',
     workDir: process.env['WORK_DIR'] ?? '/tmp/urule-packages',
     serviceName: 'urule-packages',
+    openfgaUrl: process.env['OPENFGA_URL'] ?? '',
+    openfgaStoreId: process.env['OPENFGA_STORE_ID'] ?? '',
+    openfgaModelId: process.env['OPENFGA_MODEL_ID'] || undefined,
   };
 }
