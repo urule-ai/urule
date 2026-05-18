@@ -10,10 +10,10 @@ import {
   type ZodTypeProvider,
 } from 'fastify-type-provider-zod';
 import { authMiddleware } from '@urule/auth-middleware';
+import { bootstrapAuthzClient } from '@urule/authz';
 import { authzMiddleware } from '@urule/authz-middleware';
 import { correlationIdPlugin } from '@urule/correlation-id';
 import { metricsPlugin } from '@urule/observability';
-import { buildAuthzClient } from './authz.js';
 import { backfillAuthzTuples } from './authz-backfill.js';
 import { createDb } from './db/connection.js';
 import { registerOrgRoutes } from './routes/orgs.routes.js';
@@ -72,7 +72,7 @@ export async function buildServer(config: Config) {
 
   // Resource-level authz — decorates request.authz with an OpenFGA-backed
   // AuthzClient. Must come AFTER authMiddleware so request.uruleUser exists.
-  const authzClient = await buildAuthzClient(config, app.log);
+  const authzClient = await bootstrapAuthzClient(config, app.log);
   await app.register(authzMiddleware, { authzClient });
 
   // OpenAPI documentation. Tag descriptions surface in swagger-ui as

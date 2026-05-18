@@ -34,20 +34,30 @@ describe('State Routes', () => {
   // -- Presence ------------------------------------------------------
 
   it('POST presence join, GET presence shows user', async () => {
+    // Presence must attach to a real room — the membership preHandler resolves
+    // the room's workspace, so create the room first.
+    const roomRes = await app.inject({
+      method: 'POST',
+      url: '/api/v1/rooms',
+      payload: { workspaceId: 'ws-1', name: 'Room', type: 'office' },
+    });
+    const roomId = roomRes.json().id;
+
     await app.inject({
       method: 'POST',
-      url: '/api/v1/rooms/room-1/presence',
-      payload: { userId: 'user-1', workspaceId: 'ws-1' },
+      url: `/api/v1/rooms/${roomId}/presence`,
+      payload: {},
     });
 
     const res = await app.inject({
       method: 'GET',
-      url: '/api/v1/rooms/room-1/presence',
+      url: `/api/v1/rooms/${roomId}/presence`,
     });
     expect(res.statusCode).toBe(200);
     const presences = res.json();
     expect(presences).toHaveLength(1);
-    expect(presences[0].userId).toBe('user-1');
+    // userId comes from the JWT (SKIP_AUTH mock user), not the request body.
+    expect(presences[0].userId).toBe('dev-user-001');
     expect(presences[0].status).toBe('online');
   });
 

@@ -16,6 +16,8 @@
     "@fastify/swagger": "^9.7.0",
     "@fastify/swagger-ui": "^5.2.5",
     "@urule/auth-middleware": "*",
+    "@urule/authz": "*",
+    "@urule/authz-middleware": "*",
     "@urule/correlation-id": "*",
     "@urule/observability": "*",
     "fastify": "^5.0.0",
