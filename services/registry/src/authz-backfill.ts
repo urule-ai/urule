@@ -75,11 +75,11 @@ export async function backfillAuthzTuples(opts: {
 async function main(): Promise<void> {
   const { loadConfig } = await import('./config.js');
   const { createDb } = await import('./db/connection.js');
-  const { buildAuthzClient } = await import('./authz.js');
+  const { bootstrapAuthzClient } = await import('@urule/authz');
 
   const config = loadConfig();
   const db = createDb(config.databaseUrl);
-  const authz = await buildAuthzClient(config, console);
+  const authz = await bootstrapAuthzClient(config, console);
   await backfillAuthzTuples({ db, authz, log: console });
   process.exit(0);
 }

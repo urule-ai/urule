@@ -1,9 +1,18 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import { requireMembership } from '@urule/authz-middleware';
 import type { RoomManager } from '../services/room-manager.js';
 import type { PresenceManager } from '../services/presence-manager.js';
 import type { TaskManager } from '../services/task-manager.js';
 import type { WidgetStateManager } from '../services/widget-state-manager.js';
 import type { TypingManager } from '../services/typing-manager.js';
+import {
+  bodyWorkspaceResolver,
+  requireSelfOrAdmin,
+  roomWorkspaceResolver,
+  taskWorkspaceResolver,
+  widgetPutWorkspaceResolver,
+  widgetWorkspaceResolver,
+} from '../authz.js';
 import { z } from 'zod';
 
 // -- Zod Schemas ------------------------------------------------------
@@ -18,10 +27,13 @@ const createRoomSchema = z.object({
 
 const statusEnum = z.enum(['online', 'away', 'busy', 'offline']);
 
+// `userId` / `workspaceId` are accepted for backward compatibility but IGNORED:
+// the server derives the user from the JWT and the workspace from the room, so
+// presence can no longer be forged for another user (#4 case D).
 const joinPresenceSchema = z.object({
-  userId: z.string(),
+  userId: z.string().optional(),
   status: statusEnum.optional(),
-  workspaceId: z.string(),
+  workspaceId: z.string().optional(),
 });
 
 const updatePresenceSchema = z.object({
@@ -35,7 +47,8 @@ const createTaskSchema = z.object({
   status: z.enum(['todo', 'in_progress', 'review', 'done', 'cancelled']).optional(),
   priority: z.enum(['low', 'medium', 'high', 'urgent']).optional(),
   assigneeId: z.string().optional(),
-  creatorId: z.string(),
+  // Accepted for back-compat but IGNORED — `creatorId` is derived from the JWT.
+  creatorId: z.string().optional(),
   labels: z.array(z.string()).optional(),
   dueDate: z.string().optional(),
   roomId: z.string().optional(),
@@ -55,8 +68,9 @@ const patchWidgetStateSchema = z.object({
   patch: z.object({}).loose(),
 });
 
+// `userId` accepted for back-compat but IGNORED — derived from the JWT.
 const typingPingSchema = z.object({
-  userId: z.string().min(1),
+  userId: z.string().min(1).optional(),
   ttlMs: z.number().int().positive().max(60000).optional(),
 });
 
@@ -106,9 +120,28 @@ export interface StateRouteServices {
 export function registerStateRoutes(app: FastifyInstance, services: StateRouteServices): void {
   const { roomManager, presenceManager, taskManager, widgetStateManager, typingManager } = services;
 
+  // Resource-level authz preHandlers — each resolves the target resource to a
+  // workspace, then `requireMembership` checks the caller is a workspace member.
+  const requireRoomMembership = requireMembership(roomWorkspaceResolver(roomManager));
+  const requireTaskMembership = requireMembership(taskWorkspaceResolver(taskManager));
+  const requireBodyMembership = requireMembership(bodyWorkspaceResolver);
+  const requireWidgetMembership = requireMembership(widgetWorkspaceResolver(widgetStateManager));
+  const requireWidgetPutMembership = requireMembership(widgetPutWorkspaceResolver(widgetStateManager));
+
+  /** The authenticated caller's id — 401 (via the returned reply) when absent. */
+  function callerId(req: FastifyRequest, reply: FastifyReply): string | null {
+    const user = (req as FastifyRequest & { uruleUser?: { id?: string } }).uruleUser;
+    if (!user?.id) {
+      reply.code(401).send({ error: { code: 'UNAUTHORIZED', message: 'Authentication required' } });
+      return null;
+    }
+    return user.id;
+  }
+
   // -- Rooms ---------------------------------------------------------
 
   app.post<{ Body: z.infer<typeof createRoomSchema> }>('/api/v1/rooms', {
+    preHandler: requireBodyMembership,
     schema: {
       tags: ['rooms'],
       summary: 'Create a room',
@@ -151,6 +184,7 @@ export function registerStateRoutes(app: FastifyInstance, services: StateRouteSe
   app.patch<{ Params: { roomId: string }; Body: z.infer<typeof updateRoomBody> }>(
     '/api/v1/rooms/:roomId',
     {
+      preHandler: requireRoomMembership,
       schema: {
         tags: ['rooms'],
         summary: 'Update a room',
@@ -170,6 +204,7 @@ export function registerStateRoutes(app: FastifyInstance, services: StateRouteSe
   );
 
   app.delete<{ Params: { roomId: string } }>('/api/v1/rooms/:roomId', {
+    preHandler: requireRoomMembership,
     schema: {
       tags: ['rooms'],
       summary: 'Delete a room',
@@ -190,18 +225,25 @@ export function registerStateRoutes(app: FastifyInstance, services: StateRouteSe
   app.post<{ Params: { roomId: string }; Body: z.infer<typeof joinPresenceSchema> }>(
     '/api/v1/rooms/:roomId/presence',
     {
+      preHandler: requireRoomMembership,
       schema: {
         tags: ['presence'],
         summary: 'Join a room',
-        description: 'Adds a presence row for the user in this room. Body `{ userId, status, workspaceId }`. Idempotent — re-joining the same user updates their existing row instead of duplicating.',
+        description: 'Adds a presence row for the authenticated user in this room. The user is taken from the JWT and the workspace from the room — any `userId`/`workspaceId` in the body is ignored. Idempotent — re-joining updates the existing row instead of duplicating.',
         params: roomIdParams,
         body: joinPresenceSchema,
       },
     },
     async (req, reply) => {
       const { roomId } = req.params;
-      const { userId, status, workspaceId } = req.body;
-      const presence = presenceManager.join(userId, roomId, workspaceId, status);
+      const { status } = req.body;
+      const userId = callerId(req, reply);
+      if (!userId) return;
+      const room = roomManager.getRoom(roomId);
+      if (!room) {
+        return reply.status(404).send({ error: 'Room not found' });
+      }
+      const presence = presenceManager.join(userId, roomId, room.workspaceId, status);
       return reply.status(201).send(presence);
     },
   );
@@ -222,6 +264,7 @@ export function registerStateRoutes(app: FastifyInstance, services: StateRouteSe
   app.delete<{ Params: { roomId: string; userId: string } }>(
     '/api/v1/rooms/:roomId/presence/:userId',
     {
+      preHandler: [requireRoomMembership, requireSelfOrAdmin],
       schema: {
         tags: ['presence'],
         summary: 'Leave a room',
@@ -240,6 +283,7 @@ export function registerStateRoutes(app: FastifyInstance, services: StateRouteSe
     Params: { roomId: string; userId: string };
     Body: z.infer<typeof updatePresenceSchema>;
   }>('/api/v1/rooms/:roomId/presence/:userId', {
+    preHandler: [requireRoomMembership, requireSelfOrAdmin],
     schema: {
       tags: ['presence'],
       summary: 'Update presence status',
@@ -260,14 +304,17 @@ export function registerStateRoutes(app: FastifyInstance, services: StateRouteSe
   // -- Tasks ---------------------------------------------------------
 
   app.post<{ Body: z.infer<typeof createTaskSchema> }>('/api/v1/tasks', {
+    preHandler: requireBodyMembership,
     schema: {
       tags: ['tasks'],
       summary: 'Create a task',
-      description: 'Creates a lightweight task record (workspace-scoped, optional room + assignee). Used by langgraph-adapter\'s `create_task` tool when an agent declares work it\'s starting on.',
+      description: 'Creates a lightweight task record (workspace-scoped, optional room + assignee). The creator is taken from the JWT — any `creatorId` in the body is ignored. Used by langgraph-adapter\'s `create_task` tool when an agent declares work it\'s starting on.',
       body: createTaskSchema,
     },
   }, async (req, reply) => {
-    const task = taskManager.createTask(req.body);
+    const creatorId = callerId(req, reply);
+    if (!creatorId) return;
+    const task = taskManager.createTask({ ...req.body, creatorId });
     return reply.status(201).send(task);
   });
 
@@ -305,6 +352,7 @@ export function registerStateRoutes(app: FastifyInstance, services: StateRouteSe
   app.patch<{ Params: { taskId: string }; Body: z.infer<typeof updateTaskBody> }>(
     '/api/v1/tasks/:taskId',
     {
+      preHandler: requireTaskMembership,
       schema: {
         tags: ['tasks'],
         summary: 'Update a task',
@@ -324,6 +372,7 @@ export function registerStateRoutes(app: FastifyInstance, services: StateRouteSe
   );
 
   app.delete<{ Params: { taskId: string } }>('/api/v1/tasks/:taskId', {
+    preHandler: requireTaskMembership,
     schema: {
       tags: ['tasks'],
       summary: 'Delete a task',
@@ -342,6 +391,7 @@ export function registerStateRoutes(app: FastifyInstance, services: StateRouteSe
   app.post<{ Params: { taskId: string }; Body: z.infer<typeof assignTaskSchema> }>(
     '/api/v1/tasks/:taskId/assign',
     {
+      preHandler: requireTaskMembership,
       schema: {
         tags: ['tasks'],
         summary: 'Transfer task ownership',
@@ -399,6 +449,7 @@ export function registerStateRoutes(app: FastifyInstance, services: StateRouteSe
   app.put<{ Params: { instanceId: string }; Body: z.infer<typeof putWidgetStateSchema> }>(
     '/api/v1/widget-state/:instanceId',
     {
+      preHandler: requireWidgetPutMembership,
       schema: {
         tags: ['widgets'],
         summary: 'Replace widget configuration (creates if absent)',
@@ -418,6 +469,7 @@ export function registerStateRoutes(app: FastifyInstance, services: StateRouteSe
   app.patch<{ Params: { instanceId: string }; Body: z.infer<typeof patchWidgetStateSchema> }>(
     '/api/v1/widget-state/:instanceId',
     {
+      preHandler: requireWidgetMembership,
       schema: {
         tags: ['widgets'],
         summary: 'Partial-update widget configuration',
@@ -438,6 +490,7 @@ export function registerStateRoutes(app: FastifyInstance, services: StateRouteSe
   );
 
   app.delete<{ Params: { instanceId: string } }>('/api/v1/widget-state/:instanceId', {
+    preHandler: requireWidgetMembership,
     schema: {
       tags: ['widgets'],
       summary: 'Reset widget configuration',
@@ -462,17 +515,20 @@ export function registerStateRoutes(app: FastifyInstance, services: StateRouteSe
   app.post<{ Params: { roomId: string }; Body: z.infer<typeof typingPingSchema> }>(
     '/api/v1/rooms/:roomId/typing',
     {
+      preHandler: requireRoomMembership,
       schema: {
         tags: ['typing'],
         summary: 'Ping "user is typing" (TTL-bounded)',
-        description: 'Records or refreshes a typing indicator for `userId` in this room. Body `{ userId, ttlMs? }` — default TTL 6s; clients ping every ~3s while the user is actively typing. Indicators auto-expire on read; no explicit cleanup needed.',
+        description: 'Records or refreshes a typing indicator for the authenticated user in this room. The user is taken from the JWT — any `userId` in the body is ignored. Body `{ ttlMs? }` — default TTL 6s; clients ping every ~3s while the user is actively typing. Indicators auto-expire on read.',
         params: roomIdParams,
         body: typingPingSchema,
       },
     },
     async (req, reply) => {
       const { roomId } = req.params;
-      const ping = typingManager.ping(req.body.userId, roomId, req.body.ttlMs);
+      const userId = callerId(req, reply);
+      if (!userId) return;
+      const ping = typingManager.ping(userId, roomId, req.body.ttlMs);
       return reply.status(201).send(ping);
     },
   );
@@ -492,6 +548,7 @@ export function registerStateRoutes(app: FastifyInstance, services: StateRouteSe
   app.delete<{ Params: { roomId: string; userId: string } }>(
     '/api/v1/rooms/:roomId/typing/:userId',
     {
+      preHandler: [requireRoomMembership, requireSelfOrAdmin],
       schema: {
         tags: ['typing'],
         summary: 'Clear a user\'s typing indicator',
