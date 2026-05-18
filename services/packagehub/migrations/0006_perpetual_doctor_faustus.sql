@@ -1,0 +1,1 @@
+ALTER TABLE "packages" ADD COLUMN "publisher_id" varchar(255);

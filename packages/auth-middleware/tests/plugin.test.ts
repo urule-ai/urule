@@ -78,6 +78,25 @@ describe('urule-auth-middleware', () => {
 
       expect(response.statusCode).toBe(200);
     });
+
+    it('honours method-qualified public routes (GET public, POST authenticated)', async () => {
+      // skipAuth:false + unreachable JWKS → fails closed; only public routes pass.
+      const app = Fastify({ logger: false });
+      await app.register(authMiddleware, {
+        skipAuth: false,
+        jwksUrl: 'http://localhost:99999/nonexistent',
+        publicRoutes: ['GET /api/v1/packages'],
+      });
+      app.get('/api/v1/packages', async () => ({ ok: true }));
+      app.get('/api/v1/packages/some-pkg', async () => ({ ok: true }));
+      app.post('/api/v1/packages', async () => ({ ok: true }));
+
+      // GET (and sub-paths) are public.
+      expect((await app.inject({ method: 'GET', url: '/api/v1/packages' })).statusCode).toBe(200);
+      expect((await app.inject({ method: 'GET', url: '/api/v1/packages/some-pkg' })).statusCode).toBe(200);
+      // POST to the same path still authenticates → 401 (fail-closed).
+      expect((await app.inject({ method: 'POST', url: '/api/v1/packages', payload: {} })).statusCode).toBe(401);
+    });
   });
 
   describe('user extraction', () => {

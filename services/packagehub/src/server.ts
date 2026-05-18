@@ -83,7 +83,9 @@ export async function buildServer(config: Config) {
     publicRoutes: [
       '/healthz',
       '/metrics',
-      '/api/v1/packages',
+      // Catalog browsing is public; publishing (POST /packages, POST .../versions),
+      // reviews, and pubkey rotation under the same prefix authenticate.
+      'GET /api/v1/packages',
       '/api/v1/webhooks/stripe',
       '/docs',
     ],
