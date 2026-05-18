@@ -119,6 +119,39 @@ describe('@urule/authz-middleware — requireMembership', () => {
     expect(JSON.parse(res.body).error.message).toContain('admin');
   });
 
+  it('allows an `admin` realm-role user regardless of OpenFGA tuples', async () => {
+    const { app } = await buildApp({
+      user: { id: 'root', roles: ['admin'] },
+      // No tuples at all — a non-admin would 403 here.
+    });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/v1/resources',
+      payload: { workspaceId: 'ws-unknown' },
+    });
+    expect(res.statusCode).toBe(200);
+  });
+
+  it('admin bypass works even when no authz client is registered', async () => {
+    // requireMembership short-circuits before touching request.authz.
+    const app = Fastify({ logger: false });
+    app.decorateRequest('uruleUser', null);
+    app.addHook('onRequest', async (request) => {
+      (request as import('fastify').FastifyRequest & { uruleUser: TestUser }).uruleUser = {
+        id: 'root',
+        roles: ['admin'],
+      };
+    });
+    app.post(
+      '/api/v1/resources',
+      { preHandler: requireMembership(() => 'ws-1') },
+      async () => ({ ok: true }),
+    );
+    await app.ready();
+    const res = await app.inject({ method: 'POST', url: '/api/v1/resources', payload: {} });
+    expect(res.statusCode).toBe(200);
+  });
+
   it('supports an async resolver (e.g., DB lookup)', async () => {
     const { app } = await buildApp({
       user: { id: 'alice' },
