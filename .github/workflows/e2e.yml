@@ -27,6 +27,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+          # Cache office-ui's node_modules between Playwright runs so the install
+          # step is sub-second on a cache hit instead of a minute-plus cold install.
+          # Same lockfile-deterministic theme as `npm ci` in ci.yml (#91 / #42).
+          cache: 'npm'
+          cache-dependency-path: apps/office-ui/package-lock.json
 
       - name: Install dependencies
         working-directory: apps/office-ui
