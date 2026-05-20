@@ -311,10 +311,13 @@ services:
       PORT: '4500'
       NATS_URL: nats://nats:4222
       REGISTRY_URL: http://registry:3000
+      OPENFGA_URL: http://openfga:8080
     depends_on:
       registry:
         condition: service_healthy
       nats:
+        condition: service_healthy
+      openfga:
         condition: service_healthy
     healthcheck:
       test: ['CMD-SHELL', "node -e \"fetch('http://localhost:4500/healthz').then(r=>{if(!r.ok)throw 1}).catch(()=>process.exit(1))\""]
