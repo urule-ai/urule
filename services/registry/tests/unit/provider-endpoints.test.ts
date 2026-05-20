@@ -1,6 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import Fastify from 'fastify';
 import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
+import { authzMiddleware } from '@urule/authz-middleware';
+import { createMockAuthzClient } from '@urule/authz/testing';
 import { registerProviderRoutes } from '../../src/routes/providers.routes.js';
 import { errorHandler } from '../../src/middleware/error-handler.js';
 
@@ -39,6 +41,19 @@ async function buildApp(db = makeMockDb()) {
   const app = Fastify({ logger: false });
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
+
+  // Stand in for @urule/auth-middleware — decorate an admin user so the routes'
+  // `requireMembership` preHandlers (added in PR #104) always pass. These tests
+  // exercise *validation* behaviour; authz enforcement is covered separately in
+  // tests/unit/authz-enforcement.test.ts.
+  app.decorateRequest('uruleUser', null);
+  app.addHook('onRequest', async (request) => {
+    (request as typeof request & { uruleUser: { id: string; roles: string[] } }).uruleUser = {
+      id: 'test-admin',
+      roles: ['admin'],
+    };
+  });
+  await app.register(authzMiddleware, { authzClient: createMockAuthzClient() });
   app.setErrorHandler(errorHandler);
   registerProviderRoutes(app, db as never);
   return app;
