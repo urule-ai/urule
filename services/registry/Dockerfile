@@ -36,6 +36,9 @@ WORKDIR /app/services/registry
 COPY services/registry/drizzle.config.ts ./
 COPY services/registry/migrations ./migrations
 COPY services/registry/src/db ./src/db
+# #23: drop root for the migrator container too — drizzle-kit doesn't need it.
+RUN chown -R node:node /app
+USER node
 CMD ["npx", "drizzle-kit", "migrate"]
 
 # ── runner stage: production deps only (DEFAULT TARGET — keep last) ──────────
@@ -58,4 +61,7 @@ EXPOSE 3000
 HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=3 \
   CMD node -e "fetch('http://localhost:3000/healthz').then(r=>{if(!r.ok)throw 1}).catch(()=>process.exit(1))"
 WORKDIR /app/services/registry
+# #23: drop root before exec. node:20-slim ships a `node` user (uid 1000).
+RUN chown -R node:node /app
+USER node
 CMD ["node", "dist/index.js"]

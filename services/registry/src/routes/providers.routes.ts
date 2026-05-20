@@ -6,10 +6,8 @@ import type { Database } from '../db/connection.js';
 import { providers } from '../db/schema/providers.js';
 import { workspaces } from '../db/schema/workspaces.js';
 import { AuditLogger } from '@urule/events';
-
-const audit = new AuditLogger('registry', (topic, data) => {
-  console.log(JSON.stringify({ audit: true, topic, ...data as Record<string, unknown> }));
-});
+import { requireMembership } from '@urule/authz-middleware';
+import { bodyWorkspaceResolver, providerWorkspaceResolver } from '../authz.js';
 
 const createProviderSchema = z.object({
   workspaceId: z.string().optional(),
@@ -132,6 +130,16 @@ function toUiProvider(row: Record<string, unknown>, mask = true) {
 }
 
 export function registerProviderRoutes(app: FastifyInstance, db: Database) {
+  // Audit events go through the Fastify Pino logger so they pick up the app's
+  // redaction config instead of console.log, which bypasses it (#18).
+  const audit = new AuditLogger('registry', (topic, data) => {
+    app.log.info({ audit: true, topic, ...(data as Record<string, unknown>) }, 'audit');
+  });
+
+  // Resource-level authz for the write routes.
+  const requireProviderMembership = requireMembership(providerWorkspaceResolver(db));
+  const requireBodyMembership = requireMembership(bodyWorkspaceResolver(db));
+
   // List providers (optionally filtered by workspaceId query param)
   app.get<{ Querystring: z.infer<typeof listProvidersQuerySchema> }>('/api/v1/providers', {
     schema: {
@@ -152,6 +160,7 @@ export function registerProviderRoutes(app: FastifyInstance, db: Database) {
   app.post<{
     Body: z.infer<typeof createProviderSchema>;
   }>('/api/v1/providers', {
+    preHandler: requireBodyMembership,
     schema: {
       tags: ['providers'],
       summary: 'Register an LLM provider key',
@@ -207,7 +216,7 @@ export function registerProviderRoutes(app: FastifyInstance, db: Database) {
       { id: user?.id ?? 'anonymous', username: user?.username ?? 'anonymous' },
       'provider', id, `Provider "${name}" (${provider}) created`,
       { workspaceId },
-    ).catch(() => {});
+    ).catch((err: unknown) => request.log.warn({ err }, 'audit emit failed'));
 
     reply.status(201).send(toUiProvider(row as Record<string, unknown>));
   });
@@ -230,15 +239,25 @@ export function registerProviderRoutes(app: FastifyInstance, db: Database) {
     return toUiProvider(row as Record<string, unknown>);
   });
 
-  // Get provider's real API key (internal use by adapter service)
+  // Get provider's real API key — internal-use, admin-gated (#5).
   app.get<{ Params: z.infer<typeof providerIdParamsSchema> }>('/api/v1/providers/:providerId/key', {
     schema: {
       tags: ['providers'],
-      summary: 'Get unmasked API key (internal)',
-      description: 'Returns `{ apiKey, provider, modelName }` with the real API key. Internal-use endpoint called by langgraph-adapter (and future orchestrator adapters) when picking an LlmProvider impl. Never expose this from the office-ui — UI consumes the masked endpoint instead.',
+      summary: 'Get unmasked API key (internal, admin-only)',
+      description: 'Returns `{ apiKey, provider, modelName }` with the real API key. **Admin-only** — never expose from the office-ui (the UI uses the masked `GET /:providerId`). Called by orchestrator adapters when picking an LlmProvider impl. TODO(#4): swap the admin gate for proper service-to-service auth once the authz layer can scope provider access to the caller; until then this requires an admin token.',
       params: providerIdParamsSchema,
     },
   }, async (request, reply) => {
+    // #5: this returns an UNMASKED LLM key — without the gate, any authenticated
+    // user could exfiltrate any provider's key. Until the authz layer (#4) can
+    // scope provider access to the caller's workspace, require the `admin` role.
+    // The office-ui never calls this; orchestrator adapters are the only
+    // legitimate callers and they run with an elevated/service identity.
+    const user = (request as any).uruleUser;
+    if (!user?.roles?.includes('admin')) {
+      reply.status(403).send({ error: { code: 'FORBIDDEN', message: 'Admin role required' } });
+      return;
+    }
     const { providerId } = request.params;
     const [row] = await db.select().from(providers).where(eq(providers.id, providerId));
     if (!row) {
@@ -252,6 +271,7 @@ export function registerProviderRoutes(app: FastifyInstance, db: Database) {
   app.patch<{ Params: z.infer<typeof providerIdParamsSchema>; Body: z.infer<typeof updateProviderSchema> }>(
     '/api/v1/providers/:providerId',
     {
+      preHandler: requireProviderMembership,
       schema: {
         tags: ['providers'],
         summary: 'Update provider',
@@ -314,7 +334,7 @@ export function registerProviderRoutes(app: FastifyInstance, db: Database) {
         { id: user?.id ?? 'anonymous', username: user?.username ?? 'anonymous' },
         'provider', providerId, `Provider "${row.name}" updated`,
         { metadata: { fields: Object.keys(b) } },
-      ).catch(() => {});
+      ).catch((err: unknown) => request.log.warn({ err }, 'audit emit failed'));
 
       return toUiProvider(row as Record<string, unknown>);
     },
@@ -322,6 +342,7 @@ export function registerProviderRoutes(app: FastifyInstance, db: Database) {
 
   // Delete provider
   app.delete<{ Params: z.infer<typeof providerIdParamsSchema> }>('/api/v1/providers/:providerId', {
+    preHandler: requireProviderMembership,
     schema: {
       tags: ['providers'],
       summary: 'Delete a provider',
@@ -340,7 +361,7 @@ export function registerProviderRoutes(app: FastifyInstance, db: Database) {
     audit.entityDeleted(
       { id: user?.id ?? 'anonymous', username: user?.username ?? 'anonymous' },
       'provider', providerId, `Provider "${row.name}" deleted`,
-    ).catch(() => {});
+    ).catch((err: unknown) => request.log.warn({ err }, 'audit emit failed'));
 
     reply.status(204).send();
   });

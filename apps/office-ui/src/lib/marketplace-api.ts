@@ -179,3 +179,70 @@ export async function upgradePackage(installId: string, version?: string): Promi
   );
   return data;
 }
+
+/* -------- Widget package convention --------------------------------- *
+ * Widget packages (packagehub `type: 'widget'`) embed their runtime
+ * WidgetManifest inside the package manifest under the `widget` key.
+ * This sits next to the existing manifest fields (`description`,
+ * `dependencies`, etc) so a widget package can still depend on other
+ * packages and carry the same metadata as personality / skill / etc.
+ *
+ * Convention example:
+ *   {
+ *     "name": "third-party-widget",
+ *     "type": "widget",
+ *     "manifest": {
+ *       "description": "...",
+ *       "dependencies": {},
+ *       "widget": {
+ *         "id": "vendor:tasks-overview",
+ *         "name": "Tasks Overview",
+ *         "version": "0.1.0",
+ *         "description": "Compact tile listing the workspace's open tasks",
+ *         "author": "vendor",
+ *         "mountPoints": ["sidebar", "main-panel"],
+ *         "entryType": "external",
+ *         "entryUrl": "https://vendor.example/widget.html",
+ *         "permissions": [],
+ *         "defaultConfig": {}
+ *       }
+ *     }
+ *   }
+ *
+ * `extractWidgetManifest` returns the embedded manifest if it parses,
+ * `null` otherwise — the install path treats `null` as "this isn't a
+ * widget package after all" and falls back to the regular install
+ * flow (which will 4xx because the type is `widget` and the install
+ * service doesn't know what to do with it).
+ * ------------------------------------------------------------------- */
+
+import type { WidgetManifest } from "@/widgets/types";
+
+export function extractWidgetManifest(pkg: MarketplacePackage): WidgetManifest | null {
+  const manifest = pkg.latestVersion?.manifest;
+  if (!manifest || typeof manifest !== "object") return null;
+  const widget = (manifest as Record<string, unknown>)["widget"];
+  if (!isValidWidgetManifest(widget)) return null;
+  return widget;
+}
+
+function isValidWidgetManifest(value: unknown): value is WidgetManifest {
+  if (typeof value !== "object" || value === null) return false;
+  const w = value as Record<string, unknown>;
+  if (typeof w["id"] !== "string" || w["id"].length === 0) return false;
+  if (typeof w["name"] !== "string") return false;
+  if (typeof w["version"] !== "string") return false;
+  if (typeof w["description"] !== "string") return false;
+  if (typeof w["author"] !== "string") return false;
+  if (!Array.isArray(w["mountPoints"]) || w["mountPoints"].length === 0) return false;
+  if (w["entryType"] !== "native" && w["entryType"] !== "external") return false;
+  // `external` widgets MUST carry an entryUrl — that's how the iframe
+  // bridge reaches them. `native` widgets ship as code and rely on
+  // componentPath being registered in BUILTIN_COMPONENTS, so a
+  // marketplace-installed `native` widget without a matching builtin
+  // would render blank — flagged here rather than at render time.
+  if (w["entryType"] === "external" && typeof w["entryUrl"] !== "string") return false;
+  if (!Array.isArray(w["permissions"])) return false;
+  if (typeof w["defaultConfig"] !== "object" || w["defaultConfig"] === null) return false;
+  return true;
+}

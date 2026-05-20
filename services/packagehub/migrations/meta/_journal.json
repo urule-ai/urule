@@ -36,6 +36,20 @@
       "when": 1778034150036,
       "tag": "0004_package_pubkeys",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1778157264000,
+      "tag": "0005_sigstore_columns",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1779109317326,
+      "tag": "0006_perpetual_doctor_faustus",
+      "breakpoints": true
     }
   ]
 }

@@ -9,11 +9,8 @@ import { conversationAgents, messages } from '../db/schema/conversations.js';
 import { providers } from '../db/schema/providers.js';
 import { workspaces } from '../db/schema/workspaces.js';
 import { AuditLogger } from '@urule/events';
-
-// Simple audit logger that logs to stdout (NATS integration can be added later)
-const audit = new AuditLogger('registry', (topic, data) => {
-  console.log(JSON.stringify({ audit: true, topic, ...data as Record<string, unknown> }));
-});
+import { requireMembership } from '@urule/authz-middleware';
+import { agentWorkspaceResolver, bodyWorkspaceResolver } from '../authz.js';
 
 const createAgentSchema = z.object({
   workspaceId: z.string().optional(),
@@ -89,15 +86,40 @@ function toUiAgent(row: Record<string, unknown>, provider?: Record<string, unkno
 }
 
 export function registerAgentRoutes(app: FastifyInstance, db: Database) {
-  // List all agents (across all workspaces)
+  // Audit events go through the Fastify Pino logger so they pick up the app's
+  // redaction config instead of console.log, which bypasses it (#18).
+  const audit = new AuditLogger('registry', (topic, data) => {
+    app.log.info({ audit: true, topic, ...(data as Record<string, unknown>) }, 'audit');
+  });
+
+  // Resource-level authz: write routes require membership of the agent's
+  // workspace (resolved via :agentId), or of the workspace named in the body.
+  const requireAgentMembership = requireMembership(agentWorkspaceResolver(db));
+  const requireBodyMembership = requireMembership(bodyWorkspaceResolver(db));
+
+  // List all agents (across all workspaces) — admin only (#25).
   app.get<{ Querystring: z.infer<typeof paginationQuerySchema> }>('/api/v1/agents', {
     schema: {
       tags: ['agents'],
-      summary: 'List all agents',
-      description: 'Pagination via `?limit` (capped 100) + `?offset`. Each row is decorated with its associated provider record (joined on `agent.config.provider_id`). Admin-shaped — most callers should use `/workspaces/:wsId/agents` instead.',
+      summary: 'List all agents (admin only)',
+      description: 'Cross-workspace list — **admin only**. Regular callers should use `/api/v1/workspaces/:wsId/agents` to list a workspace\'s agents. Pagination via `?limit` (capped 100) + `?offset`. Each row is decorated with its associated provider record (joined on `agent.config.provider_id`).',
       querystring: paginationQuerySchema,
     },
-  }, async (request) => {
+  }, async (request, reply) => {
+    // #25: without a guard, any authenticated user sees every workspace's
+    // agents. Require the `admin` role. TODO(#4): once the authz layer can
+    // scope to the caller's workspaces, prefer that over a blanket admin gate
+    // (and switch the office-ui's agent-list queries to /workspaces/:wsId/agents).
+    const user = (request as any).uruleUser;
+    if (!user?.roles?.includes('admin')) {
+      reply.status(403).send({
+        error: {
+          code: 'FORBIDDEN',
+          message: 'Admin role required — use /api/v1/workspaces/:wsId/agents to list a workspace’s agents',
+        },
+      });
+      return;
+    }
     const limit = Math.min(parseInt(request.query.limit ?? '50', 10), 100);
     const offset = parseInt(request.query.offset ?? '0', 10);
     const rows = await db.select().from(agents).limit(limit).offset(offset);
@@ -134,6 +156,7 @@ export function registerAgentRoutes(app: FastifyInstance, db: Database) {
   app.post<{
     Body: z.infer<typeof createAgentSchema>;
   }>('/api/v1/agents', {
+    preHandler: requireBodyMembership,
     schema: {
       tags: ['agents'],
       summary: 'Register an agent',
@@ -169,7 +192,7 @@ export function registerAgentRoutes(app: FastifyInstance, db: Database) {
       { id: user?.id ?? 'anonymous', username: user?.username ?? 'anonymous' },
       'agent', id, `Agent "${name}" created`,
       { workspaceId },
-    ).catch(() => {});
+    ).catch((err: unknown) => request.log.warn({ err }, 'audit emit failed'));
 
     reply.status(201).send(toUiAgent(agent as Record<string, unknown>));
   });
@@ -335,6 +358,7 @@ export function registerAgentRoutes(app: FastifyInstance, db: Database) {
   app.post<{ Params: z.infer<typeof agentIdParamsSchema>; Body: z.infer<typeof memoryCreateSchema> }>(
     '/api/v1/agents/:agentId/memories',
     {
+      preHandler: requireAgentMembership,
       schema: {
         tags: ['agents'],
         summary: 'Add an agent memory',
@@ -363,6 +387,7 @@ export function registerAgentRoutes(app: FastifyInstance, db: Database) {
   app.delete<{ Params: z.infer<typeof agentMemoryParamsSchema> }>(
     '/api/v1/agents/:agentId/memories/:memoryId',
     {
+      preHandler: requireAgentMembership,
       schema: {
         tags: ['agents'],
         summary: 'Delete an agent memory',
@@ -387,6 +412,7 @@ export function registerAgentRoutes(app: FastifyInstance, db: Database) {
   app.post<{ Params: z.infer<typeof agentIdParamsSchema>; Body: z.infer<typeof agentStatusSchema> }>(
     '/api/v1/agents/:agentId/status',
     {
+      preHandler: requireAgentMembership,
       schema: {
         tags: ['agents'],
         summary: "Update agent status",
@@ -413,7 +439,7 @@ export function registerAgentRoutes(app: FastifyInstance, db: Database) {
         { id: user?.id ?? 'anonymous', username: user?.username ?? 'anonymous' },
         'agent', agentId, `Agent status changed to "${status}"`,
         { changes: { status: { after: status } } },
-      ).catch(() => {});
+      ).catch((err: unknown) => request.log.warn({ err }, 'audit emit failed'));
 
       return toUiAgent(agent as Record<string, unknown>);
     },
@@ -423,6 +449,7 @@ export function registerAgentRoutes(app: FastifyInstance, db: Database) {
   app.patch<{ Params: z.infer<typeof agentIdParamsSchema>; Body: z.infer<typeof updateAgentSchema> }>(
     '/api/v1/agents/:agentId',
     {
+      preHandler: requireAgentMembership,
       schema: {
         tags: ['agents'],
         summary: 'Update an agent',
@@ -451,7 +478,7 @@ export function registerAgentRoutes(app: FastifyInstance, db: Database) {
         { id: user?.id ?? 'anonymous', username: user?.username ?? 'anonymous' },
         'agent', agentId, `Agent "${agent.name}" updated`,
         { metadata: { fields: Object.keys(updates) } },
-      ).catch(() => {});
+      ).catch((err: unknown) => request.log.warn({ err }, 'audit emit failed'));
 
       return toUiAgent(agent as Record<string, unknown>);
     },

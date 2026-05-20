@@ -1,31 +1,31 @@
 import { test, expect } from './fixtures/auth';
+import type { Page } from '@playwright/test';
+
+// The auth fixture lands on /office and waits for the office shell to
+// commit, so the command-palette keyboard listener (registered in a
+// useEffect on `window`) is already wired by the time these tests run —
+// no extra `page.goto('/office')` + fixed-sleep needed. (#65)
+//
+// The component opens on `(e.metaKey || e.ctrlKey) && key === 'k'`, so
+// either modifier works; try Meta first, fall back to Control.
+async function openPalette(page: Page) {
+  const palette = page.getByTestId('command-palette');
+  await page.keyboard.press('Meta+k');
+  if (!(await palette.isVisible().catch(() => false))) {
+    await page.keyboard.press('Control+k');
+  }
+  await expect(palette).toBeVisible();
+  return palette;
+}
 
 test.describe('Journey 8: Command Palette', () => {
   test.describe('8.1 Open / close', () => {
     test('opens via Cmd+K (or Ctrl+K)', async ({ authenticatedPage: page }) => {
-      await page.goto('/office');
-      await page.waitForTimeout(800);
-      // Use Meta on Mac, Control elsewhere — Playwright dispatches both via 'Meta+K'
-      // on darwin and 'Control+K' otherwise. Test both shapes.
-      await page.keyboard.press('Meta+k');
-      const palette = page.getByTestId('command-palette');
-      // If Meta+K didn't toggle (test runner environment), try Ctrl+K.
-      if (!(await palette.isVisible().catch(() => false))) {
-        await page.keyboard.press('Control+k');
-      }
-      await expect(page.getByTestId('command-palette')).toBeVisible();
+      await openPalette(page);
     });
 
     test('Escape closes the palette', async ({ authenticatedPage: page }) => {
-      await page.goto('/office');
-      await page.waitForTimeout(800);
-      await page.keyboard.press('Control+k');
-      // Open OR Meta path — try both.
-      if (!(await page.getByTestId('command-palette').isVisible().catch(() => false))) {
-        await page.keyboard.press('Meta+k');
-      }
-      const palette = page.getByTestId('command-palette');
-      await expect(palette).toBeVisible();
+      const palette = await openPalette(page);
       await page.keyboard.press('Escape');
       await expect(palette).not.toBeVisible();
     });
@@ -33,12 +33,7 @@ test.describe('Journey 8: Command Palette', () => {
 
   test.describe('8.2 Filtering + selection', () => {
     test('typing filters the command list', async ({ authenticatedPage: page }) => {
-      await page.goto('/office');
-      await page.waitForTimeout(800);
-      await page.keyboard.press('Control+k');
-      if (!(await page.getByTestId('command-palette').isVisible().catch(() => false))) {
-        await page.keyboard.press('Meta+k');
-      }
+      await openPalette(page);
       await page.getByLabel('Command palette input').fill('approv');
       // The "Go to Approvals" command should match; navigation commands
       // for unrelated routes shouldn't.
@@ -48,12 +43,7 @@ test.describe('Journey 8: Command Palette', () => {
     });
 
     test('Enter runs the selected command (navigation case)', async ({ authenticatedPage: page }) => {
-      await page.goto('/office');
-      await page.waitForTimeout(800);
-      await page.keyboard.press('Control+k');
-      if (!(await page.getByTestId('command-palette').isVisible().catch(() => false))) {
-        await page.keyboard.press('Meta+k');
-      }
+      await openPalette(page);
       await page.getByLabel('Command palette input').fill('approvals');
       await page.keyboard.press('Enter');
       await page.waitForURL(/\/office\/approvals/);

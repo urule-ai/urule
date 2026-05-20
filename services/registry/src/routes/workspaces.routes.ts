@@ -2,8 +2,12 @@ import type { FastifyInstance } from 'fastify';
 import { ulid } from 'ulid';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
+import { parentTuple, workspaceTuple } from '@urule/authz';
+import { requireMembership } from '@urule/authz-middleware';
+import { AuditLogger } from '@urule/events';
 import type { Database } from '../db/connection.js';
 import { workspaces } from '../db/schema/workspaces.js';
+import { firstWorkspaceId } from '../authz.js';
 
 const createWorkspaceSchema = z.object({
   orgId: z.string().min(1),
@@ -46,6 +50,13 @@ function toUiWorkspace(row: Record<string, unknown>) {
 }
 
 export function registerWorkspaceRoutes(app: FastifyInstance, db: Database) {
+  const audit = new AuditLogger('registry', (topic, data) => {
+    app.log.info({ audit: true, topic, ...(data as Record<string, unknown>) }, 'audit');
+  });
+
+  // Mutating the demo-mode "current" workspace requires membership of it.
+  const requireCurrentWorkspace = requireMembership(() => firstWorkspaceId(db));
+
   // List all workspaces
   app.get('/api/v1/workspaces', {
     schema: {
@@ -87,6 +98,7 @@ export function registerWorkspaceRoutes(app: FastifyInstance, db: Database) {
 
   // Update current workspace (for settings page)
   app.patch<{ Body: z.infer<typeof updateWorkspaceSchema> }>('/api/v1/workspaces/current', {
+    preHandler: requireCurrentWorkspace,
     schema: {
       tags: ['workspaces'],
       summary: 'Update the current workspace',
@@ -109,6 +121,7 @@ export function registerWorkspaceRoutes(app: FastifyInstance, db: Database) {
 
   // Update current workspace guardrails
   app.patch('/api/v1/workspaces/current/guardrails', {
+    preHandler: requireCurrentWorkspace,
     schema: {
       tags: ['workspaces'],
       summary: 'Update workspace guardrails (stub)',
@@ -137,15 +150,21 @@ export function registerWorkspaceRoutes(app: FastifyInstance, db: Database) {
   app.post<{ Body: z.infer<typeof createWorkspaceSchema> }>(
     '/api/v1/workspaces',
     {
+      // A workspace is created inside an org — gate on org membership.
+      preHandler: requireMembership(
+        (req) => (req.body as { orgId?: string } | null)?.orgId ?? null,
+        { objectType: 'org' },
+      ),
       schema: {
         tags: ['workspaces'],
         summary: 'Create a workspace',
-        description: 'Body `{ orgId, name, slug, description? }`. Slug must be unique within the org. New workspaces land in `status: active`.',
+        description: 'Body `{ orgId, name, slug, description? }`. Slug must be unique within the org. New workspaces land in `status: active`. Requires membership of the parent org.',
         body: createWorkspaceSchema,
       },
     },
     async (request, reply) => {
       const { orgId, name, slug, description } = request.body;
+      const user = (request as { uruleUser?: { id?: string; username?: string } }).uruleUser;
       const id = ulid();
       const now = new Date();
 
@@ -159,6 +178,23 @@ export function registerWorkspaceRoutes(app: FastifyInstance, db: Database) {
         createdAt: now,
         updatedAt: now,
       }).returning();
+
+      // Seed OpenFGA: the creator owns the workspace, and the workspace links to
+      // its parent org so org members inherit `member` via the `parent` userset.
+      // Non-fatal — registry availability must not depend on OpenFGA.
+      try {
+        const tuples = [parentTuple('workspace', id, 'org', orgId)];
+        if (user?.id) tuples.push(workspaceTuple(user.id, 'owner', id));
+        await request.authz.writeTuples(tuples);
+      } catch (err) {
+        request.log.warn({ err, workspaceId: id }, 'authz: failed to write workspace tuples');
+      }
+
+      audit.entityCreated(
+        { id: user?.id ?? 'anonymous', username: user?.username ?? 'anonymous' },
+        'workspace', id, `Workspace "${name}" created`,
+        { workspaceId: id },
+      ).catch((err: unknown) => request.log.warn({ err }, 'audit emit failed'));
 
       reply.status(201).send(toUiWorkspace(workspace as Record<string, unknown>));
     },

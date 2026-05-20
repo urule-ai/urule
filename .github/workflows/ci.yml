@@ -16,9 +16,9 @@ jobs:
         with:
           node-version: 20
           cache: 'npm'
-      - run: npm install
+      - run: npm ci
       - name: Type check
-        run: npm run typecheck:all 2>/dev/null || echo "Typecheck skipped for some packages"
+        run: npm run typecheck:all
 
   test:
     runs-on: ubuntu-latest
@@ -28,9 +28,9 @@ jobs:
         with:
           node-version: 20
           cache: 'npm'
-      - run: npm install
+      - run: npm ci
       - name: Build packages
-        run: npm run build:all 2>/dev/null || true
+        run: npm run build:all
       - name: Run tests
         run: npm run test:all
 
@@ -42,10 +42,12 @@ jobs:
         with:
           node-version: 20
           cache: 'npm'
-      - run: npm install
+      - run: npm ci
       - name: Audit dependencies
-        run: npm audit --audit-level=high || true
-        continue-on-error: true
+        # Gates on critical advisories. Residual high/moderate findings are
+        # tracked in #88 (office-ui → Next 15) and #89 (otel + vitest dev-tree);
+        # tighten this to --audit-level=high once those land.
+        run: npm audit --audit-level=critical
 
   docker:
     runs-on: ubuntu-latest
@@ -54,7 +56,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Validate Docker Compose
-        run: cd infra/compose && docker compose -f docker-compose.phase6.yaml config > /dev/null
+        # The compose files require credentials via `${VAR:?}`; seed the dev
+        # defaults from the committed template so `config` can interpolate.
+        run: cd infra/compose && cp .env.example .env && docker compose -f docker-compose.phase6.yaml config > /dev/null
 
   docker-publish:
     # Build + push container images to GHCR on git tag (v*).

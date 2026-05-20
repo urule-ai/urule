@@ -1,6 +1,9 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { requireMembership } from '@urule/authz-middleware';
 import type { PackageManager } from '../services/package-manager.js';
+import type { InstallationRepo } from '../services/installation-repo.js';
+import { installationWorkspaceResolver, wsParamResolver } from '../authz.js';
 import type { EventBus } from '@urule/events';
 import { PACKAGE_TOPICS } from '@urule/events';
 
@@ -15,11 +18,18 @@ const installIdParamsSchema = z.object({ installId: z.string() });
 export function registerInstallationRoutes(
   app: FastifyInstance,
   manager: PackageManager,
+  repo: InstallationRepo,
   options: InstallationRoutesOptions = {},
 ): void {
+  // Resource-level authz: workspace-scoped routes require membership of the
+  // `:wsId` workspace; the install-id route resolves the installation first.
+  const requireWsMembership = requireMembership(wsParamResolver);
+  const requireInstallationMembership = requireMembership(installationWorkspaceResolver(repo));
+
   app.get<{
     Params: { wsId: string };
   }>('/api/v1/workspaces/:wsId/packages', {
+    preHandler: requireWsMembership,
     schema: {
       tags: ['installations'],
       summary: 'List installations in a workspace',
@@ -43,6 +53,7 @@ export function registerInstallationRoutes(
   app.get<{
     Params: { wsId: string };
   }>('/api/v1/workspaces/:wsId/updates', {
+    preHandler: requireWsMembership,
     schema: {
       tags: ['installations'],
       summary: 'Check for available updates',
@@ -77,6 +88,7 @@ export function registerInstallationRoutes(
   app.get<{
     Params: { installId: string };
   }>('/api/v1/packages/:installId', {
+    preHandler: requireInstallationMembership,
     schema: {
       tags: ['installations'],
       summary: 'Get installation status by id',

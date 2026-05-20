@@ -49,19 +49,19 @@ test.describe('Journey 7: Widget Lifecycle', () => {
     });
 
     test('navigation between widget-backed pages does not lose the host shell', async ({ authenticatedPage: page }) => {
-      await page.goto('/office');
-      await page.waitForTimeout(800);
-      const initialUrl = page.url();
-      expect(initialUrl).toContain('/office');
+      // The auth fixture already lands on /office with the office shell
+      // committed (it waits for the dashboard-stats marker), so no extra
+      // goto + fixed-sleep here.
+      expect(page.url()).toContain('/office');
 
-      // Navigate to a different widget-backed page.
+      // Navigate to a different widget-backed page. Wait for the persistent
+      // sidebar <nav> to re-commit before asserting — a hard navigation
+      // re-mounts the office layout, and AppSidebar's nav (`aria-label=
+      // "Main navigation"`) is the marker that the shell is back. (#65)
       await page.goto('/office/approvals');
-      await page.waitForTimeout(800);
-      expect(page.url()).toContain('/office/approvals');
-
-      // The persistent app shell (sidebar, header) should still be present.
       const nav = page.locator('nav, [role="navigation"]').first();
-      await expect(nav).toBeVisible();
+      await expect(nav).toBeVisible({ timeout: 15000 });
+      expect(page.url()).toContain('/office/approvals');
     });
   });
 

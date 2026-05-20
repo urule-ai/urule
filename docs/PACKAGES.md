@@ -80,6 +80,85 @@ curl http://localhost:3009/api/v1/packages/my-package/versions/0.1.0/verify
 
 `reason: "unsigned"` for legacy/anonymous packages; `reason: "signature_invalid"` if a stored signature no longer verifies (manifest tampered post-publish).
 
+### Sigstore OIDC (alternate signing path)
+
+For repositories that publish via CI rather than from a developer laptop, `pubkey_kind: 'sigstore-oidc'` lets the publisher prove identity via a transparency-log-witnessed cosign signature instead of a long-lived Ed25519 key. The verifier delegates to [`@sigstore/verify`](https://www.npmjs.com/package/@sigstore/verify) which checks the Fulcio cert chain (TUF-pinned root), the Rekor inclusion proof, and the signature itself, then matches the cert's identity against the registered `<issuer>:<subject>`.
+
+#### Registering a Sigstore-signed package
+
+The "pubkey" in this kind is the expected identity, JSON-encoded:
+
+```bash
+curl -X POST http://localhost:3009/api/v1/packages \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "name": "ci-published-pkg",
+    "type": "skill",
+    "author": "release-bot",
+    "publisherPubkey": "{\"issuer\":\"https://token.actions.githubusercontent.com\",\"subject\":\"https://github.com/owner/repo/.github/workflows/release.yml@refs/heads/main\"}",
+    "pubkeyKind": "sigstore-oidc"
+  }'
+```
+
+`subject` is the OIDC SAN — for a GitHub Actions workflow it's the workflow URI; for a personal Google account it's an email. `issuer` is the OIDC issuer URL.
+
+#### Publishing a version with a cosign bundle
+
+In CI, sign the canonical digest (NOT the manifest bytes — same digest function as the Ed25519 path) and capture the `--bundle` output:
+
+```bash
+# Compute the canonical digest exactly as packagehub's verifier does:
+node -e '
+const { createHash } = require("crypto");
+const fs = require("fs");
+const manifest = JSON.parse(fs.readFileSync("manifest.json","utf8"));
+const readme = fs.readFileSync("README.md","utf8");
+const version = "0.1.0";
+const json = JSON.stringify(manifest, Object.keys(manifest).sort());
+process.stdout.write(createHash("sha256").update(json).update(readme).update(version).digest());
+' > digest.bin
+
+# Sign with cosign (uses the workflow's OIDC token automatically in GitHub Actions):
+cosign sign-blob \
+  --bundle ci-pkg-0.1.0.bundle.json \
+  --yes \
+  digest.bin
+
+# Publish — the `signature` field carries the bundle JSON directly:
+curl -X POST http://localhost:3009/api/v1/packages/ci-published-pkg/versions \
+  -H 'Content-Type: application/json' \
+  -d "$(jq -n \
+    --arg sig "$(cat ci-pkg-0.1.0.bundle.json)" \
+    --slurpfile manifest manifest.json \
+    '{
+      version: "0.1.0",
+      manifest: $manifest[0],
+      readme: $ENV.README,
+      signature: $sig
+    }')"
+```
+
+Verifier output is the same shape as the Ed25519 path:
+
+```bash
+curl http://localhost:3009/api/v1/packages/ci-published-pkg/versions/0.1.0/verify
+# { "verified": true, "kind": "sigstore-oidc", "publisher": "<the matching identity JSON>" }
+```
+
+#### Rotation under sigstore-oidc
+
+The rotation flow ([rotation digest](#canonical-digest) for `add` / `revoke`) works the same way: the publisher generates a fresh cosign bundle over the rotation digest with their existing identity. The verifier walks active keys and accepts when one matches. Loss of the OIDC identity (e.g., GitHub account compromise) is recoverable by registering a new identity via the standard rotation flow as long as one previous identity is still trusted.
+
+#### Optional TUF mirror configuration
+
+`@sigstore/verify` fetches Sigstore's trust root via TUF on first verification. To pin a private mirror (air-gapped deployments) or skip the network refresh:
+
+| Env var | Effect |
+|---|---|
+| `SIGSTORE_TUF_MIRROR_URL` | Override the default `https://tuf-repo-cdn.sigstore.dev` |
+| `SIGSTORE_TUF_CACHE_PATH` | Pin the on-disk cache directory |
+| `SIGSTORE_TUF_FORCE_CACHE` | `true` skips refresh entirely (use a pre-warmed cache) |
+
 ### Canonical digest
 
 ```text
@@ -178,7 +257,6 @@ The version history is held in-memory by the packages service today and resets a
 
 ## Open follow-ups (tracked in ROADMAP §6.3)
 
-- **GitHub Sigstore OIDC attestation** as an alternate signing path for repos that publish via GitHub Actions. `pubkey_kind: 'sigstore-oidc'` would dispatch to a Fulcio + Rekor verifier; signature ties identity to the GitHub account.
 - **Stripe / Lemonsqueezy webhook receivers** that mint entitlement rows on `checkout.session.completed` / equivalent.
 - **Persisted version history** — add an `installation_history` Drizzle table so rollback survives restarts.
 - **Key rotation** — the floor design is one-pubkey-per-package, immutable. Rotation requires a "this key supersedes that one" story.

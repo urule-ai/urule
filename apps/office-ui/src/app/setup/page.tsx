@@ -6,6 +6,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useAuthStore } from "@/store/useAuthStore";
+import { useAuthHasHydrated } from "@/hooks/useAuthHasHydrated";
 import api from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -519,13 +520,28 @@ function StepBar({ current }: { current: number }) {
 export default function SetupPage() {
   const router = useRouter();
   const { isAuthenticated } = useAuthStore();
+  // Gate redirect on persist-hydration the same way the office layout does;
+  // otherwise the effect fires once with `isAuthenticated: false` on first
+  // render before rehydration loads from localStorage. (#65)
+  const authHydrated = useAuthHasHydrated();
   const [step, setStep] = useState(0);
   const [testStatus, setTestStatus] = useState<"idle" | "testing" | "ok" | "fail">("idle");
   const [testError, setTestError] = useState<string | null>(null);
   const [providerId, setProviderId] = useState<string | null>(null);
 
-  if (!isAuthenticated) {
-    router.replace("/login");
+  // Redirect unauthenticated users to /login. Must run in useEffect rather
+  // than during render — calling router.replace() during SSR walks through
+  // startTransition → Object.replace which reads `location`, a browser-only
+  // global, and throws `ReferenceError: location is not defined` at build
+  // time during the static-generation pass. (#63)
+  useEffect(() => {
+    if (!authHydrated) return;
+    if (!isAuthenticated) {
+      router.replace("/login");
+    }
+  }, [authHydrated, isAuthenticated, router]);
+
+  if (!authHydrated || !isAuthenticated) {
     return null;
   }
 

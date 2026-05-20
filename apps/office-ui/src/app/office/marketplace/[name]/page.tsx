@@ -14,10 +14,13 @@ import {
   getPackageVersions,
   listInstalled,
   formatPrice,
+  extractWidgetManifest,
   type MarketplacePackage,
   type PackageVersion,
   type InstalledPackage,
 } from "@/lib/marketplace-api";
+import { useInstalledWidgetsStore } from "@/store/useInstalledWidgetsStore";
+import { widgetRegistry } from "@/widgets";
 
 /*
  * Package detail page — discovery + install + purchase + manage in one
@@ -257,6 +260,27 @@ export default function PackageDetailPage() {
     }
     setInstalling(true);
     try {
+      // Widget packages take a different install path: there's no
+      // server-side install lifecycle (the widget runs entirely in the
+      // browser, either as a registered native React component or as
+      // an iframe-loaded external resource). Instead, we register the
+      // embedded WidgetManifest into the persisted `useInstalledWidgetsStore`
+      // and the in-memory widgetRegistry; the dashboard sees it on the
+      // next render.
+      if (pkg.type === "widget") {
+        const manifest = extractWidgetManifest(pkg);
+        if (!manifest) {
+          toast.error(
+            "Widget manifest missing",
+            `Package "${pkg.name}" has no embedded widget manifest under \`manifest.widget\`.`,
+          );
+          return;
+        }
+        useInstalledWidgetsStore.getState().install(WORKSPACE_ID, manifest);
+        widgetRegistry.registerManifest(manifest);
+        toast.success("Widget installed", `${manifest.name} is now available on your dashboard.`);
+        return;
+      }
       if (installedRow && updateAvailable) {
         await api.post(`/packages/${installedRow.id}/upgrade`, {
           version: latestVersion,

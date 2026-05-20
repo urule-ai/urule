@@ -2,8 +2,10 @@ import type { FastifyInstance } from 'fastify';
 import { ulid } from 'ulid';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
+import { requireMembership } from '@urule/authz-middleware';
 import type { Database } from '../db/connection.js';
 import { runtimes } from '../db/schema/runtimes.js';
+import { bodyWorkspaceResolver } from '../authz.js';
 
 const createRuntimeSchema = z.object({
   workspaceId: z.string().min(1),
@@ -33,6 +35,7 @@ export function registerRuntimeRoutes(app: FastifyInstance, db: Database) {
   app.post<{
     Body: z.infer<typeof createRuntimeSchema>;
   }>('/api/v1/runtimes', {
+    preHandler: requireMembership(bodyWorkspaceResolver(db)),
     schema: {
       tags: ['runtimes'],
       summary: 'Register a sandbox runtime',

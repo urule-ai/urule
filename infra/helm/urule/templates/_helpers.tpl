@@ -25,7 +25,7 @@ Resolved image reference. Pass `(dict "image" $svc.image "ctx" $)`.
 */}}
 {{- define "urule.image" -}}
 {{- $registry := .ctx.Values.global.imageRegistry | default "ghcr.io/urule-ai" -}}
-{{- $tag := .ctx.Values.global.imageTag | default "latest" -}}
+{{- $tag := .ctx.Values.global.imageTag | default "0.1.0" -}}
 {{- printf "%s/%s:%s" $registry .image $tag -}}
 {{- end -}}
 

@@ -69,37 +69,32 @@ export interface AuthMiddlewareOptions {
   issuer?: string;
 
   /**
-   * Expected audience (client ID).
+   * Expected audience. A token's `aud` claim, when present, must include this
+   * value; tokens with no `aud` claim pass. There is no implicit acceptance of
+   * Keycloak's built-in `account` audience — configure the client with an
+   * audience mapper so it issues tokens with this `aud`.
    * @default 'urule-office'
    */
   audience?: string;
 
   /**
-   * Route prefixes that do NOT require authentication.
+   * Route prefixes that do NOT require authentication. Each entry is either a
+   * bare path (`/api/v1/packages` — public for every method) or method-qualified
+   * (`GET /api/v1/packages` — public for GET only, so a POST to the same path
+   * still authenticates). Matching is exact or path-prefix.
    * Healthz is always public.
    * @default ['/healthz']
    */
   publicRoutes?: string[];
 
   /**
-   * Skip auth entirely (for development/testing).
-   * When true, injects a mock user into every request.
+   * Skip auth entirely (development/testing only). When `true`, injects the
+   * admin mock user into every request — never enable this in a real
+   * deployment. When `false` (the default), the plugin validates Keycloak JWTs
+   * and **fails closed** if the JWKS endpoint is unreachable at startup (every
+   * non-public request returns 401; it never falls back to the mock user).
+   * Settable via this option or `SKIP_AUTH=true`.
    * @default false
    */
   skipAuth?: boolean;
-
-  /**
-   * Refuse to fall back to mock-user mode when the JWKS endpoint is
-   * unreachable. When `true` and JWKS fetch fails, the plugin still
-   * registers (so `/healthz` and any other `publicRoutes` keep working
-   * for k8s liveness/readiness probes) but every non-public request
-   * returns 401 instead of being silently authenticated as the
-   * MOCK_USER. Use this in production-style deployments and in service
-   * test fixtures that want to exercise real 401 behavior.
-   *
-   * Defaults to `process.env.AUTH_FAIL_CLOSED === 'true'` so production
-   * pods can opt in via env without a code change.
-   * @default false
-   */
-  failClosed?: boolean;
 }

@@ -5,7 +5,10 @@ test.describe('Journey 1: Authentication', () => {
     test('should show login page', async ({ page }) => {
       await page.goto('/login');
       await expect(page.getByText('URULE')).toBeVisible();
-      await expect(page.getByPlaceholder(/email/i)).toBeVisible();
+      // Use the label rather than the placeholder — the placeholder is
+      // "name@company.ai" which doesn't contain "email". Label is the stable
+      // accessibility hook.
+      await expect(page.getByLabel(/work email/i)).toBeVisible();
     });
 
     test('should show validation errors for empty fields', async ({ page }) => {
@@ -17,8 +20,11 @@ test.describe('Journey 1: Authentication', () => {
 
     test('should show error for invalid credentials', async ({ page }) => {
       await page.goto('/login');
-      await page.getByPlaceholder(/email/i).fill('wrong@test.com');
-      await page.getByPlaceholder(/password/i).fill('wrongpassword');
+      // Use labels rather than placeholders — placeholders are "name@company.ai"
+      // (no "email") and "••••••••" (no "password"). Labels are "Work Email"
+      // and "Password".
+      await page.getByLabel(/work email/i).fill('wrong@test.com');
+      await page.getByLabel('Password', { exact: true }).fill('wrongpassword');
       await page.getByRole('button', { name: /authenticate/i }).click();
       // Should show server error (502 since Keycloak may not be running)
       await page.waitForTimeout(2000);
@@ -61,7 +67,10 @@ test.describe('Journey 1: Authentication', () => {
   test.describe('1.2 Register', () => {
     test('should show registration page', async ({ page }) => {
       await page.goto('/register');
-      await expect(page.getByText(/create.*workspace|create.*account/i)).toBeVisible();
+      // Heading is "Create Account" — scope to the heading role since /create/i
+      // also matches the submit button and other inline copy (strict mode would
+      // fail on multiple matches).
+      await expect(page.getByRole('heading', { name: /create account/i })).toBeVisible();
     });
 
     test('should validate password requirements', async ({ page }) => {
@@ -77,15 +86,22 @@ test.describe('Journey 1: Authentication', () => {
   test.describe('1.3 Forgot Password', () => {
     test('should show forgot password page', async ({ page }) => {
       await page.goto('/forgot-password');
-      await expect(page.getByText(/reset/i)).toBeVisible();
+      // Heading is "Reset your password" — scope to heading since "reset" also
+      // appears in the body copy ("we'll send a reset link") and would
+      // trigger strict-mode multi-match.
+      await expect(page.getByRole('heading', { name: /reset your password/i })).toBeVisible();
     });
 
     test('should show success after submitting email', async ({ page }) => {
       await page.goto('/forgot-password');
-      await page.getByPlaceholder(/email/i).fill('test@example.com');
+      // The email input has no `htmlFor`-associated label on this page, so
+      // getByLabel may not resolve it; target the email input directly.
+      await page.locator('input[type="email"]').fill('test@example.com');
       await page.getByRole('button', { name: /send|reset/i }).click();
       await page.waitForTimeout(1000);
-      await expect(page.getByText(/reset link|check your email/i)).toBeVisible();
+      // After submit the page replaces the form with "Check your email" heading
+      // + a "reset link" message. Scope to heading to avoid multi-match.
+      await expect(page.getByRole('heading', { name: /check your email/i })).toBeVisible();
     });
 
     test('should navigate back to login', async ({ page }) => {

@@ -399,7 +399,7 @@ export default function OfficeDashboard() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+      <div data-testid="dashboard-stats" className="grid grid-cols-2 xl:grid-cols-4 gap-4">
         {agentsLoading ? (
           Array.from({ length: 4 }).map((_, i) => (
             <div key={i} className="glass-panel p-6 rounded-2xl space-y-4">

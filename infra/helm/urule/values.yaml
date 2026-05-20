@@ -12,9 +12,25 @@
 
 global:
   imageRegistry: ghcr.io/urule-ai
-  imageTag: latest
+  # Pin to a released version — never `latest` in production. Matches the chart
+  # appVersion / the workspace package versions; a `v0.1.0` git tag publishes
+  # `<registry>/<service>:0.1.0`. Override per-deploy: --set global.imageTag=...
+  imageTag: "0.1.0"
   imagePullPolicy: IfNotPresent
   imagePullSecrets: []
+  # Pod-level securityContext — applied to every Deployment + migrate Job
+  # rendered by this chart (#23). Drop to override entirely:
+  #   --set global.podSecurityContext=null
+  # The uid/gid match the `node` user in the official `node:20-slim` base
+  # image, which all in-repo Dockerfiles use. Standalone-repo services
+  # (approvals, channel-router, mcp-gateway, runtime-broker, langgraph-adapter)
+  # currently still run as root in their own Dockerfiles — until those repos
+  # add a `USER` directive, Kubernetes refuses to start them under
+  # `runAsNonRoot: true`. Override per-deploy if needed.
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    fsGroup: 1000
   # Connection strings shared across services. Per-service overrides
   # (services.<name>.env) take precedence.
   databaseUrlBase: postgres://urule:urule@postgres:5432

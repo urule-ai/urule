@@ -81,14 +81,14 @@ All services read `process.env.*` via `loadConfig()` in `src/config.ts`. Compose
 | `LOG_LEVEL` | `info` | `info` (or `warn`) |
 | `CORS_ORIGINS` | `http://localhost:3000` | exact frontend origin(s) |
 | `KEYCLOAK_REALM_URL` | `http://localhost:8281/realms/urule` | external Keycloak URL |
-| `AUTH_FAIL_CLOSED` | (unset) | `true` — block requests when Keycloak unreachable |
+| `SKIP_AUTH` | (unset; `true` in the local compose) | leave **unset** — `true` bypasses JWT validation entirely (admin mock user). The auth middleware now *fails closed* by default (401s when JWKS is unreachable), so there's no separate `AUTH_FAIL_CLOSED` flag any more. |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://otel-collector:4317` | leave (in-cluster OTLP) |
 | `OTEL_DISABLED` | (unset) | leave unset (`true` only in tests) |
-| `DATABASE_URL` (per service) | `postgres://urule:urule@postgres:5432/<db>` | external managed Postgres URL |
+| `DATABASE_URL` (per service) | `postgres://urule:${POSTGRES_PASSWORD}@postgres:5432/<db>` | external managed Postgres URL |
 | `NATS_URL` | `nats://nats:4222` | dedicated NATS cluster URL |
 | `TEMPORAL_ADDRESS` | `temporal:7233` | dedicated Temporal cluster |
 
-**Secrets**: Postgres password, Keycloak admin, JWT signing keys etc. should NOT be the `urule:urule` defaults in production. Override via `.env` (referenced from compose) or via secret management (Docker secrets, Kubernetes secrets, Vault). The compose file already uses `${URULE_*_PORT:-default}` interpolation patterns so port overrides work via env vars — extend the same pattern for credentials.
+**Secrets**: the compose files require `POSTGRES_PASSWORD`, `KEYCLOAK_ADMIN_PASSWORD`, and `GRAFANA_ADMIN_PASSWORD` via `${VAR:?}` — a service refuses to start if its credential is missing, so there are no insecure defaults baked into the YAML. For local dev, `make infra-up` copies `infra/compose/.env.example` (insecure dev defaults) to `infra/compose/.env` (gitignored). **In production, supply real values** via your secrets manager / orchestrator secrets (Docker secrets, Kubernetes secrets, Vault) — never the dev defaults from `.env.example`. JWT signing keys live in Keycloak, not in this compose stack.
 
 ## Reverse-proxy / TLS
 

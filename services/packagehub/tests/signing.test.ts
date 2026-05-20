@@ -11,15 +11,39 @@ function generateEd25519() {
 }
 
 describe('@urule/packagehub — signing', () => {
-  it('canonicalDigest is stable across key-order changes', () => {
+  it('canonicalDigest is stable across key-order changes (top-level + nested)', () => {
     const m1 = { name: 'pkg', version: '0.1.0', extras: { a: 1, b: 2 } };
     const m2 = { extras: { b: 2, a: 1 }, version: '0.1.0', name: 'pkg' };
-    const a = canonicalDigest(m1, 'readme', '0.1.0');
-    const b = canonicalDigest(m2, 'readme', '0.1.0');
-    // Note: nested object key ordering only stable at the top level via
-    // the sortedKeys arg; deeper objects rely on V8 insertion order. For
-    // top-level shuffle the digest should match.
-    expect(a.equals(b)).toBe(true);
+    expect(canonicalDigest(m1, 'readme', '0.1.0').equals(canonicalDigest(m2, 'readme', '0.1.0'))).toBe(true);
+  });
+
+  it('canonicalDigest preserves nested object content (#16 regression)', () => {
+    // The old impl passed `Object.keys(manifest).sort()` as JSON.stringify's
+    // replacer-array, which silently DROPS every nested key that doesn't match
+    // a top-level name — so two manifests with totally different nested content
+    // produced the same digest. The new canonicalize() must bind to the actual
+    // nested content.
+    const m1 = { name: 'pkg', extras: { a: 1, b: 2 } };
+    const m2 = { name: 'pkg', extras: { a: 1, b: 99 } };
+    expect(canonicalDigest(m1, 'readme', '0.1.0').equals(canonicalDigest(m2, 'readme', '0.1.0'))).toBe(false);
+  });
+
+  it('canonicalDigest changes when a nested key changes', () => {
+    const m1 = { extras: { a: 1 } };
+    const m2 = { extras: { a: 1, b: 2 } };
+    expect(canonicalDigest(m1, 'readme', '0.1.0').equals(canonicalDigest(m2, 'readme', '0.1.0'))).toBe(false);
+  });
+
+  it('canonicalDigest preserves array element order', () => {
+    const m1 = { tags: ['a', 'b', 'c'] };
+    const m2 = { tags: ['c', 'b', 'a'] };
+    expect(canonicalDigest(m1, 'readme', '0.1.0').equals(canonicalDigest(m2, 'readme', '0.1.0'))).toBe(false);
+  });
+
+  it('canonicalDigest canonicalizes objects inside arrays', () => {
+    const m1 = { deps: [{ name: 'foo', version: '1.0' }, { name: 'bar', version: '2.0' }] };
+    const m2 = { deps: [{ version: '1.0', name: 'foo' }, { version: '2.0', name: 'bar' }] };
+    expect(canonicalDigest(m1, 'readme', '0.1.0').equals(canonicalDigest(m2, 'readme', '0.1.0'))).toBe(true);
   });
 
   it('canonicalDigest changes when manifest mutates', () => {

@@ -121,7 +121,7 @@ export function registerPubkeysRoutes(app: FastifyInstance, db: Database): void 
       }
 
       const digest = rotationDigest('add', name, pubkey);
-      const matched = verifyAgainstActiveKeys(activeKeys, proof, digest);
+      const matched = await verifyAgainstActiveKeys(activeKeys, proof, digest);
       if (!matched) {
         return reply.code(401).send({
           error: {
@@ -200,7 +200,7 @@ export function registerPubkeysRoutes(app: FastifyInstance, db: Database): void 
       .from(packagePubkeys)
       .where(and(eq(packagePubkeys.packageId, pkg.id), eq(packagePubkeys.status, 'active')));
     const digest = rotationDigest('revoke', name, target.pubkey);
-    const matched = verifyAgainstActiveKeys(activeRows, proof, digest);
+    const matched = await verifyAgainstActiveKeys(activeRows, proof, digest);
     if (!matched) {
       return reply.code(401).send({
         error: {

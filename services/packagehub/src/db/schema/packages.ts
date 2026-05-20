@@ -6,6 +6,11 @@ export const packages = pgTable('packages', {
   type: varchar('type', { length: 50 }).notNull(), // personality, skill, mcp_connector, etc.
   description: text('description').notNull().default(''),
   author: varchar('author', { length: 255 }).notNull(),
+  // The Urule user id (JWT subject) of the account that first published this
+  // package — its owner. Only the owner may publish new versions. NULL for
+  // packages registered before ownership tracking (legacy / seed data), which
+  // fall back to signature-gated (or open) version publishing.
+  publisherId: varchar('publisher_id', { length: 255 }),
   repository: varchar('repository', { length: 500 }),
   homepage: varchar('homepage', { length: 500 }),
   license: varchar('license', { length: 50 }),
@@ -15,7 +20,9 @@ export const packages = pgTable('packages', {
   // Signing: when set, all version publishes for this package must include
   // a valid signature over (manifest || readme || version) verifiable
   // against this key. NULL means anonymous / unsigned (back-compat).
-  publisherPubkey: varchar('publisher_pubkey', { length: 64 }),
+  // `text` so the column can hold the longer Sigstore identity JSON
+  // (`{ issuer, subject }`) alongside short Ed25519 base64 keys.
+  publisherPubkey: text('publisher_pubkey'),
   pubkeyKind: varchar('pubkey_kind', { length: 20 }).notNull().default('ed25519'),
   // Marketplace: tier governs whether install requires an entitlement.
   // 'free' (default) skips the entitlement check; 'paid' / 'subscription'

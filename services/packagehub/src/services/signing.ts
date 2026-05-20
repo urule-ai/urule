@@ -1,4 +1,5 @@
 import { createHash, createPublicKey, verify } from 'node:crypto';
+import { getSigstoreVerifier, parseSigstoreIdentity } from './sigstore-verifier.js';
 
 /**
  * Active pubkey record — the subset of the `package_pubkeys` row a
@@ -11,19 +12,39 @@ export interface ActivePubkey {
 }
 
 /**
+ * Recursively canonicalize a JSON-shaped value: object keys are sorted at
+ * every level, array element order is preserved, primitives pass through.
+ * Used by `canonicalDigest` so two semantically-equal manifests serialize
+ * identically regardless of property insertion order.
+ */
+function canonicalize(value: unknown): unknown {
+  if (value === null || typeof value !== 'object') return value;
+  if (Array.isArray(value)) return value.map(canonicalize);
+  return Object.keys(value as Record<string, unknown>)
+    .sort()
+    .reduce<Record<string, unknown>>((acc, key) => {
+      acc[key] = canonicalize((value as Record<string, unknown>)[key]);
+      return acc;
+    }, {});
+}
+
+/**
  * Compute a deterministic SHA-256 digest over the canonical form of a
  * version's signed material. Both publisher and verifier use this same
  * function, so any layout change breaks all in-flight signatures — keep
  * stable.
  *
  * The canonical form is:
- *   sha256( JSON.stringify(manifest, sortedKeys) || readme || version )
+ *   sha256( JSON.stringify(canonicalize(manifest)) || readme || version )
  *
- * `JSON.stringify` with a sorted-keys reviver (passed as the 2nd arg to
- * stringify here) produces stable output across Node versions and platforms.
+ * Where `canonicalize` recursively sorts object keys at every level (#16);
+ * earlier the function passed `Object.keys(manifest).sort()` as `JSON.stringify`'s
+ * replacer-array, which only sorts top-level keys AND silently DROPS every
+ * nested key that doesn't happen to match a top-level name — defeating the
+ * whole point of binding the digest to manifest content.
  */
 export function canonicalDigest(manifest: unknown, readme: string, version: string): Buffer {
-  const json = JSON.stringify(manifest, Object.keys(manifest as object).sort());
+  const json = JSON.stringify(canonicalize(manifest));
   return createHash('sha256').update(json).update(readme).update(version).digest();
 }
 
@@ -58,21 +79,39 @@ export function verifyEd25519(pubkeyB64: string, signatureB64: string, digest: B
 
 /**
  * Verify a signature against any of a package's active pubkeys.
- * Returns the matching pubkey (b64) on success, or null on failure.
+ * Returns the matching pubkey (b64 for Ed25519, JSON identity for
+ * Sigstore) on success, or null on failure.
  *
  * Multiple active keys exist whenever a publisher has rotated mid-life
  * but kept the prior key around (e.g., a hardware-token primary and a
- * CI-pipeline secondary). Verification short-circuits on first match,
- * so the order of `keys` doesn't change correctness.
+ * CI-pipeline secondary, or an Ed25519 floor + a Sigstore CI-signed
+ * key). Verification short-circuits on first match, so the order of
+ * `keys` doesn't change correctness.
+ *
+ * Two `pubkey_kind` values are supported today:
+ *   - `ed25519`       — raw key + 64-byte signature (synchronous local crypto)
+ *   - `sigstore-oidc` — `{ issuer, subject }` identity + serialized cosign
+ *                       bundle (async; delegates to `@sigstore/verify` which
+ *                       checks Fulcio cert chain + Rekor inclusion proof)
  */
-export function verifyAgainstActiveKeys(
+export async function verifyAgainstActiveKeys(
   keys: readonly ActivePubkey[],
-  signatureB64: string,
+  signature: string,
   digest: Buffer,
-): string | null {
+): Promise<string | null> {
   for (const key of keys) {
-    if (key.pubkeyKind !== 'ed25519') continue; // only ed25519 today
-    if (verifyEd25519(key.pubkey, signatureB64, digest)) return key.pubkey;
+    if (key.pubkeyKind === 'ed25519') {
+      if (verifyEd25519(key.pubkey, signature, digest)) return key.pubkey;
+    } else if (key.pubkeyKind === 'sigstore-oidc') {
+      const identity = parseSigstoreIdentity(key.pubkey);
+      if (!identity) continue;
+      // For sigstore-oidc the `signature` field carries the JSON cosign
+      // bundle directly (the column is `text` so size isn't a concern).
+      const ok = await getSigstoreVerifier().verify(signature, digest, identity);
+      if (ok) return key.pubkey;
+    }
+    // Unknown kinds are skipped (forward-compat: a future `c2pa` etc. key
+    // can land alongside without breaking existing rows).
   }
   return null;
 }
