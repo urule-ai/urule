@@ -216,10 +216,15 @@ services:
       PORT: '3000'
       NATS_URL: nats://nats:4222
       TEMPORAL_ADDRESS: temporal:7233
+      # Resource-level authz (OpenFGA) — shares the `urule` store the registry
+      # self-bootstraps; unset to fall back to in-memory mock authz.
+      OPENFGA_URL: http://openfga:8080
     depends_on:
       nats:
         condition: service_healthy
       temporal:
+        condition: service_healthy
+      openfga:
         condition: service_healthy
     healthcheck:
       test: ['CMD-SHELL', "node -e \"fetch('http://localhost:3000/healthz').then(r=>{if(!r.ok)throw 1}).catch(()=>process.exit(1))\""]
