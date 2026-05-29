@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { ulid } from 'ulid';
 import { and, eq, gt, isNull, or } from 'drizzle-orm';
+import { requireRole } from '@urule/authz-middleware';
 import type { Database } from '../db/connection.js';
 import { packages } from '../db/schema/packages.js';
 import { entitlements } from '../db/schema/entitlements.js';
@@ -93,19 +94,25 @@ export function registerEntitlementRoutes(app: FastifyInstance, db: Database) {
   });
 
   /**
-   * POST /api/v1/entitlements — mint an entitlement row.
-   *   Used by future Stripe/Lemonsqueezy webhooks; today the manual
-   *   "grant" path. Idempotent: if an active row already exists for the
-   *   same (packageId, consumer, externalRef), return the existing one.
+   * POST /api/v1/entitlements — mint an entitlement row. **Admin only.**
+   *
+   * Previously gated by auth-only, so any authenticated user could mint
+   * paid entitlements for themselves (C-11 / urule#11). The Stripe
+   * webhook receiver bypasses this HTTP route and writes directly to the
+   * DB (see webhooks.routes.ts) — only admin tooling should hit the
+   * HTTP path. If a self-service "grant me this free thing" flow is
+   * wanted, add a separate route that checks `package.licenseTier ===
+   * 'free'` (out of scope here).
    */
   app.post<{
     Body: z.infer<typeof grantSchema>;
   }>('/api/v1/entitlements', {
+    preHandler: requireRole('admin'),
     schema: {
       tags: ['entitlements'],
-      summary: 'Mint an entitlement row',
+      summary: 'Mint an entitlement row (admin only)',
       description:
-        'Creates an entitlement record (`kind: purchase | subscription | grant`). The Stripe webhook receiver calls this on `checkout.session.completed`; admin tools call it for manual grants. Idempotent on the (packageId, externalRef) tuple — a retried call with the same external reference returns the existing row.',
+        '**Admin only** (C-11 fix). Creates an entitlement record (`kind: purchase | subscription | grant`) for an admin / manual-grant flow. The Stripe webhook does not call this route — it writes directly to the DB after HMAC verification. Idempotent on the (packageId, externalRef) tuple — a retried call with the same external reference returns the existing row.',
       body: grantSchema,
     },
   }, async (request, reply) => {
@@ -145,16 +152,21 @@ export function registerEntitlementRoutes(app: FastifyInstance, db: Database) {
   });
 
   /**
-   * DELETE /api/v1/entitlements/:id — revoke. Used for refunds.
+   * DELETE /api/v1/entitlements/:id — revoke. Used for refunds. **Admin only.**
+   *
+   * Previously gated by auth-only, so any authenticated user could
+   * revoke any paying customer's entitlement — service disruption /
+   * DoS for paid users (C-11 / urule#11).
    */
   app.delete<{ Params: { id: string } }>(
     '/api/v1/entitlements/:id',
     {
+      preHandler: requireRole('admin'),
       schema: {
         tags: ['entitlements'],
-        summary: 'Revoke an entitlement',
+        summary: 'Revoke an entitlement (admin only)',
         description:
-          'Hard-deletes the entitlement row. Used by the refund flow: a Stripe `charge.refunded` webhook (or admin tool) hits this endpoint with the entitlement id captured at mint time. 404 ENTITLEMENT_NOT_FOUND if already revoked.',
+          '**Admin only** (C-11 fix). Hard-deletes the entitlement row. Used by the refund flow: a Stripe `charge.refunded` webhook OR admin tooling hits this endpoint with the entitlement id captured at mint time. 404 ENTITLEMENT_NOT_FOUND if already revoked.',
         params: z.object({ id: z.string() }),
       },
     },
