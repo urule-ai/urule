@@ -109,9 +109,13 @@ describe("Phase J — governance admin-only authz", () => {
       });
 
       it("unauthenticated (uruleUser = null) → 403 (no admin role)", async () => {
-        // Note: in production, auth-middleware short-circuits with 401 before
-        // requireRole ever runs. This test models the case where uruleUser is
-        // null at the requireRole layer — defense in depth — and expects 403.
+        // In production, auth-middleware's onRequest hook rejects with 401
+        // when the JWT is missing/invalid — requireRole never runs. This
+        // test exercises the second line of defense: even if auth-middleware
+        // is bypassed (test fixtures, future misconfiguration, dev tooling),
+        // requireRole itself denies a null-user request with 403. The status
+        // diverges from production (401 vs 403) by design — we're checking
+        // requireRole in isolation, not the full auth+authz chain.
         const app = await buildApp({ user: ANON });
         const res = await app.inject({ method: route.method, url: route.url, payload: route.payload });
         expect(res.statusCode).toBe(403);
@@ -119,24 +123,37 @@ describe("Phase J — governance admin-only authz", () => {
     });
   }
 
-  it("audit logging is unaffected by the new preHandler — admin call still emits audit", async () => {
-    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+  it("admin call still emits the governance-decision audit event (preHandler does not short-circuit it)", async () => {
     const app = await buildApp({ user: ADMIN });
-    // Logger is wired through app.log.info; capture via the test app's logger
-    // by monkey-patching .info. Simpler: just confirm 200 + an audit event
-    // would be sent to NATS; we don't try to assert on the log here since
-    // governance routes the audit through app.log (which the silent logger
-    // discards in test). What we DO assert is that the route still completes
-    // successfully with the preHandler in place — i.e., we didn't accidentally
-    // short-circuit the handler.
+    // Spy on `app.log.info` — governance.routes.ts wires its AuditLogger
+    // callback to `app.log.info({ audit: true, topic, ... }, "audit")`. If a
+    // preHandler short-circuited the handler, no audit call would happen.
+    const infoSpy = vi.spyOn(app.log, "info");
+
     const res = await app.inject({
       method: "POST",
       url: "/api/v1/governance/decide",
       payload: DECIDE_PAYLOAD,
     });
     expect(res.statusCode).toBe(200);
-    const body = res.json();
-    expect(body).toHaveProperty("allowed");
-    logSpy.mockRestore();
+
+    // The audit emit is fire-and-forget (`audit.configChanged(...).catch(...)`)
+    // — the handler returns the response before the publish callback runs.
+    // Drain a couple of microtask layers to let the AuditLogger chain settle.
+    await new Promise((r) => setImmediate(r));
+
+    // At least one audit emission with the expected shape. The topic on the
+    // wire is `urule.audit.config.changed` (governance routes audit decisions
+    // through `audit.configChanged`); the entity type inside the event is
+    // "governance-decision".
+    const auditCalls = infoSpy.mock.calls.filter((args) => {
+      const first = args[0];
+      if (typeof first !== "object" || first === null) return false;
+      const obj = first as Record<string, unknown>;
+      if (obj.audit !== true) return false;
+      const data = obj.data as Record<string, unknown> | undefined;
+      return obj.topic === "urule.audit.config.changed" && data?.entityType === "governance-decision";
+    });
+    expect(auditCalls.length).toBeGreaterThan(0);
   });
 });
