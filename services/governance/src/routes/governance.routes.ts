@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { UruleUser } from "@urule/auth-middleware";
+import { requireRole } from "@urule/authz-middleware";
 import type { GovernanceService } from "../services/governance.js";
 import type { PolicyEngine } from "../services/policy-engine.js";
 import type { AuthzEngine } from "../services/authz-engine.js";
@@ -61,6 +62,7 @@ export async function governanceRoutes(
   app.post(
     "/api/v1/governance/decide",
     {
+      preHandler: requireRole('admin'),
       schema: {
         tags: ['governance'],
         summary: 'Combined policy + authz decision',
@@ -93,6 +95,7 @@ export async function governanceRoutes(
   app.post(
     "/api/v1/governance/policy/evaluate",
     {
+      preHandler: requireRole('admin'),
       schema: {
         tags: ['policy'],
         summary: 'Evaluate an OPA policy directly',
@@ -122,6 +125,7 @@ export async function governanceRoutes(
   app.post(
     "/api/v1/governance/authz/check",
     {
+      preHandler: requireRole('admin'),
       schema: {
         tags: ['authz'],
         summary: 'OpenFGA relationship check',
@@ -153,6 +157,7 @@ export async function governanceRoutes(
   app.post(
     "/api/v1/governance/authz/batch-check",
     {
+      preHandler: requireRole('admin'),
       schema: {
         tags: ['authz'],
         summary: 'Batched OpenFGA relationship checks',
