@@ -1,14 +1,23 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { ulid } from 'ulid';
 import { eq, desc, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { fetchWithCorrelation } from '@urule/correlation-id';
-import { requireMembership } from '@urule/authz-middleware';
+import { requireMembership, requireRole } from '@urule/authz-middleware';
+import type { UruleUser } from '@urule/auth-middleware';
 import type { Database } from '../db/connection.js';
 import { conversations, conversationAgents, messages } from '../db/schema/conversations.js';
 import { agents } from '../db/schema/agents.js';
 import { workspaces } from '../db/schema/workspaces.js';
 import { bodyWorkspaceResolver, conversationWorkspaceResolver } from '../authz.js';
+
+// auth-middleware decorates `request.uruleUser` at runtime but does not
+// publish a Fastify module augmentation. Inline-cast helper — non-null on
+// routes guarded by `requireMembership` / `requireRole` (those preHandlers
+// 401 before the handler runs when uruleUser is missing).
+function getUser(request: FastifyRequest): UruleUser {
+  return (request as FastifyRequest & { uruleUser: UruleUser }).uruleUser;
+}
 
 const createConversationSchema = z.object({
   workspaceId: z.string().min(1),
@@ -17,10 +26,15 @@ const createConversationSchema = z.object({
   agentIds: z.array(z.string()).optional(),
 });
 
-const createMessageSchema = z.object({
-  senderId: z.string().min(1),
+// `senderId` deliberately omitted — derived from `request.uruleUser.id` in
+// the handler. Reading it from the body let any authenticated workspace
+// member record a message under someone else's identity (C-08 / urule#8).
+// `z.strictObject` makes the schema **reject** a body with `senderId`
+// (returns 400) rather than silently stripping, so spoofing attempts
+// surface in CI / logs.
+const createMessageSchema = z.strictObject({
   content: z.string().min(1),
-  senderType: z.string().optional(),
+  senderType: z.enum(['user', 'agent', 'system']).optional(),
   contentType: z.string().optional(),
   actionButtons: z.array(z.unknown()).optional(),
 });
@@ -132,12 +146,17 @@ export function registerConversationRoutes(app: FastifyInstance, db: Database) {
     reply.status(201).send(toUiConversation(conv as Record<string, unknown>));
   });
 
-  // List conversations with last_message, message_count, agents
+  // List conversations with last_message, message_count, agents — admin only (#95).
+  // Cross-workspace; without an admin gate any authenticated user could enumerate
+  // every conversation in every workspace. Workspace-scoped callers should use
+  // `?workspaceId=` plus their own membership check, OR the dedicated scoped
+  // route on workspaces (TODO if not yet present).
   app.get<{ Querystring: z.infer<typeof listConversationsQuerySchema> }>('/api/v1/conversations', {
+    preHandler: requireRole('admin'),
     schema: {
       tags: ['conversations'],
-      summary: 'List conversations',
-      description: 'Newest-first by `updatedAt`. Optional `?workspaceId=` filter, `?limit` capped at 100. Each row includes the last message preview, message count, and linked agents — pre-joined for the office-ui chat list.',
+      summary: 'List conversations (admin only)',
+      description: 'Cross-workspace list — **admin only** (#95). Newest-first by `updatedAt`. Optional `?workspaceId=` filter, `?limit` capped at 100. Each row includes the last message preview, message count, and linked agents — pre-joined for the office-ui chat list. Regular callers should query a workspace-scoped variant.',
       querystring: listConversationsQuerySchema,
     },
   }, async (request) => {
@@ -256,13 +275,14 @@ export function registerConversationRoutes(app: FastifyInstance, db: Database) {
     schema: {
       tags: ['conversations'],
       summary: 'Append a message to a conversation',
-      description: 'Body `{ senderId, senderType, content, contentType?, actionButtons? }`. SenderType is `user | agent | system`; contentType is `text | markdown | tool_call | tool_result`. Used by langgraph-adapter to persist agent replies, and by the office-ui chat box for user turns.',
+      description: 'Body `{ senderType, content, contentType?, actionButtons? }`. `senderId` is **derived from the JWT subject** (`request.uruleUser.id`) — passing one in the body returns 400. SenderType is `user | agent | system` (default `user`); contentType is `text | markdown | tool_call | tool_result`. Used by langgraph-adapter to persist agent replies, and by the office-ui chat box for user turns.',
       params: conversationIdParamsSchema,
       body: createMessageSchema,
     },
   }, async (request, reply) => {
     const { conversationId } = request.params;
-    const { senderId, senderType, content, contentType, actionButtons } = request.body;
+    const { senderType, content, contentType, actionButtons } = request.body;
+    const senderId = getUser(request).id;
 
     // Verify conversation exists
     const [conv] = await db.select().from(conversations).where(eq(conversations.id, conversationId));
