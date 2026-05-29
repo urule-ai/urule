@@ -3,7 +3,7 @@ import { ulid } from 'ulid';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { parentTuple, workspaceTuple } from '@urule/authz';
-import { requireMembership } from '@urule/authz-middleware';
+import { requireMembership, requireRole } from '@urule/authz-middleware';
 import { AuditLogger } from '@urule/events';
 import type { Database } from '../db/connection.js';
 import { workspaces } from '../db/schema/workspaces.js';
@@ -57,12 +57,15 @@ export function registerWorkspaceRoutes(app: FastifyInstance, db: Database) {
   // Mutating the demo-mode "current" workspace requires membership of it.
   const requireCurrentWorkspace = requireMembership(() => firstWorkspaceId(db));
 
-  // List all workspaces
+  // List all workspaces — admin only (#95). Cross-workspace enumeration was
+  // previously open to any authenticated user; tenant-scoped callers should
+  // use `/orgs/:orgId/workspaces`.
   app.get('/api/v1/workspaces', {
+    preHandler: requireRole('admin'),
     schema: {
       tags: ['workspaces'],
-      summary: 'List all workspaces',
-      description: 'Returns every workspace in the system. Admin-shaped — most callers should use `/orgs/:orgId/workspaces` instead to scope to their tenant.',
+      summary: 'List all workspaces (admin only)',
+      description: 'Cross-workspace list — **admin only** (#95). Returns every workspace in the system. Most callers should use `/orgs/:orgId/workspaces` instead to scope to their tenant.',
     },
   }, async () => {
     const rows = await db.select().from(workspaces);

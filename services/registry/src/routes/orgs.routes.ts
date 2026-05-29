@@ -25,12 +25,14 @@ export function registerOrgRoutes(app: FastifyInstance, db: Database) {
     app.log.info({ audit: true, topic, ...(data as Record<string, unknown>) }, 'audit');
   });
 
-  // List orgs
+  // List orgs — admin only (#95). Cross-tenant enumeration; non-admin users
+  // typically belong to a single org and don't need to see all of them.
   app.get<{ Querystring: z.infer<typeof listOrgsQuerySchema> }>('/api/v1/orgs', {
+    preHandler: requireRole('admin'),
     schema: {
       tags: ['orgs'],
-      summary: 'List orgs',
-      description: '`?limit` capped at 100; `?offset` for pagination. Returns every org in the system — typically only useful for admin tools since each user typically belongs to a single org.',
+      summary: 'List orgs (admin only)',
+      description: 'Cross-tenant list — **admin only** (#95). `?limit` capped at 100; `?offset` for pagination. Returns every org in the system; non-admin callers should retrieve their own org by id instead.',
       querystring: listOrgsQuerySchema,
     },
   }, async (request) => {

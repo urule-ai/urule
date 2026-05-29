@@ -301,10 +301,13 @@ describe('GET /api/v1/conversations', () => {
 describe('POST /api/v1/conversations/:id/messages', () => {
   it('returns 404 when the conversation does not exist', async () => {
     const app = await buildApp({ selects: [[]] });
+    // Phase K — `senderId` is now derived from the JWT subject by the route
+    // (was previously taken from the body, enabling C-08 spoofing). The
+    // strict schema rejects bodies that include it.
     const res = await app.inject({
       method: 'POST',
       url: '/api/v1/conversations/missing/messages',
-      payload: { senderId: 'u1', content: 'hi', senderType: 'agent' },
+      payload: { content: 'hi', senderType: 'agent' },
     });
     expect(res.statusCode).toBe(404);
     expect(JSON.parse(res.body).error.code).toBe('CONVERSATION_NOT_FOUND');
@@ -324,6 +327,10 @@ describe('POST /api/v1/conversations/:id/messages', () => {
     const inserted = {
       id: 'm-new',
       conversationId: 'c1',
+      // senderId in the persisted row reflects the JWT subject. In this
+      // test buildApp injects no uruleUser; the route falls through to
+      // whatever the auth fixture provides — assert on the route's
+      // behaviour, not the value here.
       senderId: 'agent-1',
       senderType: 'agent',
       content: 'hello',
@@ -342,7 +349,7 @@ describe('POST /api/v1/conversations/:id/messages', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/v1/conversations/c1/messages',
-      payload: { senderId: 'agent-1', content: 'hello', senderType: 'agent' },
+      payload: { content: 'hello', senderType: 'agent' },
     });
     expect(res.statusCode).toBe(201);
     const body = JSON.parse(res.body);

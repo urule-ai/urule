@@ -1,4 +1,4 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { ulid } from 'ulid';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
@@ -8,6 +8,41 @@ import { workspaces } from '../db/schema/workspaces.js';
 import { AuditLogger } from '@urule/events';
 import { requireMembership } from '@urule/authz-middleware';
 import { bodyWorkspaceResolver, providerWorkspaceResolver } from '../authz.js';
+
+interface MaybeUser { id?: string; roles?: string[] }
+
+/**
+ * Per-#95: `GET /api/v1/providers` returns every provider system-wide when
+ * called without a filter. Gate it: members may pass `?workspaceId=` and
+ * see their workspace's providers; the no-filter (cross-workspace) path
+ * requires `admin`.
+ */
+async function requireAdminOrWorkspaceFilter(req: FastifyRequest, reply: FastifyReply): Promise<void> {
+  const user = (req as FastifyRequest & { uruleUser?: MaybeUser }).uruleUser;
+  if (!user?.id) {
+    reply.code(401).send({ error: { code: 'UNAUTHORIZED', message: 'Authentication required' } });
+    return;
+  }
+  if (user.roles?.includes('admin')) return; // admin bypass — no filter required
+
+  const wsId = (req.query as { workspaceId?: string }).workspaceId;
+  if (!wsId) {
+    reply.code(403).send({
+      error: {
+        code: 'FORBIDDEN',
+        message: 'Pass ?workspaceId= to scope to your workspace, or call as admin for the cross-workspace list',
+      },
+    });
+    return;
+  }
+
+  const { allowed } = await req.authz.check(`user:${user.id}`, 'member', `workspace:${wsId}`);
+  if (!allowed) {
+    reply.code(403).send({
+      error: { code: 'FORBIDDEN', message: `Not a member of workspace:${wsId}` },
+    });
+  }
+}
 
 const createProviderSchema = z.object({
   workspaceId: z.string().optional(),
@@ -140,12 +175,15 @@ export function registerProviderRoutes(app: FastifyInstance, db: Database) {
   const requireProviderMembership = requireMembership(providerWorkspaceResolver(db));
   const requireBodyMembership = requireMembership(bodyWorkspaceResolver(db));
 
-  // List providers (optionally filtered by workspaceId query param)
+  // List providers — `?workspaceId=` for members (membership-checked);
+  // no filter requires the `admin` role (#95). Previously open to every
+  // authenticated user, which leaked cross-workspace provider records.
   app.get<{ Querystring: z.infer<typeof listProvidersQuerySchema> }>('/api/v1/providers', {
+    preHandler: requireAdminOrWorkspaceFilter,
     schema: {
       tags: ['providers'],
       summary: 'List LLM providers',
-      description: 'Returns providers with masked API keys (last 4 chars only). Optional `?workspaceId=` filter scopes to a single workspace; without the filter, returns every provider in the system.',
+      description: 'Returns providers with masked API keys (last 4 chars only). `?workspaceId=` scopes to a single workspace and requires membership; calling without the filter returns every provider in the system and requires the `admin` role.',
       querystring: listProvidersQuerySchema,
     },
   }, async (request) => {
