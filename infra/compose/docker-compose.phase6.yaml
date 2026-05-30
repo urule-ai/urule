@@ -135,7 +135,7 @@ services:
           memory: 512M
           cpus: '1.0'
     ports:
-      - '${URULE_REGISTRY_PORT:-3001}:3000'
+      - '${URULE_BIND_HOST:-127.0.0.1}:${URULE_REGISTRY_PORT:-3001}:3000'
     environment:
       # The bundled Keycloak (infra.yaml) isn't wired to these services — none
       # set KEYCLOAK_REALM_URL pointing at it — so JWKS is unreachable and the
@@ -177,7 +177,7 @@ services:
           memory: 512M
           cpus: '1.0'
     ports:
-      - '${URULE_ADAPTER_PORT:-3002}:3000'
+      - '${URULE_BIND_HOST:-127.0.0.1}:${URULE_ADAPTER_PORT:-3002}:3000'
     environment:
       SKIP_AUTH: 'true' # dev stack has no Keycloak — see registry above
       PORT: '3000'
@@ -210,7 +210,7 @@ services:
           memory: 512M
           cpus: '1.0'
     ports:
-      - '${URULE_APPROVALS_PORT:-3003}:3000'
+      - '${URULE_BIND_HOST:-127.0.0.1}:${URULE_APPROVALS_PORT:-3003}:3000'
     environment:
       SKIP_AUTH: 'true' # dev stack has no Keycloak — see registry above
       PORT: '3000'
@@ -245,7 +245,7 @@ services:
           memory: 512M
           cpus: '1.0'
     ports:
-      - '${URULE_STATE_PORT:-3007}:3000'
+      - '${URULE_BIND_HOST:-127.0.0.1}:${URULE_STATE_PORT:-3007}:3000'
     environment:
       SKIP_AUTH: 'true' # dev stack has no Keycloak — see registry above
       PORT: '3000'
@@ -277,7 +277,7 @@ services:
           memory: 512M
           cpus: '1.0'
     ports:
-      - '${URULE_CHANNEL_ROUTER_PORT:-3006}:3000'
+      - '${URULE_BIND_HOST:-127.0.0.1}:${URULE_CHANNEL_ROUTER_PORT:-3006}:3000'
     environment:
       SKIP_AUTH: 'true' # dev stack has no Keycloak — see registry above
       PORT: '3000'
@@ -310,7 +310,7 @@ services:
           memory: 512M
           cpus: '1.0'
     ports:
-      - '${URULE_BROKER_PORT:-4500}:4500'
+      - '${URULE_BIND_HOST:-127.0.0.1}:${URULE_BROKER_PORT:-4500}:4500'
     environment:
       SKIP_AUTH: 'true' # dev stack has no Keycloak — see registry above
       PORT: '4500'
@@ -356,7 +356,7 @@ services:
           memory: 512M
           cpus: '1.0'
     ports:
-      - '${URULE_MCP_GATEWAY_PORT:-3005}:3000'
+      - '${URULE_BIND_HOST:-127.0.0.1}:${URULE_MCP_GATEWAY_PORT:-3005}:3000'
     environment:
       SKIP_AUTH: 'true' # dev stack has no Keycloak — see registry above
       PORT: '3000'
@@ -389,7 +389,7 @@ services:
           memory: 512M
           cpus: '1.0'
     ports:
-      - '${URULE_PACKAGEHUB_PORT:-3009}:3000'
+      - '${URULE_BIND_HOST:-127.0.0.1}:${URULE_PACKAGEHUB_PORT:-3009}:3000'
     environment:
       SKIP_AUTH: 'true' # dev stack has no Keycloak — see registry above
       PORT: '3000'
@@ -418,7 +418,7 @@ services:
           memory: 512M
           cpus: '1.0'
     ports:
-      - '${URULE_PACKAGES_PORT:-3008}:3000'
+      - '${URULE_BIND_HOST:-127.0.0.1}:${URULE_PACKAGES_PORT:-3008}:3000'
     environment:
       SKIP_AUTH: 'true' # dev stack has no Keycloak — see registry above
       PORT: '3000'
@@ -459,7 +459,7 @@ services:
           memory: 512M
           cpus: '1.0'
     ports:
-      - '${URULE_UI_PORT:-3000}:3000'
+      - '${URULE_BIND_HOST:-127.0.0.1}:${URULE_UI_PORT:-3000}:3000'
     environment:
       PORT: '3000'
       NEXT_PUBLIC_REGISTRY_URL: http://localhost:${URULE_REGISTRY_PORT:-3001}
