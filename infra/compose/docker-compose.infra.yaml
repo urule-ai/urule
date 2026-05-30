@@ -16,7 +16,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
       POSTGRES_DB: urule
     ports:
-      - '${URULE_PG_PORT:-5500}:5432'
+      - '${URULE_BIND_HOST:-127.0.0.1}:${URULE_PG_PORT:-5500}:5432'
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./init-db.sql:/docker-entrypoint-initdb.d/01-init-db.sql
@@ -31,8 +31,8 @@ services:
     image: nats:2-alpine
     command: ['--jetstream', '--store_dir=/data', '-m', '8222']
     ports:
-      - '${URULE_NATS_PORT:-4222}:4222'
-      - '${URULE_NATS_MONITOR_PORT:-8222}:8222'
+      - '${URULE_BIND_HOST:-127.0.0.1}:${URULE_NATS_PORT:-4222}:4222'
+      - '${URULE_BIND_HOST:-127.0.0.1}:${URULE_NATS_MONITOR_PORT:-8222}:8222'
     volumes:
       - natsdata:/data
     logging: *default-logging
@@ -54,7 +54,7 @@ services:
       POSTGRES_PWD: ${POSTGRES_PASSWORD:?}
       POSTGRES_SEEDS: postgres
     ports:
-      - '${URULE_TEMPORAL_PORT:-7233}:7233'
+      - '${URULE_BIND_HOST:-127.0.0.1}:${URULE_TEMPORAL_PORT:-7233}:7233'
     depends_on:
       postgres:
         condition: service_healthy
@@ -74,16 +74,18 @@ services:
       TEMPORAL_ADDRESS: temporal:7233
       TEMPORAL_CORS_ORIGINS: http://localhost:3000
     ports:
-      - '${URULE_TEMPORAL_UI_PORT:-8280}:8080'
+      - '${URULE_BIND_HOST:-127.0.0.1}:${URULE_TEMPORAL_UI_PORT:-8280}:8080'
     depends_on:
       - temporal
     logging: *default-logging
 
   keycloak:
     image: quay.io/keycloak/keycloak:26.1
+    # `start-dev` runs HTTP-only with weak defaults. Demo / local stack only;
+    # see infra/compose/SECURITY.md for prod-mode (`start`) wire-up.
     command: start-dev
     environment:
-      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN_USERNAME:?must be set (no `admin` default)}
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?}
       KC_DB: postgres
       KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
@@ -91,7 +93,7 @@ services:
       KC_DB_PASSWORD: ${POSTGRES_PASSWORD:?}
       KC_HEALTH_ENABLED: 'true'
     ports:
-      - '${URULE_KEYCLOAK_PORT:-8281}:8080'
+      - '${URULE_BIND_HOST:-127.0.0.1}:${URULE_KEYCLOAK_PORT:-8281}:8080'
     depends_on:
       postgres:
         condition: service_healthy
@@ -112,8 +114,8 @@ services:
       OPENFGA_DATASTORE_ENGINE: postgres
       OPENFGA_DATASTORE_URI: postgres://urule:${POSTGRES_PASSWORD:?}@postgres:5432/openfga?sslmode=disable
     ports:
-      - '${URULE_OPENFGA_HTTP_PORT:-8282}:8080'
-      - '${URULE_OPENFGA_GRPC_PORT:-8283}:8081'
+      - '${URULE_BIND_HOST:-127.0.0.1}:${URULE_OPENFGA_HTTP_PORT:-8282}:8080'
+      - '${URULE_BIND_HOST:-127.0.0.1}:${URULE_OPENFGA_GRPC_PORT:-8283}:8081'
     depends_on:
       postgres:
         condition: service_healthy
@@ -129,7 +131,7 @@ services:
     image: openpolicyagent/opa:1.0.0
     command: run --server --addr :8181
     ports:
-      - '${URULE_OPA_PORT:-8284}:8181'
+      - '${URULE_BIND_HOST:-127.0.0.1}:${URULE_OPA_PORT:-8284}:8181'
     logging: *default-logging
     healthcheck:
       test: ['CMD-SHELL', 'wget -qO- http://localhost:8181/health || exit 1']
@@ -144,8 +146,8 @@ services:
     volumes:
       - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml
     ports:
-      - '${URULE_OTEL_GRPC_PORT:-4317}:4317'
-      - '${URULE_OTEL_HTTP_PORT:-4318}:4318'
+      - '${URULE_BIND_HOST:-127.0.0.1}:${URULE_OTEL_GRPC_PORT:-4317}:4317'
+      - '${URULE_BIND_HOST:-127.0.0.1}:${URULE_OTEL_HTTP_PORT:-4318}:4318'
     logging: *default-logging
 
   jaeger:
@@ -153,9 +155,9 @@ services:
     environment:
       COLLECTOR_OTLP_ENABLED: 'true'
     ports:
-      - '${URULE_JAEGER_UI_PORT:-16686}:16686'
-      - '${URULE_JAEGER_HTTP_PORT:-14268}:14268'
-      - '${URULE_JAEGER_GRPC_PORT:-14250}:14250'
+      - '${URULE_BIND_HOST:-127.0.0.1}:${URULE_JAEGER_UI_PORT:-16686}:16686'
+      - '${URULE_BIND_HOST:-127.0.0.1}:${URULE_JAEGER_HTTP_PORT:-14268}:14268'
+      - '${URULE_BIND_HOST:-127.0.0.1}:${URULE_JAEGER_GRPC_PORT:-14250}:14250'
     logging: *default-logging
 
   prometheus:
@@ -165,14 +167,17 @@ services:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheusdata:/prometheus
     ports:
-      - '${URULE_PROMETHEUS_PORT:-9090}:9090'
+      - '${URULE_BIND_HOST:-127.0.0.1}:${URULE_PROMETHEUS_PORT:-9090}:9090'
     logging: *default-logging
 
   grafana:
     image: grafana/grafana:11.3.0
     environment:
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?}
-      GF_AUTH_ANONYMOUS_ENABLED: 'true'
+      # Anonymous viewer was on by default — anyone who reached the host port
+      # browsed the dashboards (internal traffic patterns, error rates, etc.).
+      # Now off unless `GRAFANA_ANONYMOUS_VIEWER=true` in `.env`.
+      GF_AUTH_ANONYMOUS_ENABLED: ${GRAFANA_ANONYMOUS_VIEWER:-false}
       GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
       GF_USERS_ALLOW_SIGN_UP: 'false'
     volumes:
@@ -181,7 +186,7 @@ services:
       - ./grafana-dashboard-services.json:/var/lib/grafana/dashboards/services.json:ro
       - grafanadata:/var/lib/grafana
     ports:
-      - '${URULE_GRAFANA_PORT:-3030}:3000'
+      - '${URULE_BIND_HOST:-127.0.0.1}:${URULE_GRAFANA_PORT:-3030}:3000'
     depends_on:
       - prometheus
     logging: *default-logging
