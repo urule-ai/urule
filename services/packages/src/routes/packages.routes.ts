@@ -7,11 +7,17 @@ import type { InstallationRepo } from '../services/installation-repo.js';
 import { bodyWorkspaceResolver, installationWorkspaceResolver } from '../authz.js';
 import type { PackageInstallRequest } from '../types.js';
 
+// `source` is a github.com URL OR (when the deployer opts in via
+// `URULE_PACKAGES_LOCAL_INSTALL_ROOT`) a path inside that root — the
+// dispatch + validation lives in `package-manager.ts:loadManifest`.
+// Pre-Phase-M this was `z.object({}).loose()`, accepting any object and
+// diverging from the `string` interface; that schema drift was part of
+// the C-10 attack surface.
 const installPackageSchema = z.object({
   workspaceId: z.string(),
   packageName: z.string().min(1),
   version: z.string().optional(),
-  source: z.object({}).loose().optional(),
+  source: z.string().min(1).max(2048).optional(),
 });
 
 const upgradePackageSchema = z.object({
