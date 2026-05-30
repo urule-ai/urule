@@ -3,7 +3,7 @@ import { fetchWithCorrelation } from '@urule/correlation-id';
 import type { PackageInstallRequest, InstalledPackage, PackageManifest } from '../types.js';
 import type { DependencyResolver } from './dependency-resolver.js';
 import type { InstallationRecord, InstallationRepo } from './installation-repo.js';
-import type { ManifestLoader } from './manifest-loader.js';
+import { isGitHubUrl, resolveLocalInstallPath, type ManifestLoader } from './manifest-loader.js';
 
 /**
  * Thrown when a paid/subscription package's entitlement check fails. Caller
@@ -284,15 +284,29 @@ export class PackageManager {
   }
 
   private async loadManifest(request: PackageInstallRequest): Promise<PackageManifest> {
-    if (request.source?.startsWith('https://github.com')) {
+    if (!request.source) {
+      return this.loader.loadFromPackagehub(request.packageName, request.version);
+    }
+
+    // C-10 dispatcher. The pre-fix code used `startsWith('https://github.com')`,
+    // which `https://github.com.attacker.com/repo.git` defeats. `isGitHubUrl`
+    // parses the URL and enforces an exact hostname match.
+    if (isGitHubUrl(request.source)) {
       return this.loader.loadFromGitHub(request.source, request.version);
     }
 
-    if (request.source) {
-      return this.loader.loadFromPath(request.source);
+    // Local-path installs are default-deny. A deployer must set
+    // `URULE_PACKAGES_LOCAL_INSTALL_ROOT` and the source must resolve inside
+    // it (no `..` escape). Closes the "read /etc/* via source" class of
+    // attacks for any authenticated workspace member.
+    const localPath = resolveLocalInstallPath(request.source);
+    if (localPath) {
+      return this.loader.loadFromPath(localPath);
     }
 
-    return this.loader.loadFromPackagehub(request.packageName, request.version);
+    throw new Error(
+      `Refusing install: \`source\` must be a github.com URL, or a path inside URULE_PACKAGES_LOCAL_INSTALL_ROOT when that env var is set`,
+    );
   }
 }
 

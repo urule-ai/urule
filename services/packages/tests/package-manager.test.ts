@@ -109,14 +109,30 @@ describe('PackageManager', () => {
       expect(loader.loadFromGitHub).toHaveBeenCalledWith('https://github.com/org/repo', undefined);
     });
 
-    it('should load manifest from path when source is a local path', async () => {
-      await manager.install({
-        workspaceId: 'ws-1',
-        packageName: 'local-agent',
-        source: '/opt/packages/my-agent',
-      });
+    it('rejects local-path source when URULE_PACKAGES_LOCAL_INSTALL_ROOT is unset (C-10 default-deny)', async () => {
+      delete process.env['URULE_PACKAGES_LOCAL_INSTALL_ROOT'];
+      await expect(
+        manager.install({
+          workspaceId: 'ws-1',
+          packageName: 'local-agent',
+          source: '/opt/packages/my-agent',
+        }),
+      ).rejects.toThrow(/Refusing install/);
+      expect(loader.loadFromPath).not.toHaveBeenCalled();
+    });
 
-      expect(loader.loadFromPath).toHaveBeenCalledWith('/opt/packages/my-agent');
+    it('loads a local-path source when URULE_PACKAGES_LOCAL_INSTALL_ROOT is set and the path is inside it', async () => {
+      process.env['URULE_PACKAGES_LOCAL_INSTALL_ROOT'] = '/opt/packages';
+      try {
+        await manager.install({
+          workspaceId: 'ws-1',
+          packageName: 'local-agent',
+          source: '/opt/packages/my-agent',
+        });
+        expect(loader.loadFromPath).toHaveBeenCalledWith('/opt/packages/my-agent');
+      } finally {
+        delete process.env['URULE_PACKAGES_LOCAL_INSTALL_ROOT'];
+      }
     });
   });
 
