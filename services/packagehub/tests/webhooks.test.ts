@@ -19,6 +19,7 @@ interface Behavior {
   existingEntitlement?: unknown;
   insertReturns?: unknown[];
   insertThrows?: Error;
+  onInsert?: (values: unknown) => void;
 }
 
 function makeMockDb(behavior: Behavior = {}) {
@@ -38,12 +39,15 @@ function makeMockDb(behavior: Behavior = {}) {
       };
     }),
     insert: vi.fn(() => ({
-      values: vi.fn(() => ({
-        returning: vi.fn(() => {
-          if (behavior.insertThrows) return Promise.reject(behavior.insertThrows);
-          return Promise.resolve(behavior.insertReturns ?? []);
-        }),
-      })),
+      values: vi.fn((v: unknown) => {
+        behavior.onInsert?.(v);
+        return {
+          returning: vi.fn(() => {
+            if (behavior.insertThrows) return Promise.reject(behavior.insertThrows);
+            return Promise.resolve(behavior.insertReturns ?? []);
+          }),
+        };
+      }),
     })),
     delete: vi.fn(),
     update: vi.fn(),
@@ -173,6 +177,7 @@ describe('webhooks route — checkout.session.completed', () => {
         object: {
           id: 'cs_1',
           mode: 'payment',
+          payment_status: 'paid',
           metadata: { packageName: 'foo', workspaceId: 'ws-1' },
         },
       },
@@ -196,7 +201,8 @@ describe('webhooks route — checkout.session.completed', () => {
         object: {
           id: 'cs_1',
           mode: 'subscription',
-          metadata: { packageName: 'foo', userId: 'u-1', kind: 'subscription' },
+          payment_status: 'paid',
+          metadata: { packageName: 'foo', userId: 'u-1' },
           subscription: { id: 'sub_1', current_period_end: periodEnd },
         },
       },
@@ -217,6 +223,7 @@ describe('webhooks route — checkout.session.completed', () => {
         object: {
           id: 'cs_1',
           mode: 'payment',
+          payment_status: 'paid',
           metadata: { packageName: 'foo', workspaceId: 'ws-1' },
         },
       },
@@ -232,7 +239,7 @@ describe('webhooks route — checkout.session.completed', () => {
     const res = await signedPost(app, {
       id: 'evt_1',
       type: 'checkout.session.completed',
-      data: { object: { id: 'cs_1', mode: 'payment', metadata: {} } },
+      data: { object: { id: 'cs_1', mode: 'payment', payment_status: 'paid', metadata: {} } },
     });
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body).ignored).toBe('missing_metadata');
@@ -247,6 +254,7 @@ describe('webhooks route — checkout.session.completed', () => {
         object: {
           id: 'cs_1',
           mode: 'payment',
+          payment_status: 'paid',
           metadata: { packageName: 'unknown', workspaceId: 'ws-1' },
         },
       },
@@ -264,5 +272,100 @@ describe('webhooks route — checkout.session.completed', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body).ignored).toBe('invoice.payment_failed');
+  });
+
+  /* ---------------------------------------------------------------- *
+   * H-11 regressions — kind from session.mode (not publisher metadata),
+   * payment_status gate, async-payment companion event.
+   * ---------------------------------------------------------------- */
+
+  it('H-11 — publisher metadata.kind=subscription on a payment-mode session is IGNORED (kind from session.mode)', async () => {
+    let capturedKind: string | undefined;
+    const app = await buildApp({
+      pkg: { id: 'p1', name: 'foo' },
+      insertReturns: [{ id: '01ENT', packageId: 'p1', kind: 'purchase' }],
+      onInsert: (v) => {
+        capturedKind = (v as { kind?: string }).kind;
+      },
+    });
+    const res = await signedPost(app, {
+      id: 'evt_x',
+      type: 'checkout.session.completed',
+      data: {
+        object: {
+          id: 'cs_x',
+          mode: 'payment', // authoritative: one-time payment
+          payment_status: 'paid',
+          metadata: {
+            packageName: 'foo',
+            workspaceId: 'ws-1',
+            kind: 'subscription', // attacker / misconfigured publisher
+          },
+          // No subscription object — confirms this isn't a real recurring purchase.
+        },
+      },
+    });
+    expect(res.statusCode).toBe(201);
+    // Stored kind tracks session.mode, NOT metadata.kind.
+    expect(capturedKind).toBe('purchase');
+  });
+
+  it('H-11 — checkout.session.completed with payment_status=unpaid waits for settlement (no mint)', async () => {
+    const app = await buildApp({ pkg: { id: 'p1', name: 'foo' } });
+    const res = await signedPost(app, {
+      id: 'evt_async',
+      type: 'checkout.session.completed',
+      data: {
+        object: {
+          id: 'cs_async',
+          mode: 'payment',
+          payment_status: 'unpaid', // delayed payment method (ACH/BNPL)
+          metadata: { packageName: 'foo', workspaceId: 'ws-1' },
+        },
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.ignored).toBe('awaiting_settlement');
+    expect(body.paymentStatus).toBe('unpaid');
+  });
+
+  it('H-11 — async_payment_succeeded with payment_status=paid mints the entitlement', async () => {
+    const app = await buildApp({
+      pkg: { id: 'p1', name: 'foo' },
+      insertReturns: [{ id: '01ASYNC', packageId: 'p1', kind: 'purchase' }],
+    });
+    const res = await signedPost(app, {
+      id: 'evt_async_2',
+      type: 'checkout.session.async_payment_succeeded',
+      data: {
+        object: {
+          id: 'cs_async',
+          mode: 'payment',
+          payment_status: 'paid',
+          metadata: { packageName: 'foo', workspaceId: 'ws-1' },
+        },
+      },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(JSON.parse(res.body).entitlementId).toBe('01ASYNC');
+  });
+
+  it('H-11 — mode=setup (saving a payment method) does not mint an entitlement', async () => {
+    const app = await buildApp({ pkg: { id: 'p1', name: 'foo' } });
+    const res = await signedPost(app, {
+      id: 'evt_setup',
+      type: 'checkout.session.completed',
+      data: {
+        object: {
+          id: 'cs_setup',
+          mode: 'setup',
+          payment_status: 'paid',
+          metadata: { packageName: 'foo', workspaceId: 'ws-1' },
+        },
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).ignored).toBe('unsupported_mode');
   });
 });
