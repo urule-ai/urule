@@ -1,3 +1,5 @@
+import type { FastifyRequest } from 'fastify';
+
 /**
  * JWT payload from Keycloak OIDC tokens.
  */
@@ -97,4 +99,16 @@ export interface AuthMiddlewareOptions {
    * @default false
    */
   skipAuth?: boolean;
+}
+
+declare module 'fastify' {
+  interface FastifyRequest {
+    /**
+     * The authenticated user, decoded from the validated Keycloak JWT by
+     * `@urule/auth-middleware`. `null` until the auth `onRequest` hook runs (and
+     * on public routes that skip auth), so always null-check before use. Replaces
+     * the `(request as any).uruleUser` casts that route handlers used to need.
+     */
+    uruleUser: UruleUser | null;
+  }
 }
