@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import { isIP } from 'node:net';
 import { ulid } from 'ulid';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
@@ -9,8 +10,6 @@ import { AuditLogger } from '@urule/events';
 import { requireMembership } from '@urule/authz-middleware';
 import { bodyWorkspaceResolver, providerWorkspaceResolver } from '../authz.js';
 
-interface MaybeUser { id?: string; roles?: string[] }
-
 /**
  * Per-#95: `GET /api/v1/providers` returns every provider system-wide when
  * called without a filter. Gate it: members may pass `?workspaceId=` and
@@ -18,7 +17,7 @@ interface MaybeUser { id?: string; roles?: string[] }
  * requires `admin`.
  */
 async function requireAdminOrWorkspaceFilter(req: FastifyRequest, reply: FastifyReply): Promise<void> {
-  const user = (req as FastifyRequest & { uruleUser?: MaybeUser }).uruleUser;
+  const user = req.uruleUser;
   if (!user?.id) {
     reply.code(401).send({ error: { code: 'UNAUTHORIZED', message: 'Authentication required' } });
     return;
@@ -136,6 +135,145 @@ function providerApiKeyValidationDetails(field: 'apiKey' | 'api_key', message: s
   }];
 }
 
+/**
+ * #6 (C-06) — recognised hosted endpoint per provider kind. A `baseUrl` whose
+ * host matches its kind's hosted endpoint is accepted for any member; anything
+ * else is a self-hosted / custom endpoint, which requires the admin role
+ * (Ollama, vLLM, LiteLLM proxy — see issue #6's prescribed fix). Keep the keys
+ * in sync with `providerApiKeyPrefixes` above.
+ */
+const providerHostAllowlist: Record<string, (host: string) => boolean> = {
+  anthropic: (h) => h === 'api.anthropic.com',
+  claude: (h) => h === 'api.anthropic.com',
+  openai: (h) => h === 'api.openai.com',
+  gemini: (h) => h === 'generativelanguage.googleapis.com',
+  google: (h) => h === 'generativelanguage.googleapis.com',
+  openrouter: (h) => h === 'openrouter.ai',
+  azure: (h) => /^[a-z0-9-]+\.openai\.azure\.com$/.test(h),
+};
+
+/**
+ * Normalise a host for the SSRF check: strip IPv6 brackets, lowercase, drop a
+ * trailing FQDN dot, and collapse an IPv4-mapped/-compatible IPv6 literal
+ * (`::ffff:169.254.169.254`, `::ffff:a9fe:a9fe`) down to its embedded IPv4 — so
+ * the link-local check below can't be dodged by re-encoding the address.
+ */
+function normalizeHostForSsrf(host: string): string {
+  let h = host.replace(/^\[|\]$/g, '').toLowerCase();
+  if (h.endsWith('.')) h = h.slice(0, -1);
+  const dotted = h.match(/^::ffff:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/);
+  if (dotted) return dotted[1] as string;
+  const hex = h.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
+  if (hex) {
+    const hi = parseInt(hex[1] as string, 16);
+    const lo = parseInt(hex[2] as string, 16);
+    return `${(hi >> 8) & 0xff}.${hi & 0xff}.${(lo >> 8) & 0xff}.${lo & 0xff}`;
+  }
+  return h;
+}
+
+/**
+ * SSRF hard-stop (#6 / CWE-918): link-local + cloud-metadata + unspecified
+ * addresses are never a valid LLM endpoint and are the classic credential-theft
+ * target (AWS/GCP/Azure IMDS at `169.254.169.254`, `metadata.google.internal`).
+ * Blocked even for admins — who may otherwise legitimately register a self-hosted
+ * endpoint on a private/loopback host (Ollama at `localhost`, vLLM at `10.x`).
+ * DNS names that *resolve* to these (and decimal/octal IP re-encodings the URL
+ * parser leaves as opaque hostnames) can't be caught synchronously; the adapter
+ * making the outbound call is the second line of defence.
+ */
+function isLinkLocalOrMetadataHost(host: string): boolean {
+  const h = normalizeHostForSsrf(host);
+  if (h === 'metadata.google.internal') return true;
+  const v = isIP(h);
+  if (v === 4) return h.startsWith('169.254.') || h === '0.0.0.0'; // link-local (incl. IMDS) + unspecified
+  // IPv6 link-local fe80::/10 spans first-hextet fe80–febf → prefixes fe8/fe9/fea/feb; plus `::` unspecified.
+  if (v === 6) return /^fe[89ab]/.test(h) || h === '::';
+  return false;
+}
+
+export interface BaseUrlIssue { status: 400 | 403; message: string }
+
+/**
+ * Validate a provider `baseUrl` before persisting it (#6 / C-06). Without this,
+ * a workspace member could PATCH `baseUrl` to an attacker host and silently
+ * exfiltrate the API key + every chat payload the adapter sends there. Policy:
+ *
+ *  - empty / unset                               → null (adapter uses the default hosted endpoint)
+ *  - non-http(s) scheme, or embedded credentials → 400 (blocks `file:`/`gopher:` SSRF + cred smuggling)
+ *  - recognised hosted endpoint for the provider → null, but must be https (no plaintext key downgrade)
+ *  - any other (self-hosted / custom) host       → 403 unless the caller is admin
+ *  - link-local / cloud-metadata host            → 400 even for admins (SSRF hard-stop)
+ */
+export function getBaseUrlIssue({
+  provider,
+  baseUrl,
+  isAdmin,
+}: {
+  provider?: string;
+  baseUrl?: string;
+  isAdmin: boolean;
+}): BaseUrlIssue | null {
+  if (!baseUrl || !baseUrl.trim()) return null;
+
+  let url: URL;
+  try {
+    url = new URL(baseUrl);
+  } catch {
+    return { status: 400, message: 'baseUrl must be a valid absolute URL' };
+  }
+  if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+    return { status: 400, message: 'baseUrl must use http:// or https://' };
+  }
+  if (url.username || url.password) {
+    return { status: 400, message: 'baseUrl must not contain embedded credentials' };
+  }
+
+  // Strip a trailing FQDN dot so `api.openai.com.` is treated as the hosted
+  // endpoint — it resolves to the same host, and we don't want the exact-host
+  // allow-list to be dodgeable (in either direction) by the dotted form.
+  const host = url.hostname.toLowerCase().replace(/\.$/, '');
+  const matcher = providerHostAllowlist[provider?.trim().toLowerCase() ?? ''];
+  if (matcher && matcher(host)) {
+    // Recognised hosted endpoint — must not be downgraded to plaintext.
+    if (url.protocol !== 'https:') {
+      return { status: 400, message: `baseUrl for ${provider} must use https://` };
+    }
+    return null;
+  }
+
+  // Custom / self-hosted endpoint. Core C-06 fix: a non-admin member must never
+  // be able to redirect provider egress off the hosted allow-list.
+  if (!isAdmin) {
+    return {
+      status: 403,
+      message: `baseUrl host "${url.hostname}" is not a recognised ${provider ?? 'provider'} endpoint; registering a self-hosted endpoint requires the admin role`,
+    };
+  }
+  // Even an admin may not point egress at link-local / cloud-metadata.
+  if (isLinkLocalOrMetadataHost(host)) {
+    return { status: 400, message: 'baseUrl must not target a link-local or cloud-metadata address' };
+  }
+  return null;
+}
+
+/** Map a `BaseUrlIssue` to the route's error envelope (400 validation vs 403 forbidden). */
+function baseUrlIssueResponse(issue: BaseUrlIssue) {
+  if (issue.status === 400) {
+    return {
+      error: 'Validation failed',
+      details: [{
+        keyword: 'custom',
+        instancePath: '/baseUrl',
+        schemaPath: '#/baseUrl/custom',
+        params: {},
+        message: issue.message,
+      }],
+    };
+  }
+  return { error: { code: 'FORBIDDEN', message: issue.message } };
+}
+
 const providerIdParamsSchema = z.object({ providerId: z.string() });
 
 const listProvidersQuerySchema = z.object({
@@ -220,6 +358,18 @@ export function registerProviderRoutes(app: FastifyInstance, db: Database) {
     const baseUrl = (b.baseUrl ?? b.base_url ?? '') as string;
     const isDefault = (b.isDefault ?? b.is_default ?? false) as boolean;
 
+    // #6 (C-06) — validate the egress endpoint before persisting. Self-hosted
+    // (non-allow-listed) endpoints require the admin role.
+    const baseUrlIssue = getBaseUrlIssue({
+      provider,
+      baseUrl,
+      isAdmin: request.uruleUser?.roles?.includes('admin') ?? false,
+    });
+    if (baseUrlIssue) {
+      reply.code(baseUrlIssue.status).send(baseUrlIssueResponse(baseUrlIssue));
+      return;
+    }
+
     const id = ulid();
     const now = new Date();
 
@@ -249,7 +399,7 @@ export function registerProviderRoutes(app: FastifyInstance, db: Database) {
       return;
     }
 
-    const user = (request as any).uruleUser;
+    const user = request.uruleUser;
     audit.entityCreated(
       { id: user?.id ?? 'anonymous', username: user?.username ?? 'anonymous' },
       'provider', id, `Provider "${name}" (${provider}) created`,
@@ -291,7 +441,7 @@ export function registerProviderRoutes(app: FastifyInstance, db: Database) {
     // scope provider access to the caller's workspace, require the `admin` role.
     // The office-ui never calls this; orchestrator adapters are the only
     // legitimate callers and they run with an elevated/service identity.
-    const user = (request as any).uruleUser;
+    const user = request.uruleUser;
     if (!user?.roles?.includes('admin')) {
       reply.status(403).send({ error: { code: 'FORBIDDEN', message: 'Admin role required' } });
       return;
@@ -354,6 +504,20 @@ export function registerProviderRoutes(app: FastifyInstance, db: Database) {
             details: providerApiKeyValidationDetails(b.apiKey !== undefined ? 'apiKey' : 'api_key', issue),
           });
         }
+
+        // #6 (C-06) — only re-validate the egress endpoint when this PATCH is
+        // actually changing it, so unrelated updates to rows with a pre-existing
+        // custom baseUrl aren't rejected retroactively.
+        if (updates.baseUrl !== undefined) {
+          const baseUrlIssue = getBaseUrlIssue({
+            provider: (updates.provider as string | undefined) ?? existing.provider,
+            baseUrl: updates.baseUrl as string,
+            isAdmin: request.uruleUser?.roles?.includes('admin') ?? false,
+          });
+          if (baseUrlIssue) {
+            return reply.code(baseUrlIssue.status).send(baseUrlIssueResponse(baseUrlIssue));
+          }
+        }
       }
 
       const [row] = await db
@@ -367,11 +531,20 @@ export function registerProviderRoutes(app: FastifyInstance, db: Database) {
         return;
       }
 
-      const user = (request as any).uruleUser;
+      const user = request.uruleUser;
+      // #6 (C-06) — surface egress-endpoint drift explicitly so it's monitorable;
+      // a flipped baseUrl is the high-signal indicator of the redirect attack.
+      const baseUrlChanged = updates.baseUrl !== undefined;
+      if (baseUrlChanged) {
+        request.log.warn(
+          { providerId, newBaseUrl: row.baseUrl, userId: user?.id ?? 'anonymous' },
+          'provider baseUrl changed — LLM egress endpoint updated',
+        );
+      }
       audit.entityUpdated(
         { id: user?.id ?? 'anonymous', username: user?.username ?? 'anonymous' },
         'provider', providerId, `Provider "${row.name}" updated`,
-        { metadata: { fields: Object.keys(b) } },
+        { metadata: { fields: Object.keys(b), baseUrlChanged } },
       ).catch((err: unknown) => request.log.warn({ err }, 'audit emit failed'));
 
       return toUiProvider(row as Record<string, unknown>);
@@ -395,7 +568,7 @@ export function registerProviderRoutes(app: FastifyInstance, db: Database) {
       return;
     }
 
-    const user = (request as any).uruleUser;
+    const user = request.uruleUser;
     audit.entityDeleted(
       { id: user?.id ?? 'anonymous', username: user?.username ?? 'anonymous' },
       'provider', providerId, `Provider "${row.name}" deleted`,
