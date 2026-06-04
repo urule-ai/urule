@@ -44,10 +44,14 @@ jobs:
           cache: 'npm'
       - run: npm ci
       - name: Audit dependencies
-        # Gates on critical advisories. Residual high/moderate findings are
-        # tracked in #88 (office-ui → Next 15) and #89 (otel + vitest dev-tree);
-        # tighten this to --audit-level=high once those land.
-        run: npm audit --audit-level=critical
+        # Gates on critical advisories in the production runtime tree.
+        # `--omit=dev` skips devDependencies (vitest UI RCE, esbuild dev
+        # tree, etc.) which don't reach any container image but still
+        # show up in a raw `npm audit`. Dev-tree advisories are tracked
+        # in #89 (otel + vitest); residual prod high/moderate in #88
+        # (office-ui → Next 15). Tighten this to `--audit-level=high`
+        # once those land.
+        run: npm audit --omit=dev --audit-level=critical
 
   docker:
     runs-on: ubuntu-latest

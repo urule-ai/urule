@@ -41,6 +41,12 @@ interface StripeEvent {
       id: string;
       metadata?: Record<string, string>;
       mode?: 'payment' | 'subscription' | 'setup';
+      // H-11 — `payment_status` is Stripe's authoritative settlement gate.
+      // For card payments it's `'paid'` at completion; for delayed methods
+      // (ACH, BNPL, …) it's `'unpaid'` at completion and flips to `'paid'`
+      // when `checkout.session.async_payment_succeeded` fires. Free flows
+      // (mode=setup, $0 sessions) report `'no_payment_required'`.
+      payment_status?: 'paid' | 'unpaid' | 'no_payment_required';
       // checkout.session.completed → subscription period end is on
       // the subscription object, often nested. We accept either shape.
       subscription?:
@@ -59,7 +65,7 @@ export function registerWebhookRoutes(app: FastifyInstance, db: Database): void 
       tags: ['webhooks'],
       summary: 'Stripe checkout webhook',
       description:
-        'Inbound Stripe webhook receiver. Verifies the `Stripe-Signature` HMAC against `STRIPE_WEBHOOK_SECRET`, then on `checkout.session.completed` mints an entitlement using the session id as `externalRef`. Idempotent — retried deliveries return the existing row. Subscriptions propagate `subscription.current_period_end` into `expires_at`. Returns 200 on missing metadata / unknown package / unsupported event types so Stripe doesn\'t retry forever; 400 on signature mismatch; 503 if `STRIPE_WEBHOOK_SECRET` is unset.',
+        'Inbound Stripe webhook receiver. Verifies the `Stripe-Signature` HMAC against `STRIPE_WEBHOOK_SECRET`, then on `checkout.session.completed` AND `checkout.session.async_payment_succeeded` mints an entitlement using the session id as `externalRef`. `kind` is derived from `session.mode` (NOT publisher metadata — H-11). Minting is gated on `payment_status === \'paid\' | \'no_payment_required\'`; delayed-payment flows mint only when the async-success companion event fires. Idempotent — retried deliveries return the existing row. Subscriptions propagate `subscription.current_period_end` into `expires_at`. Returns 200 on missing metadata / unknown package / unsupported event types / awaiting settlement so Stripe doesn\'t retry forever; 400 on signature mismatch; 503 if `STRIPE_WEBHOOK_SECRET` is unset.',
     },
   }, async (request, reply) => {
     if (!secret) {
@@ -104,7 +110,16 @@ export function registerWebhookRoutes(app: FastifyInstance, db: Database): void 
 
     request.log.info({ stripeEventId: event.id, type: event.type }, 'Stripe webhook received');
 
-    if (event.type !== 'checkout.session.completed') {
+    // H-11 — accept the deferred-payment companion event as well. Card flows
+    // fire `completed` with `payment_status === 'paid'` once; ACH / BNPL fire
+    // `completed` with `payment_status === 'unpaid'` first, then
+    // `async_payment_succeeded` with `payment_status === 'paid'` when the
+    // money lands. We mint only after the latter; the gate below enforces it.
+    const MINT_EVENTS = new Set([
+      'checkout.session.completed',
+      'checkout.session.async_payment_succeeded',
+    ]);
+    if (!MINT_EVENTS.has(event.type)) {
       // Ignore everything else for now — invoice.payment_failed etc.
       // are valid Stripe events but not yet wired to entitlement
       // revocation. Returning 200 keeps Stripe from retrying.
@@ -116,7 +131,16 @@ export function registerWebhookRoutes(app: FastifyInstance, db: Database): void 
     const packageName = meta['packageName'];
     const workspaceId = meta['workspaceId'];
     const userId = meta['userId'];
-    const kind = (meta['kind'] === 'subscription' ? 'subscription' : 'purchase') as 'subscription' | 'purchase';
+    // H-11 — `kind` was derived from publisher-controlled `meta.kind`. A
+    // publisher could set `metadata.kind: 'subscription'` on a one-time
+    // payment session and mint a never-expiring entitlement. Now derived
+    // strictly from `session.mode`, Stripe's authoritative field. `mode ===
+    // 'setup'` (saving a payment method) doesn't grant anything; fall
+    // through to the no-mint path below.
+    const kind: 'subscription' | 'purchase' | null =
+      session.mode === 'subscription' ? 'subscription'
+        : session.mode === 'payment' ? 'purchase'
+          : null;
 
     if (!packageName || (!workspaceId && !userId)) {
       request.log.warn(
@@ -124,6 +148,36 @@ export function registerWebhookRoutes(app: FastifyInstance, db: Database): void 
         'Webhook session metadata missing packageName / consumer; ignoring',
       );
       return reply.code(200).send({ received: true, ignored: 'missing_metadata' });
+    }
+
+    if (kind === null) {
+      // mode === 'setup' or absent — nothing to mint. Log loudly so a
+      // misconfigured Checkout session is visible.
+      request.log.warn(
+        { stripeEventId: event.id, mode: session.mode },
+        'Webhook session has no purchase mode; ignoring',
+      );
+      return reply.code(200).send({ received: true, ignored: 'unsupported_mode' });
+    }
+
+    // H-11 — Stripe's settlement gate. `checkout.session.completed` fires
+    // BEFORE the money lands for delayed-payment methods; minting then
+    // would grant access to a buyer who hasn't paid (and may never pay).
+    // Accept `'paid'` (card flows + post-settlement async) and
+    // `'no_payment_required'` (free flows; not currently a real path but
+    // future-proof). Defer everything else until the async-success
+    // companion event fires.
+    const paymentStatus = session.payment_status;
+    if (paymentStatus !== 'paid' && paymentStatus !== 'no_payment_required') {
+      request.log.info(
+        { stripeEventId: event.id, paymentStatus },
+        'Webhook payment_status not settled; waiting for async_payment_succeeded',
+      );
+      return reply.code(200).send({
+        received: true,
+        ignored: 'awaiting_settlement',
+        paymentStatus: paymentStatus ?? null,
+      });
     }
 
     const [pkg] = await db.select().from(packages).where(eq(packages.name, packageName));
