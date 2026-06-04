@@ -20,6 +20,8 @@ interface Behavior {
   insertReturns?: unknown[];
   insertThrows?: Error;
   onInsert?: (values: unknown) => void;
+  /** Row returned by the post-conflict re-select (#33 race path). */
+  raceWinner?: unknown;
 }
 
 function makeMockDb(behavior: Behavior = {}) {
@@ -30,10 +32,15 @@ function makeMockDb(behavior: Behavior = {}) {
       return {
         from: vi.fn(() => ({
           where: vi.fn(() => {
+            // 0 → packages lookup, 1 → entitlements idempotency,
+            // ≥2 → post-conflict re-select (#33).
             if (callIdx === 0) {
               return Promise.resolve(behavior.pkg !== undefined ? [behavior.pkg] : []);
             }
-            return Promise.resolve(behavior.existingEntitlement !== undefined ? [behavior.existingEntitlement] : []);
+            if (callIdx === 1) {
+              return Promise.resolve(behavior.existingEntitlement !== undefined ? [behavior.existingEntitlement] : []);
+            }
+            return Promise.resolve(behavior.raceWinner !== undefined ? [behavior.raceWinner] : []);
           }),
         })),
       };
@@ -41,11 +48,14 @@ function makeMockDb(behavior: Behavior = {}) {
     insert: vi.fn(() => ({
       values: vi.fn((v: unknown) => {
         behavior.onInsert?.(v);
+        const returning = vi.fn(() => {
+          if (behavior.insertThrows) return Promise.reject(behavior.insertThrows);
+          return Promise.resolve(behavior.insertReturns ?? []);
+        });
+        // The route chains `.onConflictDoNothing(...).returning()` (#33).
         return {
-          returning: vi.fn(() => {
-            if (behavior.insertThrows) return Promise.reject(behavior.insertThrows);
-            return Promise.resolve(behavior.insertReturns ?? []);
-          }),
+          returning,
+          onConflictDoNothing: vi.fn(() => ({ returning })),
         };
       }),
     })),
@@ -367,5 +377,61 @@ describe('webhooks route — checkout.session.completed', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body).ignored).toBe('unsupported_mode');
+  });
+
+  /* ---------------------------------------------------------------- *
+   * #48 — the event body shape is Zod-validated (after the HMAC check).
+   * ---------------------------------------------------------------- */
+
+  it('#48 — a signature-valid but malformed event body is rejected with 400 (not a 500)', async () => {
+    // Correctly signed, so it passes the HMAC gate — but it's missing `data`,
+    // which the handler reads. Must be a clean MALFORMED_EVENT, not a throw.
+    const app = await buildApp({ pkg: { id: 'p1', name: 'foo' } });
+    const res = await signedPost(app, { id: 'evt_bad', type: 'checkout.session.completed' });
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error.code).toBe('MALFORMED_EVENT');
+  });
+
+  it('#48 — non-string metadata values are rejected (Stripe metadata is always string→string)', async () => {
+    const app = await buildApp({ pkg: { id: 'p1', name: 'foo' } });
+    const res = await signedPost(app, {
+      id: 'evt_bad2',
+      type: 'checkout.session.completed',
+      data: { object: { id: 'cs_1', mode: 'payment', payment_status: 'paid', metadata: { packageName: 123 } } },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error.code).toBe('MALFORMED_EVENT');
+  });
+
+  /* ---------------------------------------------------------------- *
+   * #33 — duplicate delivery that loses the insert race resolves to the
+   * existing row via ON CONFLICT DO NOTHING + read-back (one row, no 500).
+   * ---------------------------------------------------------------- */
+
+  it('#33 — a delivery that hits the unique constraint returns the existing entitlement idempotently', async () => {
+    const app = await buildApp({
+      pkg: { id: 'p1', name: 'foo' },
+      // First idempotency SELECT finds nothing (existingEntitlement unset) so we
+      // proceed to INSERT; the insert conflicts (empty RETURNING) and the
+      // re-select returns the row a concurrent delivery already wrote.
+      insertReturns: [],
+      raceWinner: { id: '01RACEWINNER', packageId: 'p1', kind: 'purchase', externalRef: 'cs_race' },
+    });
+    const res = await signedPost(app, {
+      id: 'evt_race',
+      type: 'checkout.session.completed',
+      data: {
+        object: {
+          id: 'cs_race',
+          mode: 'payment',
+          payment_status: 'paid',
+          metadata: { packageName: 'foo', workspaceId: 'ws-1' },
+        },
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.idempotent).toBe(true);
+    expect(body.entitlementId).toBe('01RACEWINNER');
   });
 });

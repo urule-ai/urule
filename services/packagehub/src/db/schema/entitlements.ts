@@ -1,4 +1,4 @@
-import { pgTable, varchar, timestamp, index } from 'drizzle-orm/pg-core';
+import { pgTable, varchar, timestamp, index, uniqueIndex } from 'drizzle-orm/pg-core';
 import { packages } from './packages.js';
 
 /**
@@ -24,4 +24,11 @@ export const entitlements = pgTable('entitlements', {
   packageIdIdx: index('entitlements_package_id_idx').on(table.packageId),
   workspaceIdx: index('entitlements_workspace_id_idx').on(table.workspaceId, table.packageId),
   userIdx: index('entitlements_user_id_idx').on(table.userId, table.packageId),
+  // #33 — the Stripe webhook keys idempotency on (packageId, externalRef). The
+  // SELECT-then-INSERT guard alone races under at-least-once delivery (two
+  // concurrent deliveries both find no row, both insert). This backs the guard
+  // with a DB constraint so a duplicate delivery can only ever yield one row.
+  // `externalRef` is NULL for manual grants — Postgres treats NULLs as distinct,
+  // so multiple manual grants for the same package are unaffected.
+  externalRefUq: uniqueIndex('entitlements_package_external_ref_uq').on(table.packageId, table.externalRef),
 }));

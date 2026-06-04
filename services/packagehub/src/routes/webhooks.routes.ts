@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { ulid } from 'ulid';
 import { and, eq } from 'drizzle-orm';
+import { z } from 'zod';
 import type { Database } from '../db/connection.js';
 import { packages } from '../db/schema/packages.js';
 import { entitlements } from '../db/schema/entitlements.js';
@@ -33,29 +34,41 @@ import {
  * via logs, not via Stripe's dashboard going red.
  */
 
-interface StripeEvent {
-  id: string;
-  type: string;
-  data: {
-    object: {
-      id: string;
-      metadata?: Record<string, string>;
-      mode?: 'payment' | 'subscription' | 'setup';
+// #48 — the HMAC proves the body came from Stripe, but not that it has the
+// shape we read. Zod-parse the consumed subset after signature verification so
+// a malformed/partial payload is a clean 400 rather than a runtime throw deep
+// in the handler. `mode` / `payment_status` are kept as loose strings (not
+// enums) on purpose: an unrecognised value must fall through to the safe
+// no-mint path, not 400 (which Stripe would retry forever). Unknown top-level
+// Stripe fields are simply ignored.
+const stripeEventSchema = z.object({
+  id: z.string().min(1),
+  type: z.string().min(1),
+  data: z.object({
+    object: z.object({
+      id: z.string().min(1),
+      metadata: z.record(z.string(), z.string()).optional(),
+      mode: z.string().optional(),
       // H-11 — `payment_status` is Stripe's authoritative settlement gate.
       // For card payments it's `'paid'` at completion; for delayed methods
       // (ACH, BNPL, …) it's `'unpaid'` at completion and flips to `'paid'`
       // when `checkout.session.async_payment_succeeded` fires. Free flows
       // (mode=setup, $0 sessions) report `'no_payment_required'`.
-      payment_status?: 'paid' | 'unpaid' | 'no_payment_required';
+      payment_status: z.string().optional(),
       // checkout.session.completed → subscription period end is on
       // the subscription object, often nested. We accept either shape.
-      subscription?:
-        | string
-        | { id?: string; current_period_end?: number }
-        | null;
-    };
-  };
-}
+      subscription: z
+        .union([
+          z.string(),
+          z.object({ id: z.string().optional(), current_period_end: z.number().optional() }),
+          z.null(),
+        ])
+        .optional(),
+    }),
+  }),
+});
+
+type StripeEvent = z.infer<typeof stripeEventSchema>;
 
 export function registerWebhookRoutes(app: FastifyInstance, db: Database): void {
   const secret = process.env['STRIPE_WEBHOOK_SECRET'];
@@ -101,12 +114,16 @@ export function registerWebhookRoutes(app: FastifyInstance, db: Database): void 
       throw err;
     }
 
-    const event = request.body as StripeEvent;
-    if (!event?.id || !event?.type) {
+    // #48 — validate the shape we consume (post-signature). Stripe sends far
+    // more than this; unknown keys are stripped, not rejected.
+    const parsed = stripeEventSchema.safeParse(request.body);
+    if (!parsed.success) {
+      request.log.warn({ issues: parsed.error.issues }, 'Stripe event failed shape validation');
       return reply.code(400).send({
-        error: { code: 'MALFORMED_EVENT', message: 'Event missing id/type' },
+        error: { code: 'MALFORMED_EVENT', message: 'Event body did not match the expected shape' },
       });
     }
+    const event: StripeEvent = parsed.data;
 
     request.log.info({ stripeEventId: event.id, type: event.type }, 'Stripe webhook received');
 
@@ -210,6 +227,11 @@ export function registerWebhookRoutes(app: FastifyInstance, db: Database): void 
       }
     }
 
+    // #33 — back the SELECT-then-INSERT idempotency with the unique
+    // (package_id, external_ref) constraint. If a concurrent delivery of the
+    // same session won the race between our SELECT and INSERT, ON CONFLICT DO
+    // NOTHING makes this a no-op (empty RETURNING) instead of a duplicate row
+    // or a 500; we then read back the winner and answer idempotently.
     const [row] = await db
       .insert(entitlements)
       .values({
@@ -221,12 +243,25 @@ export function registerWebhookRoutes(app: FastifyInstance, db: Database): void 
         externalRef,
         expiresAt,
       })
+      .onConflictDoNothing({ target: [entitlements.packageId, entitlements.externalRef] })
       .returning();
 
+    if (!row) {
+      const [winner] = await db
+        .select()
+        .from(entitlements)
+        .where(and(eq(entitlements.packageId, pkg.id), eq(entitlements.externalRef, externalRef)));
+      request.log.info(
+        { stripeEventId: event.id, entitlementId: winner?.id, packageId: pkg.id },
+        'Entitlement insert hit the idempotency constraint; returning existing row',
+      );
+      return reply.code(200).send({ received: true, entitlementId: winner?.id, idempotent: true });
+    }
+
     request.log.info(
-      { stripeEventId: event.id, entitlementId: row?.id, packageId: pkg.id },
+      { stripeEventId: event.id, entitlementId: row.id, packageId: pkg.id },
       'Entitlement minted from Stripe webhook',
     );
-    return reply.code(201).send({ received: true, entitlementId: row?.id });
+    return reply.code(201).send({ received: true, entitlementId: row.id });
   });
 }

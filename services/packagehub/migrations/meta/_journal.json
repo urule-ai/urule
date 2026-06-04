@@ -50,6 +50,13 @@
       "when": 1779109317326,
       "tag": "0006_perpetual_doctor_faustus",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1780594559604,
+      "tag": "0007_glossy_meteorite",
+      "breakpoints": true
     }
   ]
 }
