@@ -6,6 +6,7 @@ import { useAuthStore } from "@/store/useAuthStore";
 import { useChatStore } from "@/store/useChatStore";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import api from "@/lib/api";
+import { useWorkspaceId } from "@/hooks/useWorkspaceId";
 import { cn } from "@/lib/utils";
 import type { Message, Conversation, Agent, WSEvent, ActionButton } from "@/types";
 
@@ -393,9 +394,11 @@ export default function ChatPage({ params }: { params: { conversationId: string 
         .then((r) => r.data),
   });
 
+  const workspaceId = useWorkspaceId();
   const { data: agents = [] } = useQuery<Agent[]>({
-    queryKey: ["agents"],
-    queryFn: () => api.get("/agents").then((r) => r.data),
+    queryKey: ["agents", workspaceId],
+    queryFn: () => api.get(`/workspaces/${workspaceId}/agents`).then((r) => r.data),
+    enabled: !!workspaceId,
   });
 
   const agentMap = new Map(agents.map((a) => [a.id, a]));

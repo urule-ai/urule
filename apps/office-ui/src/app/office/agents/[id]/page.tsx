@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import api from "@/lib/api";
+import { useWorkspaceId } from "@/hooks/useWorkspaceId";
 import { cn } from "@/lib/utils";
 import type { Agent } from "@/types";
 
@@ -490,9 +491,11 @@ export default function AgentDetailPage({ params }: { params: { id: string } }) 
     queryFn: () => api.get(`/agents/${params.id}/conversations`).then((r) => r.data).catch(() => []),
   });
 
+  const workspaceId = useWorkspaceId();
   const { data: allAgents = [] } = useQuery<Agent[]>({
-    queryKey: ["agents"],
-    queryFn: () => api.get("/agents").then((r) => r.data),
+    queryKey: ["agents", workspaceId],
+    queryFn: () => api.get(`/workspaces/${workspaceId}/agents`).then((r) => r.data),
+    enabled: !!workspaceId,
   });
 
   const { data: rawLogs } = useQuery<Array<{ type: string; content: string; timestamp: string }>>({

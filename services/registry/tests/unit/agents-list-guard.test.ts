@@ -4,6 +4,8 @@ import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod
 import { authMiddleware } from '@urule/auth-middleware';
 import { registerAgentRoutes } from '../../src/routes/agents.routes.js';
 import { errorHandler } from '../../src/middleware/error-handler.js';
+import { agents } from '../../src/db/schema/agents.js';
+import { providers } from '../../src/db/schema/providers.js';
 
 // `GET /api/v1/agents` is the cross-workspace "admin-shaped" list — without a
 // guard, any authenticated user saw every workspace's agents (#25). It's now
@@ -53,5 +55,49 @@ describe('GET /api/v1/agents — admin gate (#25)', () => {
     const res = await app.inject({ method: 'GET', url: '/api/v1/agents' });
     expect(res.statusCode).toBe(200);
     expect(Array.isArray(JSON.parse(res.body))).toBe(true);
+  });
+});
+
+// The office-ui moved its agent queries onto the workspace-scoped list (#95).
+// That path must return the SAME provider-decorated shape as the admin list —
+// several UI sites read `agent.model_provider.provider`, so a bare row (no
+// `model_provider`) would crash them. This locks the decoration in.
+describe('GET /api/v1/workspaces/:wsId/agents — provider decoration (#95)', () => {
+  const agentRow = {
+    id: 'a1', workspaceId: 'ws-1', name: 'Ada', status: 'idle',
+    config: { provider_id: 'p1' },
+  };
+  const providerRow = {
+    id: 'p1', workspaceId: 'ws-1', name: 'OpenAI', provider: 'openai',
+    modelName: 'gpt-4o', baseUrl: '', isDefault: true, isActive: true,
+  };
+  // Drizzle-ish mock: agents list resolves via `.where().limit().offset()`;
+  // the per-agent provider lookup resolves via `.where()` (awaited directly).
+  const mockDbWithProvider = {
+    select: () => ({
+      from: (table: unknown) => {
+        if (table === providers) {
+          return { where: () => Promise.resolve([providerRow]) };
+        }
+        return { where: () => ({ limit: () => ({ offset: () => Promise.resolve([agentRow]) }) }) };
+      },
+    }),
+  } as never;
+
+  it('decorates each agent with its model_provider', async () => {
+    const app = Fastify({ logger: false });
+    app.setValidatorCompiler(validatorCompiler);
+    app.setSerializerCompiler(serializerCompiler);
+    await app.register(authMiddleware, { skipAuth: true }); // mock admin — scoped route is membership-gated upstream, not role-gated
+    app.setErrorHandler(errorHandler);
+    registerAgentRoutes(app, mockDbWithProvider);
+    await app.ready();
+
+    const res = await app.inject({ method: 'GET', url: '/api/v1/workspaces/ws-1/agents' });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body).toHaveLength(1);
+    expect(body[0].model_provider).not.toBeNull();
+    expect(body[0].model_provider.provider).toBe('openai');
   });
 });

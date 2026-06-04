@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import api from "@/lib/api";
+import { useWorkspaceId } from "@/hooks/useWorkspaceId";
 import { cn } from "@/lib/utils";
 import type { Conversation, Agent } from "@/types";
 import { useState } from "react";
@@ -20,9 +21,11 @@ export default function MeetingsPage() {
     queryFn: () => api.get("/conversations").then((r) => r.data),
   });
 
+  const workspaceId = useWorkspaceId();
   const { data: agents = [] } = useQuery<Agent[]>({
-    queryKey: ["agents"],
-    queryFn: () => api.get("/agents").then((r) => r.data),
+    queryKey: ["agents", workspaceId],
+    queryFn: () => api.get(`/workspaces/${workspaceId}/agents`).then((r) => r.data),
+    enabled: !!workspaceId,
   });
 
   const meetings = conversations.filter((c) => c.type === "meeting");

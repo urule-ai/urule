@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import api from "@/lib/api";
+import { useWorkspaceId } from "@/hooks/useWorkspaceId";
 import { cn } from "@/lib/utils";
 import { SkeletonCard } from "@/components/ui/Skeleton";
 import { QueryError } from "@/components/ui/QueryError";
@@ -124,9 +125,11 @@ export default function AgentsPage() {
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<AgentStatus | null>(null);
 
+  const workspaceId = useWorkspaceId();
   const { data: agents = [], isLoading, isError, error, refetch } = useQuery<Agent[]>({
-    queryKey: ["agents"],
-    queryFn: () => api.get("/agents").then((r) => r.data),
+    queryKey: ["agents", workspaceId],
+    queryFn: () => api.get(`/workspaces/${workspaceId}/agents`).then((r) => r.data),
+    enabled: !!workspaceId,
   });
 
   const filtered = agents.filter((a) => {

@@ -6,6 +6,7 @@ import axios from "axios";
 import Link from "next/link";
 import { useAuthStore } from "@/store/useAuthStore";
 import api from "@/lib/api";
+import { useWorkspaceId } from "@/hooks/useWorkspaceId";
 import { cn } from "@/lib/utils";
 import { OfficeView } from "@/components/office/OfficeView";
 import SandboxMonitor from "@/components/office/SandboxMonitor";
@@ -291,10 +292,12 @@ export default function OfficeDashboard() {
   const [rightTab, setRightTab] = useState<RightTab>("overview");
   const [containerActionLoading, setContainerActionLoading] = useState<string | null>(null);
 
+  const workspaceId = useWorkspaceId();
   const { data: agents = [], isLoading: agentsLoading } = useQuery<Agent[]>({
-    queryKey: ["agents"],
-    queryFn: () => api.get("/agents").then((r) => r.data),
+    queryKey: ["agents", workspaceId],
+    queryFn: () => api.get(`/workspaces/${workspaceId}/agents`).then((r) => r.data),
     refetchInterval: 15000,
+    enabled: !!workspaceId,
   });
 
   const { data: stats } = useQuery<OfficeStats>({
