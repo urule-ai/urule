@@ -7,6 +7,7 @@ import { useAuthStore } from "@/store/useAuthStore";
 import { useChatStore } from "@/store/useChatStore";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import api from "@/lib/api";
+import { useWorkspaceId } from "@/hooks/useWorkspaceId";
 import { cn } from "@/lib/utils";
 import type { Message, Conversation, Agent, WSEvent } from "@/types";
 
@@ -338,9 +339,11 @@ export default function MeetingChatPage({ params }: { params: { id: string } }) 
         .then((r) => r.data),
   });
 
+  const workspaceId = useWorkspaceId();
   const { data: agents = [] } = useQuery<Agent[]>({
-    queryKey: ["agents"],
-    queryFn: () => api.get("/agents").then((r) => r.data),
+    queryKey: ["agents", workspaceId],
+    queryFn: () => api.get(`/workspaces/${workspaceId}/agents`).then((r) => r.data),
+    enabled: !!workspaceId,
   });
 
   const { data: goals = [], refetch: refetchGoals } = useQuery<MeetingGoal[]>({

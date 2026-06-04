@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import api from "@/lib/api";
+import { useWorkspaceId } from "@/hooks/useWorkspaceId";
 import { cn } from "@/lib/utils";
 import { toast } from "@/store/useToastStore";
 import { SkeletonCard } from "@/components/ui/Skeleton";
@@ -636,9 +637,11 @@ function Step2({
     queryFn: () => api.get("/tools").then((r) => r.data),
   });
 
+  const workspaceId = useWorkspaceId();
   const { data: existingAgents = [] } = useQuery<{ id: string; name: string; role: string }[]>({
-    queryKey: ["agents-list"],
-    queryFn: () => api.get("/agents").then((r) => r.data?.agents ?? r.data ?? []),
+    queryKey: ["agents-list", workspaceId],
+    queryFn: () => api.get(`/workspaces/${workspaceId}/agents`).then((r) => r.data?.agents ?? r.data ?? []),
+    enabled: !!workspaceId,
   });
 
   // Test provider connections on load

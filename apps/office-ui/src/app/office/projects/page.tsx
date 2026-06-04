@@ -4,6 +4,7 @@ import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import api from "@/lib/api";
+import { useWorkspaceId } from "@/hooks/useWorkspaceId";
 import { cn } from "@/lib/utils";
 import type { Project, Task, Agent, RaciRole } from "@/types";
 
@@ -844,9 +845,11 @@ export default function ProjectsPage() {
     queryFn: () => api.get("/tasks").then((r) => r.data),
   });
 
+  const workspaceId = useWorkspaceId();
   const { data: workspaceAgents = [] } = useQuery<Agent[]>({
-    queryKey: ["agents"],
-    queryFn: () => api.get("/agents").then((r) => r.data),
+    queryKey: ["agents", workspaceId],
+    queryFn: () => api.get(`/workspaces/${workspaceId}/agents`).then((r) => r.data),
+    enabled: !!workspaceId,
   });
 
   // Collect all agents from projects for the board view

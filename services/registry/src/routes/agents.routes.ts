@@ -85,6 +85,27 @@ function toUiAgent(row: Record<string, unknown>, provider?: Record<string, unkno
   };
 }
 
+/**
+ * Decorate agent rows with their LLM provider record (joined on
+ * `config.provider_id`) so the UI receives `model_provider`. Shared by the
+ * cross-workspace admin list and the workspace-scoped list so both return the
+ * identical shape — the office-ui agent queries (#95) depend on `model_provider`
+ * being present. NOTE: the per-row provider lookup is an N+1 (#32); acceptable
+ * for now, batch when #32 is addressed.
+ */
+async function decorateAgentsWithProviders(db: Database, rows: Record<string, unknown>[]) {
+  return Promise.all(rows.map(async (row) => {
+    const config = (row.config ?? {}) as Record<string, unknown>;
+    const providerId = config.provider_id as string | undefined;
+    let provider: Record<string, unknown> | null = null;
+    if (providerId) {
+      const [p] = await db.select().from(providers).where(eq(providers.id, providerId));
+      provider = p ?? null;
+    }
+    return toUiAgent(row, provider);
+  }));
+}
+
 export function registerAgentRoutes(app: FastifyInstance, db: Database) {
   // Audit events go through the Fastify Pino logger so they pick up the app's
   // redaction config instead of console.log, which bypasses it (#18).
@@ -123,16 +144,7 @@ export function registerAgentRoutes(app: FastifyInstance, db: Database) {
     const limit = Math.min(parseInt(request.query.limit ?? '50', 10), 100);
     const offset = parseInt(request.query.offset ?? '0', 10);
     const rows = await db.select().from(agents).limit(limit).offset(offset);
-    return Promise.all(rows.map(async (row) => {
-      const config = (row.config ?? {}) as Record<string, unknown>;
-      const providerId = config.provider_id as string | undefined;
-      let provider = null;
-      if (providerId) {
-        const [p] = await db.select().from(providers).where(eq(providers.id, providerId));
-        provider = p ?? null;
-      }
-      return toUiAgent(row as Record<string, unknown>, provider);
-    }));
+    return decorateAgentsWithProviders(db, rows as Record<string, unknown>[]);
   });
 
   // List agents for a workspace
@@ -149,7 +161,9 @@ export function registerAgentRoutes(app: FastifyInstance, db: Database) {
     const limit = Math.min(parseInt(request.query.limit ?? '50', 10), 100);
     const offset = parseInt(request.query.offset ?? '0', 10);
     const rows = await db.select().from(agents).where(eq(agents.workspaceId, wsId)).limit(limit).offset(offset);
-    return rows.map(row => toUiAgent(row as Record<string, unknown>));
+    // Decorate with provider so this matches the admin list's shape — the
+    // office-ui agent queries (#95) read `model_provider`.
+    return decorateAgentsWithProviders(db, rows as Record<string, unknown>[]);
   });
 
   // Register agent

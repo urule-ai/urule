@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import api from "@/lib/api";
+import { useWorkspaceId } from "@/hooks/useWorkspaceId";
 import { cn } from "@/lib/utils";
 import { toast } from "@/store/useToastStore";
 import { SkeletonList } from "@/components/ui/Skeleton";
@@ -54,9 +55,11 @@ export default function ChatListPage() {
     refetchInterval: 15_000,
   });
 
+  const workspaceId = useWorkspaceId();
   const { data: agents = [] } = useQuery<Agent[]>({
-    queryKey: ["agents"],
-    queryFn: () => api.get("/agents").then((r) => r.data).catch(() => []),
+    queryKey: ["agents", workspaceId],
+    queryFn: () => api.get(`/workspaces/${workspaceId}/agents`).then((r) => r.data).catch(() => []),
+    enabled: !!workspaceId,
   });
 
   const filtered = conversations.filter((c) => {
