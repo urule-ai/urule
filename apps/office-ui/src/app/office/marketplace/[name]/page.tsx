@@ -14,10 +14,12 @@ import {
   getPackageVersions,
   listInstalled,
   formatPrice,
-  extractWidgetManifest,
+  widgetInstallTarget,
+  verifyWidgetVersion,
   type MarketplacePackage,
   type PackageVersion,
   type InstalledPackage,
+  type WidgetVerification,
 } from "@/lib/marketplace-api";
 import { useInstalledWidgetsStore } from "@/store/useInstalledWidgetsStore";
 import { widgetRegistry } from "@/widgets";
@@ -268,15 +270,41 @@ export default function PackageDetailPage() {
       // and the in-memory widgetRegistry; the dashboard sees it on the
       // next render.
       if (pkg.type === "widget") {
-        const manifest = extractWidgetManifest(pkg);
-        if (!manifest) {
+        // #39 — take the manifest AND the version to verify from one source
+        // (`pkg.latestVersion`). Do NOT use the page's `latestVersion` (newest
+        // non-yanked) here: the embedded manifest lives only on
+        // `pkg.latestVersion`, so verifying any other version would let a
+        // yanked-latest verify one version while we register another's entryUrl.
+        const target = widgetInstallTarget(pkg);
+        if (!target) {
           toast.error(
             "Widget manifest missing",
             `Package "${pkg.name}" has no embedded widget manifest under \`manifest.widget\`.`,
           );
           return;
         }
-        useInstalledWidgetsStore.getState().install(WORKSPACE_ID, manifest);
+        const { manifest, version: widgetVersion } = target;
+        // external (iframe) widgets must carry a verified publisher signature
+        // before we register their entryUrl. Native widgets run in-bundle
+        // (no remote URL) and skip the check.
+        let verification = { verified: true, publisher: null as string | null };
+        if (manifest.entryType === "external") {
+          let result: WidgetVerification;
+          try {
+            result = await verifyWidgetVersion(pkg.name, widgetVersion);
+          } catch {
+            result = { verified: false, publisher: null, reason: "verify_failed" };
+          }
+          if (!result.verified) {
+            toast.error(
+              "Widget signature not verified",
+              `"${manifest.name}" was not installed — its publisher signature could not be verified${result.reason ? ` (${result.reason})` : ""}.`,
+            );
+            return;
+          }
+          verification = { verified: true, publisher: result.publisher };
+        }
+        useInstalledWidgetsStore.getState().install(WORKSPACE_ID, manifest, verification);
         widgetRegistry.registerManifest(manifest);
         toast.success("Widget installed", `${manifest.name} is now available on your dashboard.`);
         return;

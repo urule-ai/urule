@@ -5,6 +5,7 @@ import {
   isSameOriginEntry,
   widgetSandbox,
   widgetTargetOrigin,
+  widgetLoadDecision,
 } from "./widget-frame-security";
 
 /* ------------------------------------------------------------------ *
@@ -111,5 +112,23 @@ describe("isAllowedFromWidget (receive-side origin filter)", () => {
     // We default to 'null'; only 'null'-origin messages pass.
     expect(isAllowedFromWidget("https://widgets.partner.com", "/foo", "")).toBe(false);
     expect(isAllowedFromWidget("null", "/foo", "")).toBe(true);
+  });
+});
+
+/* ------------------------------------------------------------------ *
+ * #39 / Q-M-13 — manifest signature gate.
+ * ------------------------------------------------------------------ */
+describe("widgetLoadDecision", () => {
+  it("always allows native widgets regardless of verification", () => {
+    expect(widgetLoadDecision("native", false)).toEqual({ allowed: true });
+    expect(widgetLoadDecision("native", true)).toEqual({ allowed: true });
+  });
+
+  it("allows an external widget only when verified", () => {
+    expect(widgetLoadDecision("external", true)).toEqual({ allowed: true });
+  });
+
+  it("blocks an unverified external widget (fail-closed)", () => {
+    expect(widgetLoadDecision("external", false)).toEqual({ allowed: false, reason: "unverified" });
   });
 });

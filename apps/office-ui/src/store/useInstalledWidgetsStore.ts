@@ -24,12 +24,26 @@ import type { WidgetManifest } from "@/widgets/types";
  * anything" — both flow through to BUILTIN_MANIFESTS only.
  */
 
+/**
+ * #39 — per-manifest publisher-signature verification, kept in a map parallel to
+ * `byWorkspace` (rather than on the manifest) so it's host-only state that never
+ * touches the widget-sdk contract. `verified: false` is the fail-closed default
+ * for legacy/unknown entries.
+ */
+export interface WidgetVerification {
+  verified: boolean;
+  publisher: string | null;
+}
+
 interface InstalledWidgetsState {
   byWorkspace: Record<string, WidgetManifest[]>;
+  verifiedByWorkspace: Record<string, Record<string, WidgetVerification>>;
 
-  install: (workspaceId: string, manifest: WidgetManifest) => void;
+  install: (workspaceId: string, manifest: WidgetManifest, verification?: WidgetVerification) => void;
   uninstall: (workspaceId: string, manifestId: string) => void;
   getInstalled: (workspaceId: string) => WidgetManifest[];
+  /** #39 — has this installed manifest been verified? Fail-closed (false) when unknown. */
+  isVerified: (workspaceId: string, manifestId: string) => boolean;
   /** Test seam — wipe all state. */
   clear: () => void;
 }
@@ -38,8 +52,9 @@ export const useInstalledWidgetsStore = create<InstalledWidgetsState>()(
   persist(
     (set, get) => ({
       byWorkspace: {},
+      verifiedByWorkspace: {},
 
-      install: (workspaceId, manifest) =>
+      install: (workspaceId, manifest, verification) =>
         set((state) => {
           const existing = state.byWorkspace[workspaceId] ?? [];
           // Idempotent: re-installing the same manifest id replaces the
@@ -51,6 +66,13 @@ export const useInstalledWidgetsStore = create<InstalledWidgetsState>()(
               ...state.byWorkspace,
               [workspaceId]: [...filtered, manifest],
             },
+            verifiedByWorkspace: {
+              ...state.verifiedByWorkspace,
+              [workspaceId]: {
+                ...(state.verifiedByWorkspace[workspaceId] ?? {}),
+                [manifest.id]: verification ?? { verified: false, publisher: null },
+              },
+            },
           };
         }),
 
@@ -59,21 +81,44 @@ export const useInstalledWidgetsStore = create<InstalledWidgetsState>()(
           const existing = state.byWorkspace[workspaceId];
           if (!existing) return state;
           const filtered = existing.filter((m) => m.id !== manifestId);
+          const verified = { ...(state.verifiedByWorkspace[workspaceId] ?? {}) };
+          delete verified[manifestId];
           // Empty the array slot rather than deleting it — keeps the
           // workspace key around so a "you have nothing installed" UI
           // can distinguish "never installed" from "uninstalled all".
           return {
             byWorkspace: { ...state.byWorkspace, [workspaceId]: filtered },
+            verifiedByWorkspace: { ...state.verifiedByWorkspace, [workspaceId]: verified },
           };
         }),
 
       getInstalled: (workspaceId) => get().byWorkspace[workspaceId] ?? [],
 
-      clear: () => set({ byWorkspace: {} }),
+      isVerified: (workspaceId, manifestId) =>
+        get().verifiedByWorkspace[workspaceId]?.[manifestId]?.verified === true,
+
+      clear: () => set({ byWorkspace: {}, verifiedByWorkspace: {} }),
     }),
     {
       name: "urule-installed-widgets",
-      partialize: (state) => ({ byWorkspace: state.byWorkspace }),
+      version: 1,
+      partialize: (state) => ({
+        byWorkspace: state.byWorkspace,
+        verifiedByWorkspace: state.verifiedByWorkspace,
+      }),
+      // v0 persisted only `byWorkspace`. Carry it forward with an empty
+      // verification map so every pre-existing entry reads as unverified
+      // (fail-closed) until re-installed.
+      migrate: (persisted, version) => {
+        const state = (persisted ?? {}) as Partial<{
+          byWorkspace: Record<string, WidgetManifest[]>;
+          verifiedByWorkspace: Record<string, Record<string, WidgetVerification>>;
+        }>;
+        return {
+          byWorkspace: state.byWorkspace ?? {},
+          verifiedByWorkspace: version === 0 ? {} : (state.verifiedByWorkspace ?? {}),
+        };
+      },
     },
   ),
 );

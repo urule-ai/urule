@@ -226,6 +226,53 @@ export function extractWidgetManifest(pkg: MarketplacePackage): WidgetManifest |
   return widget;
 }
 
+/*
+ * #39 — bind the widget manifest to the *exact version it was extracted from*.
+ *
+ * The embedded manifest only ever lives on `pkg.latestVersion.manifest`, while
+ * the page also computes a separate "newest non-yanked" version string for its
+ * update flow. Verifying that separate string while installing the manifest from
+ * `pkg.latestVersion` would let a yanked-latest split the two — verify version X's
+ * signature, register version Y's `entryUrl`. This helper hands the caller the
+ * manifest AND the version from the *same* `pkg.latestVersion` object, so the
+ * signature check and the registered bytes can never reference different versions.
+ */
+export function widgetInstallTarget(
+  pkg: MarketplacePackage,
+): { manifest: WidgetManifest; version: string } | null {
+  const version = pkg.latestVersion?.version;
+  const manifest = extractWidgetManifest(pkg);
+  if (!manifest || !version) return null;
+  return { manifest, version };
+}
+
+export interface WidgetVerification {
+  verified: boolean;
+  publisher: string | null;
+  reason?: string;
+}
+
+/*
+ * #39 — verify a widget package version's publisher signature via packagehub's
+ * existing endpoint. The signature covers the whole package manifest (including
+ * the embedded `widget` field), so `verified: true` means the manifest — and
+ * its `entryUrl` — is exactly what the identified publisher signed, unmodified.
+ * The host gates external (iframe) widget install + instantiation on this.
+ * `reason` is `'unsigned'` for legacy unsigned packages, `'signature_invalid'`
+ * for a tampered/wrong-key signature.
+ */
+export async function verifyWidgetVersion(name: string, version: string): Promise<WidgetVerification> {
+  const { data } = await marketplace.get<{
+    verified: boolean;
+    kind: string | null;
+    publisher: string | null;
+    reason?: string;
+  }>(
+    `/packages/${encodeURIComponent(name)}/versions/${encodeURIComponent(version)}/verify`,
+  );
+  return { verified: data.verified === true, publisher: data.publisher ?? null, reason: data.reason };
+}
+
 function isValidWidgetManifest(value: unknown): value is WidgetManifest {
   if (typeof value !== "object" || value === null) return false;
   const w = value as Record<string, unknown>;

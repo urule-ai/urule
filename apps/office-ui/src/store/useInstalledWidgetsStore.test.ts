@@ -78,4 +78,43 @@ describe("useInstalledWidgetsStore", () => {
     expect(ws2).toHaveLength(1);
     expect(ws2[0]?.id).toBe("b");
   });
+
+  /* #39 — publisher-signature verification tracking. */
+
+  it("isVerified is true only when install carried a verified result", () => {
+    const store = useInstalledWidgetsStore.getState();
+    store.install("ws-1", mkManifest("ok"), { verified: true, publisher: "pubB64" });
+    expect(store.isVerified("ws-1", "ok")).toBe(true);
+  });
+
+  it("isVerified defaults to false (fail-closed) when install carried no verification", () => {
+    const store = useInstalledWidgetsStore.getState();
+    store.install("ws-1", mkManifest("legacy")); // 2-arg call — no verification
+    expect(store.isVerified("ws-1", "legacy")).toBe(false);
+  });
+
+  it("isVerified is false for an unknown manifest or workspace", () => {
+    const store = useInstalledWidgetsStore.getState();
+    store.install("ws-1", mkManifest("ok"), { verified: true, publisher: "p" });
+    expect(store.isVerified("ws-1", "nope")).toBe(false);
+    expect(store.isVerified("ws-other", "ok")).toBe(false);
+  });
+
+  it("uninstall clears the verification entry", () => {
+    const store = useInstalledWidgetsStore.getState();
+    store.install("ws-1", mkManifest("ok"), { verified: true, publisher: "p" });
+    store.uninstall("ws-1", "ok");
+    expect(useInstalledWidgetsStore.getState().isVerified("ws-1", "ok")).toBe(false);
+  });
+
+  it("verification state is persisted alongside the manifest", () => {
+    useInstalledWidgetsStore
+      .getState()
+      .install("ws-1", mkManifest("ok"), { verified: true, publisher: "pubB64" });
+    const parsed = JSON.parse(localStorage.getItem("urule-installed-widgets") as string);
+    expect(parsed.state.verifiedByWorkspace["ws-1"]["ok"]).toEqual({
+      verified: true,
+      publisher: "pubB64",
+    });
+  });
 });
