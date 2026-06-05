@@ -14,7 +14,8 @@ import {
   getPackageVersions,
   listInstalled,
   formatPrice,
-  extractWidgetManifest,
+  installWidgetFromPackage,
+  verifyWidgetVersion,
   type MarketplacePackage,
   type PackageVersion,
   type InstalledPackage,
@@ -268,17 +269,20 @@ export default function PackageDetailPage() {
       // and the in-memory widgetRegistry; the dashboard sees it on the
       // next render.
       if (pkg.type === "widget") {
-        const manifest = extractWidgetManifest(pkg);
-        if (!manifest) {
-          toast.error(
-            "Widget manifest missing",
-            `Package "${pkg.name}" has no embedded widget manifest under \`manifest.widget\`.`,
-          );
-          return;
-        }
-        useInstalledWidgetsStore.getState().install(WORKSPACE_ID, manifest);
-        widgetRegistry.registerManifest(manifest);
-        toast.success("Widget installed", `${manifest.name} is now available on your dashboard.`);
+        // #39 — verify/install binding + fail-closed gate live in
+        // installWidgetFromPackage (unit-tested). The version verified is the
+        // manifest's own source version (`pkg.latestVersion`), never the page's
+        // `latestVersion` (newest non-yanked), so a yanked-latest can't verify
+        // one version while we register another's entryUrl.
+        await installWidgetFromPackage(pkg, WORKSPACE_ID, {
+          verify: verifyWidgetVersion,
+          install: (workspaceId, manifest, verification) =>
+            useInstalledWidgetsStore.getState().install(workspaceId, manifest, verification),
+          register: (manifest) => widgetRegistry.registerManifest(manifest),
+          onSuccess: (manifest) =>
+            toast.success("Widget installed", `${manifest.name} is now available on your dashboard.`),
+          onError: (title, message) => toast.error(title, message),
+        });
         return;
       }
       if (installedRow && updateAvailable) {

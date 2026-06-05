@@ -1,0 +1,24 @@
+{
+  "name": "tasks-overview-widget",
+  "version": "0.1.0",
+  "type": "widget",
+  "description": "Compact dashboard tile listing the workspace's open tasks",
+  "author": "vendor",
+  "license": "MIT",
+  "keywords": ["dashboard", "tasks", "widget"],
+  "widget": {
+    "id": "vendor:tasks-overview",
+    "name": "Tasks Overview",
+    "version": "0.1.0",
+    "description": "Compact tile listing the workspace's open tasks",
+    "author": "vendor",
+    "mountPoints": ["sidebar", "main-panel"],
+    "entryType": "external",
+    "entryUrl": "https://vendor.example/widgets/tasks-overview.html",
+    "permissions": ["read:tasks"],
+    "defaultConfig": {},
+    "minWidth": 240,
+    "minHeight": 160,
+    "category": "productivity"
+  }
+}

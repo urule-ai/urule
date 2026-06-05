@@ -26,9 +26,14 @@ function useWidgetRegistryInit() {
       // multi-workspace installs collapse cleanly. WidgetZone filters
       // by mountPoint at render time — workspace scoping happens via
       // the per-workspace install record, not here.
-      const installed = useInstalledWidgetsStore.getState().byWorkspace;
-      for (const manifests of Object.values(installed)) {
+      const store = useInstalledWidgetsStore.getState();
+      for (const [workspaceId, manifests] of Object.entries(store.byWorkspace)) {
         for (const manifest of manifests) {
+          // #39 — never re-register an external (iframe) widget that isn't
+          // verified, so a stale/tampered entry can't reach the registry.
+          if (manifest.entryType === "external" && !store.isVerified(workspaceId, manifest.id)) {
+            continue;
+          }
           widgetRegistry.registerManifest(manifest);
         }
       }

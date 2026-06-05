@@ -73,3 +73,21 @@ export function isAllowedFromWidget(
 ): boolean {
   return eventOrigin === widgetTargetOrigin(entryUrl, hostOrigin);
 }
+
+/* ------------------------------------------------------------------ *
+ * #39 (Q-M-13) — manifest signature gate.
+ *
+ * `external` widgets load a remote `entryUrl` into an iframe, so the host
+ * must confirm the manifest carries a verified publisher signature (checked
+ * server-side via packagehub's /verify at install) before instantiating it —
+ * otherwise a malicious/tampered manifest could point `entryUrl` at attacker
+ * infrastructure. `native` widgets are in-bundle React components (no remote
+ * URL) and are always allowed. Fail-closed: an external widget with
+ * `verified !== true` is blocked.
+ * ------------------------------------------------------------------ */
+export type WidgetLoadDecision = { allowed: true } | { allowed: false; reason: "unverified" };
+
+export function widgetLoadDecision(entryType: string, verified: boolean): WidgetLoadDecision {
+  if (entryType !== "external") return { allowed: true };
+  return verified ? { allowed: true } : { allowed: false, reason: "unverified" };
+}

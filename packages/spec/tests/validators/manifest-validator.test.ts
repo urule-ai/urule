@@ -5,6 +5,17 @@ import personalityExample from '../../src/examples/personality-pack.json';
 import skillExample from '../../src/examples/skill-pack.json';
 import mcpConnectorExample from '../../src/examples/mcp-connector-pack.json';
 import gooseRecipeExample from '../../src/examples/goose-recipe-pack.json';
+import widgetExample from '../../src/examples/widget-pack.json';
+
+/** Base for ad-hoc widget manifests in the tests below. */
+const widgetBase = {
+  name: 'demo-widget',
+  version: '1.0.0',
+  type: 'widget',
+  description: 'Demo widget',
+  author: 'test',
+  license: 'MIT',
+};
 
 describe('validateManifest', () => {
   describe('valid manifests', () => {
@@ -28,6 +39,32 @@ describe('validateManifest', () => {
 
     it('validates a goose-recipe pack manifest', () => {
       const result = validateManifest(gooseRecipeExample);
+      expect(result.valid).toBe(true);
+      expect(result.errors).toHaveLength(0);
+    });
+
+    it('validates a widget pack manifest (external entryType)', () => {
+      const result = validateManifest(widgetExample);
+      expect(result.valid).toBe(true);
+      expect(result.errors).toHaveLength(0);
+    });
+
+    it('validates a native widget pack manifest (componentPath)', () => {
+      const result = validateManifest({
+        ...widgetBase,
+        widget: {
+          id: 'urule:dashboard-stats',
+          name: 'Dashboard Stats',
+          version: '1.0.0',
+          description: 'In-bundle stats tile',
+          author: 'urule',
+          mountPoints: ['main-panel'],
+          entryType: 'native',
+          componentPath: 'builtin/DashboardStats',
+          permissions: [],
+          defaultConfig: {},
+        },
+      });
       expect(result.valid).toBe(true);
       expect(result.errors).toHaveLength(0);
     });
@@ -123,6 +160,66 @@ describe('validateManifest', () => {
       expect(validateManifest(null).valid).toBe(false);
       expect(validateManifest('string').valid).toBe(false);
       expect(validateManifest(42).valid).toBe(false);
+    });
+
+    it('rejects widget manifest without widget config', () => {
+      const result = validateManifest({ ...widgetBase });
+      expect(result.valid).toBe(false);
+    });
+
+    it('rejects external widget without entryUrl', () => {
+      const result = validateManifest({
+        ...widgetBase,
+        widget: {
+          id: 'vendor:no-url',
+          name: 'No URL',
+          version: '1.0.0',
+          description: 'missing entryUrl',
+          author: 'vendor',
+          mountPoints: ['sidebar'],
+          entryType: 'external',
+          permissions: [],
+          defaultConfig: {},
+        },
+      });
+      expect(result.valid).toBe(false);
+    });
+
+    it('rejects native widget without componentPath', () => {
+      const result = validateManifest({
+        ...widgetBase,
+        widget: {
+          id: 'vendor:no-component',
+          name: 'No Component',
+          version: '1.0.0',
+          description: 'missing componentPath',
+          author: 'vendor',
+          mountPoints: ['sidebar'],
+          entryType: 'native',
+          permissions: [],
+          defaultConfig: {},
+        },
+      });
+      expect(result.valid).toBe(false);
+    });
+
+    it('rejects widget with an unknown mountPoint', () => {
+      const result = validateManifest({
+        ...widgetBase,
+        widget: {
+          id: 'vendor:bad-mount',
+          name: 'Bad Mount',
+          version: '1.0.0',
+          description: 'invalid mount point',
+          author: 'vendor',
+          mountPoints: ['not-a-real-mount'],
+          entryType: 'external',
+          entryUrl: 'https://vendor.example/w.html',
+          permissions: [],
+          defaultConfig: {},
+        },
+      });
+      expect(result.valid).toBe(false);
     });
   });
 });

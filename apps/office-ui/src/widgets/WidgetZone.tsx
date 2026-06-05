@@ -3,9 +3,11 @@
 import { useMemo, useState } from "react";
 import { useWidgetStore } from "@/store/useWidgetStore";
 import { useDashboardLayoutStore } from "@/store/useDashboardLayoutStore";
+import { useInstalledWidgetsStore } from "@/store/useInstalledWidgetsStore";
 import { widgetRegistry } from "./registry";
 import { NativeWidgetRenderer } from "./NativeWidgetRenderer";
 import { WidgetFrame } from "./WidgetFrame";
+import { widgetLoadDecision } from "./widget-frame-security";
 import type { WidgetRenderContext } from "./context";
 import type { WidgetInstance, WidgetMountPoint, WidgetTheme } from "./types";
 import { cn } from "@/lib/utils";
@@ -56,6 +58,9 @@ export function WidgetZone({ mountPoint, workspaceId, className, reorderable }: 
   const activeMainWidgetId = useWidgetStore((s) => s.activeMainWidgetId);
   const editing = useDashboardLayoutStore((s) => s.editing);
   const setOrder = useDashboardLayoutStore((s) => s.setOrder);
+  // #39 — subscribe to the verification map so an external widget only renders
+  // once its publisher signature is verified (set at install time).
+  const verifiedByWorkspace = useInstalledWidgetsStore((s) => s.verifiedByWorkspace);
   const persistedOrder = useDashboardLayoutStore((s) =>
     reorderable ? s.orders[`${workspaceId}::${mountPoint}`] : undefined,
   );
@@ -180,7 +185,17 @@ export function WidgetZone({ mountPoint, workspaceId, className, reorderable }: 
             {manifest.entryType === "native" && manifest.componentPath ? (
               <NativeWidgetRenderer context={context} componentPath={manifest.componentPath} />
             ) : manifest.entryType === "external" && manifest.entryUrl ? (
-              <WidgetFrame context={context} entryUrl={manifest.entryUrl} />
+              widgetLoadDecision(
+                "external",
+                verifiedByWorkspace[workspaceId]?.[manifest.id]?.verified === true,
+              ).allowed ? (
+                <WidgetFrame context={context} entryUrl={manifest.entryUrl} />
+              ) : (
+                <div className="p-4 text-accent-warning text-sm">
+                  <span className="icon mr-1">gpp_bad</span>
+                  Unverified widget — {manifest.name} was not loaded (no valid publisher signature).
+                </div>
+              )
             ) : (
               <div className="p-4 text-accent-warning text-sm">
                 <span className="icon mr-1">error</span>
