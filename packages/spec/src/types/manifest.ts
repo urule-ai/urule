@@ -92,13 +92,49 @@ export interface PolicyManifest extends PackageManifestBase {
   };
 }
 
+export type WidgetMountPoint = 'sidebar' | 'main-panel' | 'modal' | 'status-bar' | 'drawer';
+export type WidgetEntryType = 'native' | 'external';
+export type WidgetCategory =
+  | 'monitoring'
+  | 'productivity'
+  | 'communication'
+  | 'development'
+  | 'admin';
+
+/**
+ * Runtime widget manifest embedded under a widget package's `manifest.widget`.
+ * The host (office-ui) and `@urule/widget-sdk` are the source of truth for this
+ * shape — the package manifest carries it verbatim and the publisher signature
+ * covers it, so the host can trust `entryUrl` after verification (urule #39).
+ *
+ * `native` widgets ship as in-bundle React components addressed by
+ * `componentPath`; `external` widgets load `entryUrl` into a sandboxed iframe.
+ */
+export interface WidgetConfig {
+  id: string;
+  name: string;
+  version: string;
+  description: string;
+  author: string;
+  mountPoints: WidgetMountPoint[];
+  entryType: WidgetEntryType;
+  /** Required when `entryType === 'external'` — the iframe source URL. */
+  entryUrl?: string;
+  /** Required when `entryType === 'native'` — the registered component path. */
+  componentPath?: string;
+  permissions: string[];
+  defaultConfig: Record<string, unknown>;
+  minWidth?: number;
+  minHeight?: number;
+  maxWidth?: number;
+  maxHeight?: number;
+  icon?: string;
+  category?: WidgetCategory;
+}
+
 export interface WidgetManifest extends PackageManifestBase {
   type: 'widget';
-  widget: {
-    entrypoint: string;
-    mountPoints: string[];
-    dimensions?: { width: number; height: number };
-  };
+  widget: WidgetConfig;
 }
 
 export interface OfficeManifest extends PackageManifestBase {

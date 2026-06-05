@@ -248,18 +248,56 @@
     },
     "widgetConfig": {
       "type": "object",
-      "required": ["entrypoint", "mountPoints"],
+      "required": [
+        "id",
+        "name",
+        "version",
+        "description",
+        "author",
+        "mountPoints",
+        "entryType",
+        "permissions",
+        "defaultConfig"
+      ],
       "properties": {
-        "entrypoint": { "type": "string" },
-        "mountPoints": { "type": "array", "items": { "type": "string" } },
-        "dimensions": {
-          "type": "object",
-          "properties": {
-            "width": { "type": "number" },
-            "height": { "type": "number" }
-          }
+        "id": { "type": "string", "minLength": 1 },
+        "name": { "type": "string" },
+        "version": { "type": "string" },
+        "description": { "type": "string" },
+        "author": { "type": "string" },
+        "mountPoints": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["sidebar", "main-panel", "modal", "status-bar", "drawer"]
+          },
+          "minItems": 1
+        },
+        "entryType": { "type": "string", "enum": ["native", "external"] },
+        "entryUrl": { "type": "string" },
+        "componentPath": { "type": "string" },
+        "permissions": { "type": "array", "items": { "type": "string" } },
+        "defaultConfig": { "type": "object" },
+        "minWidth": { "type": "number" },
+        "minHeight": { "type": "number" },
+        "maxWidth": { "type": "number" },
+        "maxHeight": { "type": "number" },
+        "icon": { "type": "string" },
+        "category": {
+          "type": "string",
+          "enum": ["monitoring", "productivity", "communication", "development", "admin"]
         }
       },
+      "allOf": [
+        {
+          "if": { "properties": { "entryType": { "const": "external" } } },
+          "then": { "required": ["entryUrl"] }
+        },
+        {
+          "if": { "properties": { "entryType": { "const": "native" } } },
+          "then": { "required": ["componentPath"] }
+        }
+      ],
       "additionalProperties": false
     },
     "officeConfig": {
