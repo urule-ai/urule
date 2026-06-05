@@ -65,6 +65,20 @@ export function providerWorkspaceResolver(db: Database): WorkspaceIdResolver {
   };
 }
 
+/**
+ * Resolver for `/workspaces/:wsId/...` routes — the workspace IS the addressed
+ * resource, so the path param is the workspace id directly. A non-existent
+ * `:wsId` is left to the membership check (a non-member of an unknown workspace
+ * is denied 403, which also avoids leaking which workspace ids exist). Returns
+ * `null` only when the param is missing.
+ */
+export function workspaceParamResolver(): WorkspaceIdResolver {
+  return async (req: FastifyRequest) => {
+    const { wsId } = req.params as { wsId?: string };
+    return wsId ?? null;
+  };
+}
+
 /** Resolver for `/conversations/:conversationId/...` routes. */
 export function conversationWorkspaceResolver(db: Database): WorkspaceIdResolver {
   return async (req: FastifyRequest) => {

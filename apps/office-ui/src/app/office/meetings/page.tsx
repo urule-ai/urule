@@ -16,12 +16,17 @@ export default function MeetingsPage() {
   const [title, setTitle] = useState("");
   const [selectedAgents, setSelectedAgents] = useState<string[]>([]);
 
+  const workspaceId = useWorkspaceId();
+
+  // Workspace-scoped + membership-gated (#4/#95): the cross-workspace
+  // `GET /conversations` is admin-only. Meetings are conversations with
+  // `type === "meeting"`, filtered below.
   const { data: conversations = [], isLoading } = useQuery<Conversation[]>({
-    queryKey: ["meetings"],
-    queryFn: () => api.get("/conversations").then((r) => r.data),
+    queryKey: ["meetings", workspaceId],
+    queryFn: () => api.get(`/workspaces/${workspaceId}/conversations`).then((r) => r.data),
+    enabled: !!workspaceId,
   });
 
-  const workspaceId = useWorkspaceId();
   const { data: agents = [] } = useQuery<Agent[]>({
     queryKey: ["agents", workspaceId],
     queryFn: () => api.get(`/workspaces/${workspaceId}/agents`).then((r) => r.data),

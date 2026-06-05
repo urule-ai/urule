@@ -9,7 +9,7 @@ import type { Database } from '../db/connection.js';
 import { conversations, conversationAgents, messages } from '../db/schema/conversations.js';
 import { agents } from '../db/schema/agents.js';
 import { workspaces } from '../db/schema/workspaces.js';
-import { bodyWorkspaceResolver, conversationWorkspaceResolver } from '../authz.js';
+import { bodyWorkspaceResolver, conversationWorkspaceResolver, workspaceParamResolver } from '../authz.js';
 
 // auth-middleware decorates `request.uruleUser` at runtime but does not
 // publish a Fastify module augmentation. Inline-cast helper — non-null on
@@ -40,9 +40,15 @@ const createMessageSchema = z.strictObject({
 });
 
 const conversationIdParamsSchema = z.object({ conversationId: z.string() });
+const wsIdParamsSchema = z.object({ wsId: z.string() });
 
 const listConversationsQuerySchema = z.object({
   workspaceId: z.string().optional(),
+  limit: z.string().optional(),
+  offset: z.string().optional(),
+});
+
+const wsConversationsQuerySchema = z.object({
   limit: z.string().optional(),
   offset: z.string().optional(),
 });
@@ -98,6 +104,46 @@ function toUiAgentSummary(row: Record<string, unknown>) {
     name: row.name,
     accent_color: config.accentColor ?? '#0db9f2',
   };
+}
+
+/**
+ * Decorate raw conversation rows with the linked agents, message count, and
+ * last-message preview the office-ui chat/meetings lists render. Shared by the
+ * admin cross-workspace list and the workspace-scoped list so the two can never
+ * drift in shape.
+ */
+async function decorateConversations(db: Database, convRows: Record<string, unknown>[]) {
+  return Promise.all(convRows.map(async (conv) => {
+    const agentLinks = await db.select().from(conversationAgents)
+      .where(eq(conversationAgents.conversationId, conv.id as string));
+
+    let convAgents: unknown[] = [];
+    if (agentLinks.length > 0) {
+      convAgents = await Promise.all(
+        agentLinks.map(async (link) => {
+          const [agent] = await db.select().from(agents).where(eq(agents.id, link.agentId));
+          return agent ? toUiAgentSummary(agent as Record<string, unknown>) : null;
+        })
+      );
+      convAgents = convAgents.filter(Boolean);
+    }
+
+    const [countResult] = await db.select({
+      count: sql<number>`count(*)::int`,
+    }).from(messages).where(eq(messages.conversationId, conv.id as string));
+
+    const [lastMsg] = await db.select().from(messages)
+      .where(eq(messages.conversationId, conv.id as string))
+      .orderBy(desc(messages.createdAt))
+      .limit(1);
+
+    return {
+      ...toUiConversation(conv),
+      agents: convAgents,
+      message_count: countResult?.count ?? 0,
+      last_message: lastMsg ? toUiMessage(lastMsg as Record<string, unknown>) : null,
+    };
+  }));
 }
 
 export function registerConversationRoutes(app: FastifyInstance, db: Database) {
@@ -176,42 +222,34 @@ export function registerConversationRoutes(app: FastifyInstance, db: Database) {
         .limit(limit).offset(offset);
     }
 
-    const result = await Promise.all(convRows.map(async (conv) => {
-      // Get agents for this conversation
-      const agentLinks = await db.select().from(conversationAgents)
-        .where(eq(conversationAgents.conversationId, conv.id));
+    return decorateConversations(db, convRows as Record<string, unknown>[]);
+  });
 
-      let convAgents: unknown[] = [];
-      if (agentLinks.length > 0) {
-        convAgents = await Promise.all(
-          agentLinks.map(async (link) => {
-            const [agent] = await db.select().from(agents).where(eq(agents.id, link.agentId));
-            return agent ? toUiAgentSummary(agent as Record<string, unknown>) : null;
-          })
-        );
-        convAgents = convAgents.filter(Boolean);
-      }
+  // List conversations for a workspace — membership-gated (#4 / #95 follow-up).
+  // The office-ui chat + meetings lists hit this directly so non-admin members
+  // can see their own workspace's conversations (the cross-workspace list above
+  // stays admin-only). `requireMembership` resolves the workspace from `:wsId`
+  // and 403s a non-member, so this can't be used to enumerate other workspaces.
+  app.get<{ Params: z.infer<typeof wsIdParamsSchema>; Querystring: z.infer<typeof wsConversationsQuerySchema> }>('/api/v1/workspaces/:wsId/conversations', {
+    preHandler: requireMembership(workspaceParamResolver()),
+    schema: {
+      tags: ['conversations'],
+      summary: 'List conversations in a workspace',
+      description: 'Workspace-scoped, membership-gated. Newest-first by `updatedAt`, `?limit` capped at 100 + `?offset`. Each row carries the same last-message preview / message count / linked agents as the admin list. Empty array (200) when the workspace has no conversations.',
+      params: wsIdParamsSchema,
+      querystring: wsConversationsQuerySchema,
+    },
+  }, async (request) => {
+    const { wsId } = request.params;
+    const limit = Math.min(parseInt(request.query.limit ?? '50', 10), 100);
+    const offset = parseInt(request.query.offset ?? '0', 10);
 
-      // Get message count
-      const [countResult] = await db.select({
-        count: sql<number>`count(*)::int`,
-      }).from(messages).where(eq(messages.conversationId, conv.id));
+    const convRows = await db.select().from(conversations)
+      .where(eq(conversations.workspaceId, wsId))
+      .orderBy(desc(conversations.updatedAt))
+      .limit(limit).offset(offset);
 
-      // Get last message
-      const [lastMsg] = await db.select().from(messages)
-        .where(eq(messages.conversationId, conv.id))
-        .orderBy(desc(messages.createdAt))
-        .limit(1);
-
-      return {
-        ...toUiConversation(conv as Record<string, unknown>),
-        agents: convAgents,
-        message_count: countResult?.count ?? 0,
-        last_message: lastMsg ? toUiMessage(lastMsg as Record<string, unknown>) : null,
-      };
-    }));
-
-    return result;
+    return decorateConversations(db, convRows as Record<string, unknown>[]);
   });
 
   // Get single conversation

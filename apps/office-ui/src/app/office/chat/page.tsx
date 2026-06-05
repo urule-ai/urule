@@ -49,13 +49,17 @@ export default function ChatListPage() {
   const [filter, setFilter] = useState<FilterType>("all");
   const [search, setSearch] = useState("");
 
+  const workspaceId = useWorkspaceId();
+
+  // Workspace-scoped + membership-gated (#4/#95): the cross-workspace
+  // `GET /conversations` is admin-only, so non-admin members 403'd on it.
   const { data: conversations = [], isLoading } = useQuery<ConversationListItem[]>({
-    queryKey: ["conversations"],
-    queryFn: () => api.get("/conversations").then((r) => r.data),
+    queryKey: ["conversations", workspaceId],
+    queryFn: () => api.get(`/workspaces/${workspaceId}/conversations`).then((r) => r.data),
+    enabled: !!workspaceId,
     refetchInterval: 15_000,
   });
 
-  const workspaceId = useWorkspaceId();
   const { data: agents = [] } = useQuery<Agent[]>({
     queryKey: ["agents", workspaceId],
     queryFn: () => api.get(`/workspaces/${workspaceId}/agents`).then((r) => r.data).catch(() => []),
