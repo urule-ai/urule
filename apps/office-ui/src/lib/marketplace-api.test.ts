@@ -18,7 +18,9 @@ import {
   extractWidgetManifest,
   widgetInstallTarget,
   verifyWidgetVersion,
+  installWidgetFromPackage,
   type MarketplacePackage,
+  type WidgetInstallDeps,
 } from "./marketplace-api";
 
 const validWidget = {
@@ -163,5 +165,99 @@ describe("verifyWidgetVersion (#39)", () => {
     getMock.mockResolvedValue({ data: { verified: "yes", kind: null, publisher: null } });
     const res = await verifyWidgetVersion("w", "0.1.0");
     expect(res.verified).toBe(false);
+  });
+});
+
+describe("installWidgetFromPackage (#39 — gate + version binding)", () => {
+  const mkDeps = (): WidgetInstallDeps & {
+    verify: ReturnType<typeof vi.fn>;
+    install: ReturnType<typeof vi.fn>;
+    register: ReturnType<typeof vi.fn>;
+    onSuccess: ReturnType<typeof vi.fn>;
+    onError: ReturnType<typeof vi.fn>;
+  } => ({
+    verify: vi.fn(),
+    install: vi.fn(),
+    register: vi.fn(),
+    onSuccess: vi.fn(),
+    onError: vi.fn(),
+  });
+
+  const nativeWidget = {
+    ...validWidget,
+    entryType: "native",
+    componentPath: "builtin/Foo",
+    entryUrl: undefined,
+  };
+
+  it("verifies the SAME version the manifest came from, then installs + registers", async () => {
+    const pkg = mkPkg({ widget: validWidget });
+    pkg.latestVersion!.version = "3.0.0"; // served version differs from anything else
+    const deps = mkDeps();
+    deps.verify.mockResolvedValue({ verified: true, publisher: "pubB64" });
+
+    await installWidgetFromPackage(pkg, "ws-1", deps);
+
+    // Binding regression: verify MUST be called with pkg.latestVersion.version,
+    // not a separately-computed "latest". This fails if the call site diverges.
+    expect(deps.verify).toHaveBeenCalledWith("p", "3.0.0");
+    expect(deps.install).toHaveBeenCalledWith("ws-1", validWidget, {
+      verified: true,
+      publisher: "pubB64",
+    });
+    expect(deps.register).toHaveBeenCalledWith(validWidget);
+    expect(deps.onSuccess).toHaveBeenCalledOnce();
+    expect(deps.onError).not.toHaveBeenCalled();
+  });
+
+  it("does NOT install or register an external widget that fails verification (fail-closed)", async () => {
+    const pkg = mkPkg({ widget: validWidget });
+    const deps = mkDeps();
+    deps.verify.mockResolvedValue({ verified: false, publisher: null, reason: "signature_invalid" });
+
+    await installWidgetFromPackage(pkg, "ws-1", deps);
+
+    expect(deps.install).not.toHaveBeenCalled();
+    expect(deps.register).not.toHaveBeenCalled();
+    expect(deps.onSuccess).not.toHaveBeenCalled();
+    expect(deps.onError).toHaveBeenCalledOnce();
+  });
+
+  it("treats a thrown verify as unverified (fail-closed)", async () => {
+    const pkg = mkPkg({ widget: validWidget });
+    const deps = mkDeps();
+    deps.verify.mockRejectedValue(new Error("network"));
+
+    await installWidgetFromPackage(pkg, "ws-1", deps);
+
+    expect(deps.install).not.toHaveBeenCalled();
+    expect(deps.register).not.toHaveBeenCalled();
+    expect(deps.onError).toHaveBeenCalledOnce();
+  });
+
+  it("installs a native widget WITHOUT calling verify", async () => {
+    const pkg = mkPkg({ widget: nativeWidget });
+    const deps = mkDeps();
+
+    await installWidgetFromPackage(pkg, "ws-1", deps);
+
+    expect(deps.verify).not.toHaveBeenCalled();
+    expect(deps.install).toHaveBeenCalledWith("ws-1", nativeWidget, {
+      verified: true,
+      publisher: null,
+    });
+    expect(deps.register).toHaveBeenCalledWith(nativeWidget);
+  });
+
+  it("errors and installs nothing when there is no embedded manifest", async () => {
+    const pkg = mkPkg({});
+    const deps = mkDeps();
+
+    await installWidgetFromPackage(pkg, "ws-1", deps);
+
+    expect(deps.verify).not.toHaveBeenCalled();
+    expect(deps.install).not.toHaveBeenCalled();
+    expect(deps.register).not.toHaveBeenCalled();
+    expect(deps.onError).toHaveBeenCalledOnce();
   });
 });

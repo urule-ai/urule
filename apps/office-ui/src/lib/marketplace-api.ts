@@ -273,6 +273,69 @@ export async function verifyWidgetVersion(name: string, version: string): Promis
   return { verified: data.verified === true, publisher: data.publisher ?? null, reason: data.reason };
 }
 
+/** Host side-effects the widget install drives, injected so the decision
+ *  logic below stays pure and unit-testable (matches the widget pure-helper
+ *  pattern). */
+export interface WidgetInstallDeps {
+  verify: (name: string, version: string) => Promise<WidgetVerification>;
+  install: (
+    workspaceId: string,
+    manifest: WidgetManifest,
+    verification: { verified: boolean; publisher: string | null },
+  ) => void;
+  register: (manifest: WidgetManifest) => void;
+  onSuccess: (manifest: WidgetManifest) => void;
+  onError: (title: string, message: string) => void;
+}
+
+/*
+ * #39 — the widget install decision, extracted from the marketplace page so the
+ * verify/gate wiring is unit-testable (the page component itself is not). The
+ * security invariants live here:
+ *   - the version verified is ALWAYS `widgetInstallTarget().version` (i.e. the
+ *     manifest's own source version), never a separately-computed one;
+ *   - an `external` widget that doesn't verify is NEVER installed or registered
+ *     (fail-closed, incl. when `verify` throws);
+ *   - `native` widgets skip verification (in-bundle, no remote URL).
+ */
+export async function installWidgetFromPackage(
+  pkg: MarketplacePackage,
+  workspaceId: string,
+  deps: WidgetInstallDeps,
+): Promise<void> {
+  const target = widgetInstallTarget(pkg);
+  if (!target) {
+    deps.onError(
+      "Widget manifest missing",
+      `Package "${pkg.name}" has no embedded widget manifest under \`manifest.widget\`.`,
+    );
+    return;
+  }
+  const { manifest, version } = target;
+
+  let verification = { verified: true, publisher: null as string | null };
+  if (manifest.entryType === "external") {
+    let result: WidgetVerification;
+    try {
+      result = await deps.verify(pkg.name, version);
+    } catch {
+      result = { verified: false, publisher: null, reason: "verify_failed" };
+    }
+    if (!result.verified) {
+      deps.onError(
+        "Widget signature not verified",
+        `"${manifest.name}" was not installed — its publisher signature could not be verified${result.reason ? ` (${result.reason})` : ""}.`,
+      );
+      return;
+    }
+    verification = { verified: true, publisher: result.publisher };
+  }
+
+  deps.install(workspaceId, manifest, verification);
+  deps.register(manifest);
+  deps.onSuccess(manifest);
+}
+
 function isValidWidgetManifest(value: unknown): value is WidgetManifest {
   if (typeof value !== "object" || value === null) return false;
   const w = value as Record<string, unknown>;
