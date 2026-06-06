@@ -88,7 +88,7 @@ describe('GET /api/v1/workspaces/:wsId/agents — provider decoration (#95)', ()
     const app = Fastify({ logger: false });
     app.setValidatorCompiler(validatorCompiler);
     app.setSerializerCompiler(serializerCompiler);
-    await app.register(authMiddleware, { skipAuth: true }); // mock admin — scoped route is membership-gated upstream, not role-gated
+    await app.register(authMiddleware, { skipAuth: true }); // mock admin — the scoped route is membership-gated (#4); admin bypasses it. Gate itself is covered in workspace-scoped-read-guard.test.ts.
     app.setErrorHandler(errorHandler);
     registerAgentRoutes(app, mockDbWithProvider);
     await app.ready();

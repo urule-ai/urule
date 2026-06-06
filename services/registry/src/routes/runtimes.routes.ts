@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { requireMembership } from '@urule/authz-middleware';
 import type { Database } from '../db/connection.js';
 import { runtimes } from '../db/schema/runtimes.js';
-import { bodyWorkspaceResolver } from '../authz.js';
+import { bodyWorkspaceResolver, workspaceParamResolver } from '../authz.js';
 
 const createRuntimeSchema = z.object({
   workspaceId: z.string().min(1),
@@ -18,12 +18,14 @@ const wsIdParamsSchema = z.object({ wsId: z.string() });
 const runtimeIdParamsSchema = z.object({ runtimeId: z.string() });
 
 export function registerRuntimeRoutes(app: FastifyInstance, db: Database) {
-  // List runtimes for a workspace
+  // List runtimes for a workspace — membership-gated (#4). Without it any
+  // authenticated user could read another workspace's runtimes by changing :wsId.
   app.get<{ Params: z.infer<typeof wsIdParamsSchema> }>('/api/v1/workspaces/:wsId/runtimes', {
+    preHandler: requireMembership(workspaceParamResolver()),
     schema: {
       tags: ['runtimes'],
       summary: 'List runtimes registered to a workspace',
-      description: 'Returns sandbox runtime registrations the workspace can dispatch agent runs to (Docker, Firecracker, etc.). Empty list when none registered — not 404.',
+      description: 'Membership-gated. Returns sandbox runtime registrations the workspace can dispatch agent runs to (Docker, Firecracker, etc.). Empty list when none registered — not 404.',
       params: wsIdParamsSchema,
     },
   }, async (request) => {
