@@ -215,6 +215,7 @@ export function registerAgentRoutes(app: FastifyInstance, db: Database) {
 
   // Get agent by ID
   app.get<{ Params: z.infer<typeof agentIdParamsSchema> }>('/api/v1/agents/:agentId', {
+    preHandler: requireAgentMembership,
     schema: {
       tags: ['agents'],
       summary: 'Get agent by id (with provider join)',
@@ -243,6 +244,7 @@ export function registerAgentRoutes(app: FastifyInstance, db: Database) {
 
   // Agent metrics — derived from messages + conversation_agents on read.
   app.get<{ Params: z.infer<typeof agentIdParamsSchema> }>('/api/v1/agents/:agentId/metrics', {
+    preHandler: requireAgentMembership,
     schema: {
       tags: ['agents'],
       summary: 'Agent activity metrics (real, derived)',
@@ -290,6 +292,7 @@ export function registerAgentRoutes(app: FastifyInstance, db: Database) {
 
   // Agent health — derived from last activity timestamp on messages.
   app.get<{ Params: z.infer<typeof agentIdParamsSchema> }>('/api/v1/agents/:agentId/health', {
+    preHandler: requireAgentMembership,
     schema: {
       tags: ['agents'],
       summary: 'Agent health snapshot',
@@ -326,6 +329,7 @@ export function registerAgentRoutes(app: FastifyInstance, db: Database) {
 
   // Agent conversations stub
   app.get<{ Params: z.infer<typeof agentIdParamsSchema> }>('/api/v1/agents/:agentId/conversations', {
+    preHandler: requireAgentMembership,
     schema: {
       tags: ['agents'],
       summary: "Agent's conversations (stub)",
@@ -336,6 +340,7 @@ export function registerAgentRoutes(app: FastifyInstance, db: Database) {
 
   // Agent logs stub
   app.get<{ Params: z.infer<typeof agentIdParamsSchema> }>('/api/v1/agents/:agentId/logs', {
+    preHandler: requireAgentMembership,
     schema: {
       tags: ['agents'],
       summary: "Agent's activity log (stub)",

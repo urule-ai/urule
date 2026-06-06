@@ -5,6 +5,7 @@ import type { Database } from './db/connection.js';
 import { agents } from './db/schema/agents.js';
 import { conversations } from './db/schema/conversations.js';
 import { providers } from './db/schema/providers.js';
+import { runtimes } from './db/schema/runtimes.js';
 import { workspaces } from './db/schema/workspaces.js';
 
 /* ------------------------------------------------------------------ *
@@ -88,6 +89,19 @@ export function conversationWorkspaceResolver(db: Database): WorkspaceIdResolver
       .select({ workspaceId: conversations.workspaceId })
       .from(conversations)
       .where(eq(conversations.id, conversationId));
+    return row?.workspaceId ?? null;
+  };
+}
+
+/** Resolver for `/runtimes/:runtimeId` routes — looks up the runtime's workspace. */
+export function runtimeWorkspaceResolver(db: Database): WorkspaceIdResolver {
+  return async (req: FastifyRequest) => {
+    const { runtimeId } = req.params as { runtimeId?: string };
+    if (!runtimeId) return null;
+    const [row] = await db
+      .select({ workspaceId: runtimes.workspaceId })
+      .from(runtimes)
+      .where(eq(runtimes.id, runtimeId));
     return row?.workspaceId ?? null;
   };
 }

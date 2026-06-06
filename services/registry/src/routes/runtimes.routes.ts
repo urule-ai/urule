@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { requireMembership } from '@urule/authz-middleware';
 import type { Database } from '../db/connection.js';
 import { runtimes } from '../db/schema/runtimes.js';
-import { bodyWorkspaceResolver, workspaceParamResolver } from '../authz.js';
+import { bodyWorkspaceResolver, workspaceParamResolver, runtimeWorkspaceResolver } from '../authz.js';
 
 const createRuntimeSchema = z.object({
   workspaceId: z.string().min(1),
@@ -63,8 +63,10 @@ export function registerRuntimeRoutes(app: FastifyInstance, db: Database) {
     reply.status(201).send(runtime);
   });
 
-  // Get runtime by ID
+  // Get runtime by ID — membership-gated (#4): resolve the runtime's workspace
+  // and require membership, so a runtime id can't be read cross-workspace.
   app.get<{ Params: z.infer<typeof runtimeIdParamsSchema> }>('/api/v1/runtimes/:runtimeId', {
+    preHandler: requireMembership(runtimeWorkspaceResolver(db)),
     schema: {
       tags: ['runtimes'],
       summary: 'Get runtime by id',

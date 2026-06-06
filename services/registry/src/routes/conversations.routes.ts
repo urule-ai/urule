@@ -254,6 +254,7 @@ export function registerConversationRoutes(app: FastifyInstance, db: Database) {
 
   // Get single conversation
   app.get<{ Params: z.infer<typeof conversationIdParamsSchema> }>('/api/v1/conversations/:conversationId', {
+    preHandler: requireConversationMembership,
     schema: {
       tags: ['conversations'],
       summary: 'Get conversation by id',
@@ -381,6 +382,7 @@ export function registerConversationRoutes(app: FastifyInstance, db: Database) {
     Params: z.infer<typeof conversationIdParamsSchema>;
     Querystring: z.infer<typeof messagesQuerySchema>;
   }>('/api/v1/conversations/:conversationId/messages', {
+    preHandler: requireConversationMembership,
     schema: {
       tags: ['conversations'],
       summary: 'List messages in a conversation',
@@ -534,6 +536,7 @@ export function registerConversationRoutes(app: FastifyInstance, db: Database) {
   app.get<{
     Params: z.infer<typeof conversationIdParamsSchema>;
   }>('/api/v1/conversations/:conversationId/branches', {
+    preHandler: requireConversationMembership,
     schema: {
       tags: ['conversations'],
       summary: 'List branches forked from this conversation',
