@@ -7,7 +7,7 @@ import { requireMembership, requireRole } from '@urule/authz-middleware';
 import { AuditLogger } from '@urule/events';
 import type { Database } from '../db/connection.js';
 import { workspaces } from '../db/schema/workspaces.js';
-import { firstWorkspaceId } from '../authz.js';
+import { firstWorkspaceId, workspaceParamResolver } from '../authz.js';
 
 const createWorkspaceSchema = z.object({
   orgId: z.string().min(1),
@@ -203,12 +203,14 @@ export function registerWorkspaceRoutes(app: FastifyInstance, db: Database) {
     },
   );
 
-  // Get workspace by ID
+  // Get workspace by ID — membership-gated (#4). `/workspaces/current` is a
+  // separate route registered above, so this gate doesn't affect it.
   app.get<{ Params: z.infer<typeof wsIdParamsSchema> }>('/api/v1/workspaces/:wsId', {
+    preHandler: requireMembership(workspaceParamResolver()),
     schema: {
       tags: ['workspaces'],
       summary: 'Get workspace by id',
-      description: '404 WORKSPACE_NOT_FOUND when the id is unknown.',
+      description: 'Membership-gated. 404 WORKSPACE_NOT_FOUND when the id is unknown.',
       params: wsIdParamsSchema,
     },
   }, async (request, reply) => {

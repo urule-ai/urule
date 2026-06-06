@@ -10,7 +10,7 @@ import { providers } from '../db/schema/providers.js';
 import { workspaces } from '../db/schema/workspaces.js';
 import { AuditLogger } from '@urule/events';
 import { requireMembership } from '@urule/authz-middleware';
-import { agentWorkspaceResolver, bodyWorkspaceResolver } from '../authz.js';
+import { agentWorkspaceResolver, bodyWorkspaceResolver, workspaceParamResolver } from '../authz.js';
 
 const createAgentSchema = z.object({
   workspaceId: z.string().optional(),
@@ -147,12 +147,14 @@ export function registerAgentRoutes(app: FastifyInstance, db: Database) {
     return decorateAgentsWithProviders(db, rows as Record<string, unknown>[]);
   });
 
-  // List agents for a workspace
+  // List agents for a workspace — membership-gated (#4). Without it any
+  // authenticated user could read another workspace's agents by changing :wsId.
   app.get<{ Params: z.infer<typeof wsIdParamsSchema>; Querystring: z.infer<typeof paginationQuerySchema> }>('/api/v1/workspaces/:wsId/agents', {
+    preHandler: requireMembership(workspaceParamResolver()),
     schema: {
       tags: ['agents'],
       summary: 'List agents in a workspace',
-      description: 'Pagination via `?limit` (capped 100) + `?offset`. Empty array (200) when the workspace has no agents — not 404. The Office UI agent directory hits this directly.',
+      description: 'Membership-gated. Pagination via `?limit` (capped 100) + `?offset`. Empty array (200) when the workspace has no agents — not 404. The Office UI agent directory hits this directly.',
       params: wsIdParamsSchema,
       querystring: paginationQuerySchema,
     },
