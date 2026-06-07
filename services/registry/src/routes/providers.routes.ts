@@ -409,8 +409,9 @@ export function registerProviderRoutes(app: FastifyInstance, db: Database) {
     reply.status(201).send(toUiProvider(row as Record<string, unknown>));
   });
 
-  // Get single provider (masked key)
+  // Get single provider (masked key) — membership-gated (#4).
   app.get<{ Params: z.infer<typeof providerIdParamsSchema> }>('/api/v1/providers/:providerId', {
+    preHandler: requireProviderMembership,
     schema: {
       tags: ['providers'],
       summary: 'Get provider by id (masked)',
