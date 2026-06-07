@@ -353,6 +353,7 @@ export function registerAgentRoutes(app: FastifyInstance, db: Database) {
   app.get<{ Params: z.infer<typeof agentIdParamsSchema>; Querystring: z.infer<typeof paginationQuerySchema> }>(
     '/api/v1/agents/:agentId/memories',
     {
+      preHandler: requireAgentMembership,
       schema: {
         tags: ['agents'],
         summary: "List agent memories",

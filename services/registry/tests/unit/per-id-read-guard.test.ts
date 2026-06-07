@@ -92,6 +92,7 @@ const ALL_GATED = [
   '/api/v1/agents/a1/health',
   '/api/v1/agents/a1/conversations',
   '/api/v1/agents/a1/logs',
+  '/api/v1/agents/a1/memories',
   '/api/v1/conversations/c1',
   '/api/v1/conversations/c1/messages',
   '/api/v1/conversations/c1/branches',
