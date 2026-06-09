@@ -7,7 +7,7 @@ import { requireMembership, requireRole } from '@urule/authz-middleware';
 import { AuditLogger } from '@urule/events';
 import type { Database } from '../db/connection.js';
 import { workspaces } from '../db/schema/workspaces.js';
-import { firstWorkspaceId, workspaceParamResolver } from '../authz.js';
+import { firstWorkspaceId, orgParamResolver, workspaceParamResolver } from '../authz.js';
 
 const createWorkspaceSchema = z.object({
   orgId: z.string().min(1),
@@ -135,12 +135,15 @@ export function registerWorkspaceRoutes(app: FastifyInstance, db: Database) {
     reply.send({ ok: true });
   });
 
-  // List workspaces for an org
+  // List workspaces for an org — membership-gated (#4): requires membership of
+  // the org, so its workspace list (tenant structure) can't be enumerated
+  // cross-tenant by org id. (`GET /workspaces` cross-tenant list stays admin-only.)
   app.get<{ Params: z.infer<typeof orgIdParamsSchema> }>('/api/v1/orgs/:orgId/workspaces', {
+    preHandler: requireMembership(orgParamResolver(), { objectType: 'org' }),
     schema: {
       tags: ['workspaces'],
       summary: 'List workspaces in an org',
-      description: 'Returns every workspace belonging to the given org. Empty array (200) when the org has no workspaces yet — not 404.',
+      description: 'Requires membership of the org. Returns every workspace belonging to the given org. Empty array (200) when the org has no workspaces yet — not 404.',
       params: orgIdParamsSchema,
     },
   }, async (request) => {

@@ -80,6 +80,20 @@ export function workspaceParamResolver(): WorkspaceIdResolver {
   };
 }
 
+/**
+ * Resolver for `/orgs/:orgId/...` routes — the org IS the addressed resource,
+ * so the path param is the org id directly (no DB lookup). Pair with
+ * `requireMembership(orgParamResolver(), { objectType: 'org' })`. Returns `null`
+ * only when the param is missing; a non-member of an unknown org is denied 403
+ * (which also avoids leaking which org ids exist).
+ */
+export function orgParamResolver(): WorkspaceIdResolver {
+  return async (req: FastifyRequest) => {
+    const { orgId } = req.params as { orgId?: string };
+    return orgId ?? null;
+  };
+}
+
 /** Resolver for `/conversations/:conversationId/...` routes. */
 export function conversationWorkspaceResolver(db: Database): WorkspaceIdResolver {
   return async (req: FastifyRequest) => {
