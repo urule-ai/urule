@@ -3,10 +3,11 @@ import { ulid } from 'ulid';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { orgTuple } from '@urule/authz';
-import { requireRole } from '@urule/authz-middleware';
+import { requireMembership, requireRole } from '@urule/authz-middleware';
 import { AuditLogger } from '@urule/events';
 import type { Database } from '../db/connection.js';
 import { orgs } from '../db/schema/orgs.js';
+import { orgParamResolver } from '../authz.js';
 
 const createOrgSchema = z.object({
   name: z.string().min(1).max(100),
@@ -89,12 +90,14 @@ export function registerOrgRoutes(app: FastifyInstance, db: Database) {
     reply.status(201).send(org);
   });
 
-  // Get org by ID
+  // Get org by ID — membership-gated (#4): requires membership of the org, so an
+  // org id can't be read cross-tenant. (`GET /orgs` list stays admin-only.)
   app.get<{ Params: z.infer<typeof orgIdParamsSchema> }>('/api/v1/orgs/:orgId', {
+    preHandler: requireMembership(orgParamResolver(), { objectType: 'org' }),
     schema: {
       tags: ['orgs'],
       summary: 'Get an org by id',
-      description: '404 ORG_NOT_FOUND when the id is unknown.',
+      description: 'Requires membership of the org. 404 ORG_NOT_FOUND when the id is unknown.',
       params: orgIdParamsSchema,
     },
   }, async (request, reply) => {
